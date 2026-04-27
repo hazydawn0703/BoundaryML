@@ -2185,17 +2185,3 @@ BoundaryML MVP 完成后，应满足以下最终判断：
 
 ---
 
-# 附：建议插入主 PRD 的说明
-
-本文建议作为主 PRD 的独立补充文件，文件名建议：
-
-```text
-boundaryml-prd-appendix-15-26.md
-```
-
-主 PRD 中可新增引用说明：
-
-```md
-> 章节 15–26 已整理为独立补充文件《BoundaryML PRD 补充章节：15–26》，用于定义 BoundaryML Spec、Boundary Rules、风险策略、状态机、模板系统、Execution Kit、Diff 规则、Context Pack、Prompt 版本与 MVP 验收标准。
-```
-
