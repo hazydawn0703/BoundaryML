@@ -20,6 +20,8 @@ BoundaryML 是一个面向 AI 转型项目的 **人机协作边界编排系统**
 7. Settings / Model Access（只读 + model call logs）
 
 ### 核心模型（前端内存 + localStorage）
+统一字段契约定义见 `src/domain/schema.js`。
+
 - Project
 - ContextPack
 - Workflow / Phase / Node / Edge

@@ -76,3 +76,7 @@ pre { white-space: pre-wrap; background: #0f172a; color: #93c5fd; padding: 12px;
   .split-2, .project-grid, .grid-2 { grid-template-columns: 1fr; }
   .canvas { grid-template-columns: 1fr; min-height: 420px; }
 }
+
+.muted-node { opacity: 0.35; }
+.edge-hints { margin: 8px 0 0; padding-left: 18px; color: #64748b; font-size: 12px; }
+.asset-detail textarea, .panel textarea { width: 100%; }

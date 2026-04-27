@@ -1,7 +1,7 @@
 import { createExampleProject } from '../domain/sampleProject.js';
 import { validateWorkflow } from '../services/validationEngine.js';
 
-const STORAGE_KEY = 'boundaryml_mvp_state_v2';
+const STORAGE_KEY = 'boundaryml_mvp_state_v3';
 
 function initialState() {
   const exampleProject = createExampleProject();
@@ -14,6 +14,19 @@ function initialState() {
     activeNodeDetailTab: 'overview',
     aiEdit: { open: false, request: '', diff: null },
     exportPreviewType: 'workflowSpec',
+    studioFilter: { mode: 'all', risk: 'all' },
+    assetsFilter: { type: 'prompt', phase: 'all', status: 'all' },
+    selectedAsset: null,
+  };
+}
+
+function hydrateState(parsed) {
+  const base = initialState();
+  return {
+    ...base,
+    ...parsed,
+    studioFilter: { ...base.studioFilter, ...(parsed.studioFilter || {}) },
+    assetsFilter: { ...base.assetsFilter, ...(parsed.assetsFilter || {}) },
   };
 }
 
@@ -21,8 +34,7 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return initialState();
-    const parsed = JSON.parse(raw);
-    return parsed;
+    return hydrateState(JSON.parse(raw));
   } catch {
     return initialState();
   }

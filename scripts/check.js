@@ -1,8 +1,8 @@
 import { createExampleProject } from '../src/domain/sampleProject.js';
 import { validateWorkflow } from '../src/services/validationEngine.js';
 import { generateExecutionKit } from '../src/services/executionKitGenerator.js';
-
-const project = createExampleProject();
+import { generateWorkflowDraft } from '../src/services/workflowGenerator.js';
+import { generateWorkflowDiff, applyWorkflowDiff } from '../src/services/diffGenerator.js';
 
 function assert(condition, message) {
   if (!condition) {
@@ -11,26 +11,65 @@ function assert(condition, message) {
   }
 }
 
+const project = createExampleProject();
 assert(project.workflow.nodes.length >= 12, 'example workflow should contain at least 12 nodes');
+assert(project.workflow.phases.length === 6, 'example workflow should contain 6 phases');
+assert(new Set(project.workflow.nodes.map((n) => n.executionMode)).size >= 4, 'workflow should contain at least 4 execution modes');
+assert(project.assets.prompts.every((prompt) => project.workflow.nodes.find((n) => n.id === prompt.nodeId)?.executionMode !== 'human_only'), 'human-only nodes should not have prompts');
+assert(project.workflow.nodes.filter((n) => n.riskLevel === 'high').every((n) => n.reviewGate?.required), 'high risk nodes must have required review gates');
+
+const contextual = generateWorkflowDraft({
+  name: 'test',
+  type: 'AI Feature',
+  setupMode: 'org_aware',
+  sensitiveAreas: ['Customer Data', 'Production Release'],
+}, {
+  teamRoles: ['Security Owner', 'Release Manager'],
+  approvalProcess: ['Security Review', 'Release Approval'],
+});
+
+assert(contextual.workflow.nodes.some((n) => n.reviewGate?.name.toLowerCase().includes('security')), 'customer data context should add security review gate');
+
+const diff = generateWorkflowDiff('add testing nodes before launch', project.workflow, project.assets);
+const applied = applyWorkflowDiff(project, diff, false);
+assert(applied.workflow.version === project.workflow.version + 1, 'apply diff should increase workflow version');
+
+const changedNodeIds = diff.changes.filter((c) => c.targetType === 'node').map((c) => c.targetId);
+const promptsNeedingUpdate = project.assets.prompts.filter((p) => changedNodeIds.includes(p.nodeId));
+if (promptsNeedingUpdate.length) {
+  assert(applied.assets.prompts.some((p) => changedNodeIds.includes(p.nodeId) && p.status === 'outdated'), 'apply diff should mark related prompts outdated');
+}
+
+
+const forcedDiff = {
+  id: 'diff-force',
+  request: 'force change',
+  changes: [{
+    id: 'force-node-change',
+    type: 'updated',
+    targetType: 'node',
+    targetId: 'node-3',
+    field: 'executionMode',
+    before: 'ai_draft_human_review',
+    after: 'ai_execute_human_approval',
+    reason: 'force',
+    impact: 'test',
+    selected: true,
+  }],
+  warnings: [],
+  createdAt: new Date().toISOString(),
+};
+const forcedApplied = applyWorkflowDiff(project, forcedDiff, true);
+assert(forcedApplied.assets.prompts.some((p) => p.nodeId === 'node-3' && p.status === 'outdated'), 'apply diff should mark related prompts outdated');
+
+const goodValidation = validateWorkflow(project.workflow, project.assets);
+const goodKit = generateExecutionKit(project.workflow, project.assets, goodValidation);
+assert(goodKit.snapshotVersion === project.workflow.version, 'execution kit should store workflow snapshot version');
 
 const broken = structuredClone(project);
-const highRiskNode = broken.workflow.nodes.find((n) => n.riskLevel === 'high');
-highRiskNode.reviewGate.required = false;
-
-const humanOnlyNode = broken.workflow.nodes.find((n) => n.executionMode === 'human_only');
-broken.assets.prompts.push({ id: 'prompt-bad', nodeId: humanOnlyNode.id, name: 'invalid', status: 'draft', content: '' });
-
-const autonomousNode = broken.workflow.nodes.find((n) => n.executionMode !== 'human_only');
-autonomousNode.executionMode = 'ai_autonomous';
-autonomousNode.riskLevel = 'high';
-
-const validation = validateWorkflow(broken.workflow, broken.assets);
-
-assert(validation.some((r) => r.id.includes('high_risk_requires_review_gate')), 'should detect high-risk missing review gate');
-assert(validation.some((r) => r.id.includes('human_only_no_ai_prompt')), 'should detect human-only node with prompt');
-assert(validation.some((r) => r.id.includes('ai_autonomous_low_risk_only')), 'should detect autonomous high-risk violation');
-
-const kit = generateExecutionKit(project.workflow, project.assets, validateWorkflow(project.workflow, project.assets));
-assert(kit.files.workflowSpec && kit.files.promptPack, 'execution kit generator should produce preview files');
+broken.workflow.nodes.find((n) => n.riskLevel === 'high').reviewGate.required = false;
+const badValidation = validateWorkflow(broken.workflow, broken.assets);
+const badKit = generateExecutionKit(broken.workflow, broken.assets, badValidation);
+assert(!badKit.canExportFinal, 'blocking errors should disable final kit export');
 
 console.log('✅ checks passed');

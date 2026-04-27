@@ -174,13 +174,13 @@ export function applyWorkflowDiff(project, diff, applySelectedOnly = true) {
 
   updated.assets.prompts = updated.assets.prompts.map((prompt) => (
     affectedNodeIds.includes(prompt.nodeId)
-      ? { ...prompt, status: 'outdated' }
+      ? { ...prompt, status: 'outdated', outdatedReason: 'Workflow diff changed node contract' }
       : prompt
   ));
 
   updated.assets.checklists = updated.assets.checklists.map((checklist) => (
     affectedNodeIds.includes(checklist.nodeId)
-      ? { ...checklist, status: 'outdated' }
+      ? { ...checklist, status: 'outdated', outdatedReason: 'Workflow diff changed node contract' }
       : checklist
   ));
 

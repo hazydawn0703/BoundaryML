@@ -1,5 +1,6 @@
 export function generateExecutionKit(workflow, assets, validationResults) {
-  const hasBlockingError = validationResults.some((item) => item.level === 'error' && item.blockingFinal);
+  const blockingErrors = validationResults.filter((item) => item.level === 'error' && item.blockingFinal);
+  const hasBlockingError = blockingErrors.length > 0;
 
   const workflowSpec = {
     version: workflow.version,
@@ -27,6 +28,8 @@ export function generateExecutionKit(workflow, assets, validationResults) {
     status: hasBlockingError ? 'draft_only' : 'final_ready',
     canExportFinal: !hasBlockingError,
     generatedAt: new Date().toISOString(),
+    snapshotVersion: workflow.version,
+    blockingErrors: blockingErrors.length,
     files: {
       workflowSpec,
       taskList,
