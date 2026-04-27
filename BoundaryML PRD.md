@@ -1,4 +1,4 @@
-# BoundaryML PRD v0.1
+# BoundaryML PRD
 
 > 文档定位：本文用于定义 BoundaryML 的产品边界、核心工作流与关键功能要求。本文不替开发定义数据库表结构，不强行规定技术实现方式；重点说明产品目标、用户行为、输入输出、页面能力、交互逻辑与验收口径。
 
@@ -1127,4 +1127,10 @@ README 后续应补充以下内容：
 | Model Access Layer | 将项目输入转化为人机分工蓝图、节点建议、提示词和 Diff 的模型接入层 |
 | Boundary Rules | 用于校验和约束模型输出的人机分界规则 |
 | Diff Review | AI 修改正式生效前的差异确认机制 |
+
+---
+
+# 章节 15–26 已整理为独立补充文件《BoundaryML PRD 补充章节：15–26》，用于定义 BoundaryML Spec、Boundary Rules、风险策略、状态机、模板系统、Execution Kit、Diff 规则、Context Pack、Prompt 版本与 MVP 验收标准。
+
+# 系统架构、前后端边界、通信层、持久化层和 LLM 接入层详见《BoundaryML PRD 架构补充章节：27–36》。后续开发不得将 BoundaryML 仅实现为纯前端工程；Local Demo Mode 只作为演示模式存在，正式开源运行模式应包含 BoundaryML Server、Persistence Layer 和 LLM Access Layer。
 
