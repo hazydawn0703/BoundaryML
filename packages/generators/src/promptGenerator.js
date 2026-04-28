@@ -1,4 +1,4 @@
-import { EXECUTION_MODES } from '../domain/constants.js';
+import { EXECUTION_MODES } from '../../schema/src/constants.js';
 
 export function generatePrompt(node) {
   if (!EXECUTION_MODES[node.executionMode]?.ai) return null;

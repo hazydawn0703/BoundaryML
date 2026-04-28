@@ -1,5 +1,5 @@
-import { createExampleProject } from '../domain/sampleProject.js';
-import { validateWorkflow } from '../services/validationEngine.js';
+import { createExampleProject } from '../../../packages/core/src/sampleProject.js';
+import { validateWorkflow } from '../../../packages/rules/src/validationEngine.js';
 
 const STORAGE_KEY = 'boundaryml_mvp_state_v3';
 
