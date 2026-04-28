@@ -1,70 +1,112 @@
-/**
- * BoundaryML unified domain object contract (JSDoc typedefs).
- * All generators, state, validation and UI should follow these structures.
- */
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:/;
 
-/** @typedef {'human_only'|'ai_draft_human_review'|'human_lead_ai_assist'|'ai_execute_human_approval'|'ai_autonomous'} ExecutionMode */
-/** @typedef {'low'|'medium'|'high'} RiskLevel */
-/** @typedef {'missing'|'draft'|'reviewed'|'validated'|'final'|'applied'|'rejected'|'outdated'|'failed_validation'|'invalid'} Status */
+export const SCHEMA_VERSION = 'boundaryml-schema-v2';
 
-/**
- * @typedef {Object} ReviewGate
- * @property {string} id
- * @property {string} name
- * @property {string} reviewerRole
- * @property {string[]} criteria
- * @property {string} passCondition
- * @property {string} rejectCondition
- * @property {boolean} allowAiRevision
- * @property {boolean} required
- */
+export const ENTITY_SCHEMAS = {
+  project: {
+    required: ['id', 'workspace_id', 'name', 'type', 'goal', 'risk_level', 'setup_mode', 'workflow', 'context_pack', 'assets'],
+  },
+  context_pack: {
+    required: ['team_roles', 'approval_process', 'tool_stack', 'risk_constraints', 'historical_process_materials'],
+  },
+  workflow: {
+    required: ['id', 'workspace_id', 'version', 'status', 'phases', 'nodes', 'edges', 'updated_at'],
+  },
+  phase: {
+    required: ['id', 'name', 'order'],
+  },
+  node: {
+    required: ['id', 'phase_id', 'name', 'goal', 'execution_mode', 'risk_level', 'status', 'inputs', 'outputs'],
+  },
+  edge: {
+    required: ['id', 'from', 'to'],
+  },
+  review_gate: {
+    required: ['id', 'name', 'reviewer_role', 'criteria', 'pass_condition', 'reject_condition', 'allow_ai_revision', 'required'],
+  },
+  prompt_asset: {
+    required: ['id', 'node_id', 'phase_id', 'name', 'status', 'content', 'updated_at'],
+  },
+  checklist_asset: {
+    required: ['id', 'node_id', 'phase_id', 'name', 'status', 'items', 'updated_at'],
+  },
+  workflow_diff: {
+    required: ['id', 'project_id', 'workflow_id', 'request', 'changes', 'warnings', 'created_at'],
+  },
+  execution_kit: {
+    required: ['id', 'project_id', 'status', 'workflow_snapshot_version', 'generated_at', 'files'],
+  },
+  generation_job: {
+    required: ['id', 'workspace_id', 'project_id', 'job_type', 'status', 'created_at', 'updated_at'],
+  },
+};
 
-/**
- * @typedef {Object} ArtifactContract
- * @property {string} id
- * @property {string} format
- * @property {string} outputFormat
- * @property {string[]} acceptanceCriteria
- */
+const ALLOWED_JOB_STATUS = new Set(['queued', 'running', 'succeeded', 'failed']);
 
-/**
- * @typedef {Object} Node
- * @property {string} id
- * @property {string} phaseId
- * @property {string} name
- * @property {string} goal
- * @property {ExecutionMode} executionMode
- * @property {RiskLevel} riskLevel
- * @property {Status} status
- * @property {string} humanOwnerRole
- * @property {string} aiRole
- * @property {string[]} inputs
- * @property {string[]} outputs
- * @property {ArtifactContract} artifactContract
- * @property {ReviewGate|null} reviewGate
- * @property {Status} promptStatus
- * @property {Status} checklistStatus
- * @property {{at:string, action:string}[]} history
- */
+export function toSnakeCaseKeys(input) {
+  if (Array.isArray(input)) return input.map((item) => toSnakeCaseKeys(item));
+  if (!input || typeof input !== 'object') return input;
 
-/** @typedef {{id:string,name:string,order:number}} Phase */
-/** @typedef {{id:string,from:string,to:string}} Edge */
+  return Object.entries(input).reduce((acc, [key, value]) => {
+    const snake = key
+      .replace(/([A-Z])/g, '_$1')
+      .replace(/-/g, '_')
+      .toLowerCase();
+    acc[snake] = toSnakeCaseKeys(value);
+    return acc;
+  }, {});
+}
 
-/** @typedef {{id:string,nodeId:string,phaseId:string,name:string,model:string,status:Status,outputFormat:string,acceptanceCriteria:string[],content:string,updatedAt:string,outdatedReason?:string}} PromptAsset */
-/** @typedef {{id:string,nodeId:string,phaseId:string,name:string,status:Status,reviewerRole:string,items:string[],updatedAt:string,outdatedReason?:string}} ChecklistAsset */
-/** @typedef {{id:string,nodeId:string,name:string,content:string,status:Status}} ArtifactTemplate */
+function validateRequiredFields(type, data) {
+  const schema = ENTITY_SCHEMAS[type];
+  if (!schema) return [`Unknown schema type: ${type}`];
 
-/** @typedef {{id:string,version:number,status:Status,phases:Phase[],nodes:Node[],edges:Edge[],updatedAt:string,templateType?:string}} Workflow */
+  return schema.required
+    .filter((field) => !(field in data))
+    .map((field) => `${type}.${field} is required`);
+}
 
-/** @typedef {{teamRoles:string[],approvalProcess:string[],toolStack:string[],riskConstraints:string[],historicalProcessMaterials:string,summary?:Object|null}} ContextPack */
+function validateCoreTypes(type, data) {
+  const errors = [];
+  if ('id' in data && typeof data.id !== 'string') errors.push(`${type}.id must be string`);
+  if ('workspace_id' in data && typeof data.workspace_id !== 'string') errors.push(`${type}.workspace_id must be string`);
+  if ('created_at' in data && typeof data.created_at === 'string' && !ISO_DATE_REGEX.test(data.created_at)) errors.push(`${type}.created_at must be ISO timestamp`);
+  if ('updated_at' in data && typeof data.updated_at === 'string' && !ISO_DATE_REGEX.test(data.updated_at)) errors.push(`${type}.updated_at must be ISO timestamp`);
 
-/** @typedef {{id:string,level:'error'|'warning'|'suggestion',targetType:'workflow'|'node'|'prompt'|'checklist'|'edge',targetId:string,title:string,message:string,suggestedAction?:string,autoFixAvailable?:boolean,blockingFinal?:boolean}} ValidationResult */
+  if (type === 'generation_job' && data.status && !ALLOWED_JOB_STATUS.has(data.status)) {
+    errors.push('generation_job.status must be one of queued|running|succeeded|failed');
+  }
 
-/** @typedef {{id:string,type:'added'|'updated'|'removed',targetType:string,targetId:string,field:string,before:any,after:any,reason:string,impact:string,selected:boolean}} DiffChange */
-/** @typedef {{id:string,request:string,changes:DiffChange[],warnings:string[],createdAt:string}} WorkflowDiff */
+  if (type === 'workflow' && typeof data.version !== 'number') {
+    errors.push('workflow.version must be number');
+  }
 
-/** @typedef {{id:string,status:'draft_only'|'final_ready'|'stale',canExportFinal:boolean,generatedAt:string,snapshotVersion:number,files:Object,blockingErrors:number}} ExecutionKit */
+  return errors;
+}
 
-/** @typedef {{id:string,name:string,type:string,goal:string,currentStage:string,riskLevel:RiskLevel,workflowStatus:Status,deliveryScope:string[],expectedAiScope:string[],sensitiveAreas:string[],setupMode:string,contextPack:ContextPack,workflow:Workflow,assets:{prompts:PromptAsset[],checklists:ChecklistAsset[],artifactTemplates:ArtifactTemplate[]},executionKit:ExecutionKit|null}} Project */
+export function validateSchema(type, payload) {
+  const normalized = toSnakeCaseKeys(payload);
+  const errors = [
+    ...validateRequiredFields(type, normalized),
+    ...validateCoreTypes(type, normalized),
+  ];
 
-export const SCHEMA_VERSION = 'boundaryml-schema-v1';
+  return {
+    ok: errors.length === 0,
+    errors,
+    normalized,
+  };
+}
+
+export const validateProject = (payload) => validateSchema('project', payload);
+export const validateContextPack = (payload) => validateSchema('context_pack', payload);
+export const validateWorkflow = (payload) => validateSchema('workflow', payload);
+export const validatePhase = (payload) => validateSchema('phase', payload);
+export const validateNode = (payload) => validateSchema('node', payload);
+export const validateEdge = (payload) => validateSchema('edge', payload);
+export const validateReviewGate = (payload) => validateSchema('review_gate', payload);
+export const validatePromptAsset = (payload) => validateSchema('prompt_asset', payload);
+export const validateChecklistAsset = (payload) => validateSchema('checklist_asset', payload);
+export const validateWorkflowDiff = (payload) => validateSchema('workflow_diff', payload);
+export const validateExecutionKit = (payload) => validateSchema('execution_kit', payload);
+export const validateGenerationJob = (payload) => validateSchema('generation_job', payload);

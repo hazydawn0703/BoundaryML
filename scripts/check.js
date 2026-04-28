@@ -3,6 +3,9 @@ import { validateWorkflow } from '../packages/rules/src/validationEngine.js';
 import { generateExecutionKit } from '../packages/generators/src/executionKitGenerator.js';
 import { generateWorkflowDraft } from '../packages/generators/src/workflowGenerator.js';
 import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/diff.js';
+import { validateProject as validateProjectSchema } from '../packages/schema/src/schema.js';
+import { readFileSync } from 'node:fs';
+import { FileStorage } from '../packages/storage/src/fileStorage.js';
 
 function assert(condition, message) {
   if (!condition) {
@@ -12,6 +15,10 @@ function assert(condition, message) {
 }
 
 const project = createExampleProject();
+const exampleFile = JSON.parse(readFileSync(new URL('../examples/ai-saas-feature-mvp.json', import.meta.url), 'utf-8'));
+const schemaValidation = validateProjectSchema(exampleFile);
+assert(schemaValidation.ok, `example schema validation failed: ${schemaValidation.errors.join(', ')}`);
+
 assert(project.workflow.nodes.length >= 12, 'example workflow should contain at least 12 nodes');
 assert(project.workflow.phases.length === 6, 'example workflow should contain 6 phases');
 assert(new Set(project.workflow.nodes.map((n) => n.executionMode)).size >= 4, 'workflow should contain at least 4 execution modes');
@@ -71,5 +78,12 @@ broken.workflow.nodes.find((n) => n.riskLevel === 'high').reviewGate.required = 
 const badValidation = validateWorkflow(broken.workflow, broken.assets);
 const badKit = generateExecutionKit(broken.workflow, broken.assets, badValidation);
 assert(!badKit.canExportFinal, 'blocking errors should disable final kit export');
+
+const tempStorageDir = '.tmp-storage-check';
+const fsStorage = new FileStorage(tempStorageDir);
+const scopedProject = { ...project, workspace_id: 'check_workspace' };
+fsStorage.saveProject('check_workspace', scopedProject);
+const reloaded = new FileStorage(tempStorageDir).getProject('check_workspace', scopedProject.id);
+assert(Boolean(reloaded), 'file storage should persist project across instances');
 
 console.log('✅ checks passed');

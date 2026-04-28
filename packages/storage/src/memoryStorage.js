@@ -1,17 +1,27 @@
 export class MemoryStorage {
-  constructor(seed = {}) {
-    this.store = new Map(Object.entries(seed));
+  constructor() {
+    this.projectsByWorkspace = new Map();
   }
 
-  get(key) {
-    return this.store.has(key) ? this.store.get(key) : null;
+  ensureWorkspace(workspace_id) {
+    if (!workspace_id) throw new Error('workspace_id is required');
+    if (!this.projectsByWorkspace.has(workspace_id)) {
+      this.projectsByWorkspace.set(workspace_id, new Map());
+    }
+    return this.projectsByWorkspace.get(workspace_id);
   }
 
-  set(key, value) {
-    this.store.set(key, value);
+  listProjects(workspace_id) {
+    return Array.from(this.ensureWorkspace(workspace_id).values());
   }
 
-  remove(key) {
-    this.store.delete(key);
+  getProject(workspace_id, project_id) {
+    return this.ensureWorkspace(workspace_id).get(project_id) || null;
+  }
+
+  saveProject(workspace_id, project) {
+    if (project.workspace_id !== workspace_id) throw new Error('workspace_id mismatch');
+    this.ensureWorkspace(workspace_id).set(project.id, project);
+    return project;
   }
 }
