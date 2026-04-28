@@ -1,4 +1,4 @@
-import { createExampleProject } from '../domain/sampleProject.js';
+import { createExampleProject } from '../../core/src/sampleProject.js';
 
 function applySensitiveAreaRules(project) {
   const hasCustomerData = project.sensitiveAreas.includes('Customer Data');

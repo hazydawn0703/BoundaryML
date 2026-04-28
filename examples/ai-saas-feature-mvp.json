@@ -1,0 +1,1158 @@
+{
+  "id": "project-ai-saas-feature-mvp",
+  "name": "AI SaaS Feature MVP",
+  "type": "AI Feature",
+  "goal": "Build an AI SaaS feature MVP with explicit human-AI boundaries",
+  "current_stage": "Planning",
+  "risk_level": "high",
+  "workflow_status": "draft",
+  "delivery_scope": [
+    "PRD",
+    "Prototype",
+    "Technical Design",
+    "API Contract",
+    "Source Code",
+    "Test Cases",
+    "Launch Plan"
+  ],
+  "expected_ai_scope": [
+    "PRD",
+    "Code",
+    "Test",
+    "Docs",
+    "Review"
+  ],
+  "sensitive_areas": [
+    "Customer Data",
+    "Production Release",
+    "Security"
+  ],
+  "setup_mode": "quick_start",
+  "context_pack": {
+    "team_roles": [
+      "Product Manager",
+      "Tech Lead",
+      "QA Lead",
+      "Release Manager"
+    ],
+    "approval_process": [
+      "PRD Review",
+      "Architecture Review",
+      "Launch Approval"
+    ],
+    "tool_stack": [
+      "Jira",
+      "GitHub",
+      "Figma",
+      "Playwright"
+    ],
+    "risk_constraints": [
+      "No production change without manual approval"
+    ],
+    "historical_process_materials": "Legacy release checklist v2.1",
+    "summary": null
+  },
+  "workflow": {
+    "id": "workflow-1",
+    "version": 1,
+    "status": "draft",
+    "phases": [
+      {
+        "id": "phase-1",
+        "name": "Discovery",
+        "order": 1
+      },
+      {
+        "id": "phase-2",
+        "name": "Product Design",
+        "order": 2
+      },
+      {
+        "id": "phase-3",
+        "name": "Technical Design",
+        "order": 3
+      },
+      {
+        "id": "phase-4",
+        "name": "Development",
+        "order": 4
+      },
+      {
+        "id": "phase-5",
+        "name": "Testing",
+        "order": 5
+      },
+      {
+        "id": "phase-6",
+        "name": "Launch",
+        "order": 6
+      }
+    ],
+    "nodes": [
+      {
+        "id": "node-1",
+        "phase_id": "phase-1",
+        "name": "Project Goal Clarification",
+        "goal": "Complete Project Goal Clarification for AI SaaS MVP delivery",
+        "execution_mode": "human_lead_ai_assist",
+        "risk_level": "medium",
+        "status": "draft",
+        "human_owner_role": "Product Manager",
+        "ai_role": "AI Strategy Copilot",
+        "inputs": [
+          "Business objective"
+        ],
+        "outputs": [
+          "Clarified project goal"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-1",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-pm-review",
+          "name": "PM Review",
+          "reviewer_role": "Product Manager",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "draft",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-2",
+        "phase_id": "phase-1",
+        "name": "Context Pack Summary",
+        "goal": "Complete Context Pack Summary for AI SaaS MVP delivery",
+        "execution_mode": "ai_draft_human_review",
+        "risk_level": "medium",
+        "status": "draft",
+        "human_owner_role": "Product Manager",
+        "ai_role": "Context Synthesizer",
+        "inputs": [
+          "Team roles",
+          "Risk constraints"
+        ],
+        "outputs": [
+          "Context summary"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-2",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-pm-review",
+          "name": "PM Review",
+          "reviewer_role": "Product Manager",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "draft",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-3",
+        "phase_id": "phase-2",
+        "name": "PRD Draft Generation",
+        "goal": "Complete PRD Draft Generation for AI SaaS MVP delivery",
+        "execution_mode": "ai_draft_human_review",
+        "risk_level": "medium",
+        "status": "draft",
+        "human_owner_role": "Product Manager",
+        "ai_role": "PRD Writer",
+        "inputs": [
+          "Project goal",
+          "Context pack"
+        ],
+        "outputs": [
+          "PRD draft"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-3",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-pm-review",
+          "name": "PM Review",
+          "reviewer_role": "Product Manager",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "draft",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-4",
+        "phase_id": "phase-2",
+        "name": "Scope Review",
+        "goal": "Complete Scope Review for AI SaaS MVP delivery",
+        "execution_mode": "human_only",
+        "risk_level": "high",
+        "status": "draft",
+        "human_owner_role": "Product Lead",
+        "ai_role": "",
+        "inputs": [
+          "PRD draft"
+        ],
+        "outputs": [
+          "Approved scope"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-4",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-product-lead-approval",
+          "name": "Product Lead Approval",
+          "reviewer_role": "Product Lead",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "missing",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-5",
+        "phase_id": "phase-3",
+        "name": "Architecture Proposal",
+        "goal": "Complete Architecture Proposal for AI SaaS MVP delivery",
+        "execution_mode": "human_lead_ai_assist",
+        "risk_level": "high",
+        "status": "draft",
+        "human_owner_role": "Tech Lead",
+        "ai_role": "Architecture Assistant",
+        "inputs": [
+          "Approved scope"
+        ],
+        "outputs": [
+          "Architecture proposal"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-5",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-tech-lead-review",
+          "name": "Tech Lead Review",
+          "reviewer_role": "Tech Lead",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "draft",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-6",
+        "phase_id": "phase-3",
+        "name": "API Contract Draft",
+        "goal": "Complete API Contract Draft for AI SaaS MVP delivery",
+        "execution_mode": "ai_draft_human_review",
+        "risk_level": "medium",
+        "status": "draft",
+        "human_owner_role": "Backend Engineer",
+        "ai_role": "API Contract Copilot",
+        "inputs": [
+          "Architecture proposal"
+        ],
+        "outputs": [
+          "API contract"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-6",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-tech-lead-review",
+          "name": "Tech Lead Review",
+          "reviewer_role": "Tech Lead",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "draft",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-7",
+        "phase_id": "phase-4",
+        "name": "Task Breakdown",
+        "goal": "Complete Task Breakdown for AI SaaS MVP delivery",
+        "execution_mode": "ai_execute_human_approval",
+        "risk_level": "medium",
+        "status": "draft",
+        "human_owner_role": "Engineering Manager",
+        "ai_role": "Task Planner",
+        "inputs": [
+          "PRD",
+          "API contract"
+        ],
+        "outputs": [
+          "Implementation task list"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-7",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-engineer-approval",
+          "name": "Engineer Approval",
+          "reviewer_role": "Engineering Manager",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "draft",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-8",
+        "phase_id": "phase-4",
+        "name": "Code Generation Prompt",
+        "goal": "Complete Code Generation Prompt for AI SaaS MVP delivery",
+        "execution_mode": "ai_execute_human_approval",
+        "risk_level": "high",
+        "status": "draft",
+        "human_owner_role": "Senior Engineer",
+        "ai_role": "Code Assistant",
+        "inputs": [
+          "Task list",
+          "Architecture proposal"
+        ],
+        "outputs": [
+          "Code prompt pack"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-8",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-code-review",
+          "name": "Code Review",
+          "reviewer_role": "Senior Engineer",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "draft",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-9",
+        "phase_id": "phase-5",
+        "name": "Test Case Generation",
+        "goal": "Complete Test Case Generation for AI SaaS MVP delivery",
+        "execution_mode": "ai_draft_human_review",
+        "risk_level": "medium",
+        "status": "draft",
+        "human_owner_role": "QA Engineer",
+        "ai_role": "QA Copilot",
+        "inputs": [
+          "Task list",
+          "PRD"
+        ],
+        "outputs": [
+          "Test case suite"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-9",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-qa-review",
+          "name": "QA Review",
+          "reviewer_role": "QA Engineer",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "draft",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-10",
+        "phase_id": "phase-5",
+        "name": "QA Review",
+        "goal": "Complete QA Review for AI SaaS MVP delivery",
+        "execution_mode": "human_only",
+        "risk_level": "high",
+        "status": "draft",
+        "human_owner_role": "QA Lead",
+        "ai_role": "",
+        "inputs": [
+          "Test case suite"
+        ],
+        "outputs": [
+          "QA sign-off"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-10",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-qa-lead-approval",
+          "name": "QA Lead Approval",
+          "reviewer_role": "QA Lead",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "missing",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-11",
+        "phase_id": "phase-6",
+        "name": "Launch Checklist",
+        "goal": "Complete Launch Checklist for AI SaaS MVP delivery",
+        "execution_mode": "ai_draft_human_review",
+        "risk_level": "high",
+        "status": "draft",
+        "human_owner_role": "Release Manager",
+        "ai_role": "Release Copilot",
+        "inputs": [
+          "QA sign-off"
+        ],
+        "outputs": [
+          "Launch checklist"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-11",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-release-manager-review",
+          "name": "Release Manager Review",
+          "reviewer_role": "Release Manager",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "draft",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      },
+      {
+        "id": "node-12",
+        "phase_id": "phase-6",
+        "name": "Production Approval",
+        "goal": "Complete Production Approval for AI SaaS MVP delivery",
+        "execution_mode": "human_only",
+        "risk_level": "high",
+        "status": "draft",
+        "human_owner_role": "Release Manager",
+        "ai_role": "",
+        "inputs": [
+          "Launch checklist"
+        ],
+        "outputs": [
+          "Production approval"
+        ],
+        "artifact_contract": {
+          "id": "artifact-node-12",
+          "format": "markdown",
+          "output_format": "Structured Markdown with headings and bullets",
+          "acceptance_criteria": [
+            "Output is complete and addresses node goal",
+            "Terminology aligns with project objective"
+          ]
+        },
+        "review_gate": {
+          "id": "gate-release-manager-approval",
+          "name": "Release Manager Approval",
+          "reviewer_role": "Release Manager",
+          "criteria": [
+            "Completeness",
+            "Consistency",
+            "Risk controls present"
+          ],
+          "pass_condition": "All required criteria are met",
+          "reject_condition": "Any high-severity issue remains",
+          "allow_ai_revision": true,
+          "required": true
+        },
+        "prompt_status": "missing",
+        "checklist_status": "draft",
+        "history": [
+          {
+            "at": "2026-04-28T10:34:18.647Z",
+            "action": "Node created from template"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-1",
+        "from": "node-1",
+        "to": "node-2"
+      },
+      {
+        "id": "edge-2",
+        "from": "node-2",
+        "to": "node-3"
+      },
+      {
+        "id": "edge-3",
+        "from": "node-3",
+        "to": "node-4"
+      },
+      {
+        "id": "edge-4",
+        "from": "node-4",
+        "to": "node-5"
+      },
+      {
+        "id": "edge-5",
+        "from": "node-5",
+        "to": "node-6"
+      },
+      {
+        "id": "edge-6",
+        "from": "node-6",
+        "to": "node-7"
+      },
+      {
+        "id": "edge-7",
+        "from": "node-7",
+        "to": "node-8"
+      },
+      {
+        "id": "edge-8",
+        "from": "node-8",
+        "to": "node-9"
+      },
+      {
+        "id": "edge-9",
+        "from": "node-9",
+        "to": "node-10"
+      },
+      {
+        "id": "edge-10",
+        "from": "node-10",
+        "to": "node-11"
+      },
+      {
+        "id": "edge-11",
+        "from": "node-11",
+        "to": "node-12"
+      }
+    ],
+    "updated_at": "2026-04-28T10:34:18.648Z"
+  },
+  "assets": {
+    "prompts": [
+      {
+        "id": "prompt-node-1",
+        "node_id": "node-1",
+        "phase_id": "phase-1",
+        "name": "Prompt: Project Goal Clarification",
+        "model": "mock-planning-model",
+        "status": "draft",
+        "output_format": "Structured Markdown with headings and bullets",
+        "acceptance_criteria": [
+          "Output is complete and addresses node goal",
+          "Terminology aligns with project objective"
+        ],
+        "content": "# Role\nAI Strategy Copilot\n\n# Objective\nComplete Project Goal Clarification for AI SaaS MVP delivery\n\n# Context Required\n- Business objective\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
+        "updated_at": "2026-04-28T10:34:18.647Z"
+      },
+      {
+        "id": "prompt-node-2",
+        "node_id": "node-2",
+        "phase_id": "phase-1",
+        "name": "Prompt: Context Pack Summary",
+        "model": "mock-planning-model",
+        "status": "draft",
+        "output_format": "Structured Markdown with headings and bullets",
+        "acceptance_criteria": [
+          "Output is complete and addresses node goal",
+          "Terminology aligns with project objective"
+        ],
+        "content": "# Role\nContext Synthesizer\n\n# Objective\nComplete Context Pack Summary for AI SaaS MVP delivery\n\n# Context Required\n- Team roles\n- Risk constraints\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
+        "updated_at": "2026-04-28T10:34:18.647Z"
+      },
+      {
+        "id": "prompt-node-3",
+        "node_id": "node-3",
+        "phase_id": "phase-2",
+        "name": "Prompt: PRD Draft Generation",
+        "model": "mock-planning-model",
+        "status": "draft",
+        "output_format": "Structured Markdown with headings and bullets",
+        "acceptance_criteria": [
+          "Output is complete and addresses node goal",
+          "Terminology aligns with project objective"
+        ],
+        "content": "# Role\nPRD Writer\n\n# Objective\nComplete PRD Draft Generation for AI SaaS MVP delivery\n\n# Context Required\n- Project goal\n- Context pack\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
+        "updated_at": "2026-04-28T10:34:18.647Z"
+      },
+      {
+        "id": "prompt-node-5",
+        "node_id": "node-5",
+        "phase_id": "phase-3",
+        "name": "Prompt: Architecture Proposal",
+        "model": "mock-planning-model",
+        "status": "draft",
+        "output_format": "Structured Markdown with headings and bullets",
+        "acceptance_criteria": [
+          "Output is complete and addresses node goal",
+          "Terminology aligns with project objective"
+        ],
+        "content": "# Role\nArchitecture Assistant\n\n# Objective\nComplete Architecture Proposal for AI SaaS MVP delivery\n\n# Context Required\n- Approved scope\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
+        "updated_at": "2026-04-28T10:34:18.647Z"
+      },
+      {
+        "id": "prompt-node-6",
+        "node_id": "node-6",
+        "phase_id": "phase-3",
+        "name": "Prompt: API Contract Draft",
+        "model": "mock-planning-model",
+        "status": "draft",
+        "output_format": "Structured Markdown with headings and bullets",
+        "acceptance_criteria": [
+          "Output is complete and addresses node goal",
+          "Terminology aligns with project objective"
+        ],
+        "content": "# Role\nAPI Contract Copilot\n\n# Objective\nComplete API Contract Draft for AI SaaS MVP delivery\n\n# Context Required\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
+        "updated_at": "2026-04-28T10:34:18.647Z"
+      },
+      {
+        "id": "prompt-node-7",
+        "node_id": "node-7",
+        "phase_id": "phase-4",
+        "name": "Prompt: Task Breakdown",
+        "model": "mock-planning-model",
+        "status": "draft",
+        "output_format": "Structured Markdown with headings and bullets",
+        "acceptance_criteria": [
+          "Output is complete and addresses node goal",
+          "Terminology aligns with project objective"
+        ],
+        "content": "# Role\nTask Planner\n\n# Objective\nComplete Task Breakdown for AI SaaS MVP delivery\n\n# Context Required\n- PRD\n- API contract\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
+        "updated_at": "2026-04-28T10:34:18.647Z"
+      },
+      {
+        "id": "prompt-node-8",
+        "node_id": "node-8",
+        "phase_id": "phase-4",
+        "name": "Prompt: Code Generation Prompt",
+        "model": "mock-planning-model",
+        "status": "draft",
+        "output_format": "Structured Markdown with headings and bullets",
+        "acceptance_criteria": [
+          "Output is complete and addresses node goal",
+          "Terminology aligns with project objective"
+        ],
+        "content": "# Role\nCode Assistant\n\n# Objective\nComplete Code Generation Prompt for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
+        "updated_at": "2026-04-28T10:34:18.647Z"
+      },
+      {
+        "id": "prompt-node-9",
+        "node_id": "node-9",
+        "phase_id": "phase-5",
+        "name": "Prompt: Test Case Generation",
+        "model": "mock-planning-model",
+        "status": "draft",
+        "output_format": "Structured Markdown with headings and bullets",
+        "acceptance_criteria": [
+          "Output is complete and addresses node goal",
+          "Terminology aligns with project objective"
+        ],
+        "content": "# Role\nQA Copilot\n\n# Objective\nComplete Test Case Generation for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- PRD\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
+        "updated_at": "2026-04-28T10:34:18.647Z"
+      },
+      {
+        "id": "prompt-node-11",
+        "node_id": "node-11",
+        "phase_id": "phase-6",
+        "name": "Prompt: Launch Checklist",
+        "model": "mock-planning-model",
+        "status": "draft",
+        "output_format": "Structured Markdown with headings and bullets",
+        "acceptance_criteria": [
+          "Output is complete and addresses node goal",
+          "Terminology aligns with project objective"
+        ],
+        "content": "# Role\nRelease Copilot\n\n# Objective\nComplete Launch Checklist for AI SaaS MVP delivery\n\n# Context Required\n- QA sign-off\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
+        "updated_at": "2026-04-28T10:34:18.647Z"
+      }
+    ],
+    "checklists": [
+      {
+        "id": "checklist-node-1",
+        "node_id": "node-1",
+        "phase_id": "phase-1",
+        "name": "Checklist: Project Goal Clarification",
+        "status": "draft",
+        "reviewer_role": "Product Manager",
+        "items": [
+          "Confirm goal of Project Goal Clarification is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-2",
+        "node_id": "node-2",
+        "phase_id": "phase-1",
+        "name": "Checklist: Context Pack Summary",
+        "status": "draft",
+        "reviewer_role": "Product Manager",
+        "items": [
+          "Confirm goal of Context Pack Summary is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-3",
+        "node_id": "node-3",
+        "phase_id": "phase-2",
+        "name": "Checklist: PRD Draft Generation",
+        "status": "draft",
+        "reviewer_role": "Product Manager",
+        "items": [
+          "Confirm goal of PRD Draft Generation is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-4",
+        "node_id": "node-4",
+        "phase_id": "phase-2",
+        "name": "Checklist: Scope Review",
+        "status": "draft",
+        "reviewer_role": "Product Lead",
+        "items": [
+          "Confirm goal of Scope Review is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-5",
+        "node_id": "node-5",
+        "phase_id": "phase-3",
+        "name": "Checklist: Architecture Proposal",
+        "status": "draft",
+        "reviewer_role": "Tech Lead",
+        "items": [
+          "Confirm goal of Architecture Proposal is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-6",
+        "node_id": "node-6",
+        "phase_id": "phase-3",
+        "name": "Checklist: API Contract Draft",
+        "status": "draft",
+        "reviewer_role": "Tech Lead",
+        "items": [
+          "Confirm goal of API Contract Draft is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-7",
+        "node_id": "node-7",
+        "phase_id": "phase-4",
+        "name": "Checklist: Task Breakdown",
+        "status": "draft",
+        "reviewer_role": "Engineering Manager",
+        "items": [
+          "Confirm goal of Task Breakdown is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-8",
+        "node_id": "node-8",
+        "phase_id": "phase-4",
+        "name": "Checklist: Code Generation Prompt",
+        "status": "draft",
+        "reviewer_role": "Senior Engineer",
+        "items": [
+          "Confirm goal of Code Generation Prompt is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-9",
+        "node_id": "node-9",
+        "phase_id": "phase-5",
+        "name": "Checklist: Test Case Generation",
+        "status": "draft",
+        "reviewer_role": "QA Engineer",
+        "items": [
+          "Confirm goal of Test Case Generation is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-10",
+        "node_id": "node-10",
+        "phase_id": "phase-5",
+        "name": "Checklist: QA Review",
+        "status": "draft",
+        "reviewer_role": "QA Lead",
+        "items": [
+          "Confirm goal of QA Review is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-11",
+        "node_id": "node-11",
+        "phase_id": "phase-6",
+        "name": "Checklist: Launch Checklist",
+        "status": "draft",
+        "reviewer_role": "Release Manager",
+        "items": [
+          "Confirm goal of Launch Checklist is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      },
+      {
+        "id": "checklist-node-12",
+        "node_id": "node-12",
+        "phase_id": "phase-6",
+        "name": "Checklist: Production Approval",
+        "status": "draft",
+        "reviewer_role": "Release Manager",
+        "items": [
+          "Confirm goal of Production Approval is met",
+          "Completeness",
+          "Consistency",
+          "Risk controls present",
+          "Verify pass condition: All required criteria are met"
+        ],
+        "updated_at": "2026-04-28T10:34:18.648Z"
+      }
+    ],
+    "artifact_templates": [
+      {
+        "id": "artifact-template-node-1",
+        "node_id": "node-1",
+        "name": "Project Goal Clarification Artifact Template",
+        "content": "# Project Goal Clarification\n\n## Goal\nComplete Project Goal Clarification for AI SaaS MVP delivery\n\n## Required Output\n- Clarified project goal",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-2",
+        "node_id": "node-2",
+        "name": "Context Pack Summary Artifact Template",
+        "content": "# Context Pack Summary\n\n## Goal\nComplete Context Pack Summary for AI SaaS MVP delivery\n\n## Required Output\n- Context summary",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-3",
+        "node_id": "node-3",
+        "name": "PRD Draft Generation Artifact Template",
+        "content": "# PRD Draft Generation\n\n## Goal\nComplete PRD Draft Generation for AI SaaS MVP delivery\n\n## Required Output\n- PRD draft",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-4",
+        "node_id": "node-4",
+        "name": "Scope Review Artifact Template",
+        "content": "# Scope Review\n\n## Goal\nComplete Scope Review for AI SaaS MVP delivery\n\n## Required Output\n- Approved scope",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-5",
+        "node_id": "node-5",
+        "name": "Architecture Proposal Artifact Template",
+        "content": "# Architecture Proposal\n\n## Goal\nComplete Architecture Proposal for AI SaaS MVP delivery\n\n## Required Output\n- Architecture proposal",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-6",
+        "node_id": "node-6",
+        "name": "API Contract Draft Artifact Template",
+        "content": "# API Contract Draft\n\n## Goal\nComplete API Contract Draft for AI SaaS MVP delivery\n\n## Required Output\n- API contract",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-7",
+        "node_id": "node-7",
+        "name": "Task Breakdown Artifact Template",
+        "content": "# Task Breakdown\n\n## Goal\nComplete Task Breakdown for AI SaaS MVP delivery\n\n## Required Output\n- Implementation task list",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-8",
+        "node_id": "node-8",
+        "name": "Code Generation Prompt Artifact Template",
+        "content": "# Code Generation Prompt\n\n## Goal\nComplete Code Generation Prompt for AI SaaS MVP delivery\n\n## Required Output\n- Code prompt pack",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-9",
+        "node_id": "node-9",
+        "name": "Test Case Generation Artifact Template",
+        "content": "# Test Case Generation\n\n## Goal\nComplete Test Case Generation for AI SaaS MVP delivery\n\n## Required Output\n- Test case suite",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-10",
+        "node_id": "node-10",
+        "name": "QA Review Artifact Template",
+        "content": "# QA Review\n\n## Goal\nComplete QA Review for AI SaaS MVP delivery\n\n## Required Output\n- QA sign-off",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-11",
+        "node_id": "node-11",
+        "name": "Launch Checklist Artifact Template",
+        "content": "# Launch Checklist\n\n## Goal\nComplete Launch Checklist for AI SaaS MVP delivery\n\n## Required Output\n- Launch checklist",
+        "status": "draft"
+      },
+      {
+        "id": "artifact-template-node-12",
+        "node_id": "node-12",
+        "name": "Production Approval Artifact Template",
+        "content": "# Production Approval\n\n## Goal\nComplete Production Approval for AI SaaS MVP delivery\n\n## Required Output\n- Production approval",
+        "status": "draft"
+      }
+    ]
+  },
+  "execution_kit": null,
+  "workspace_id": "demo_workspace",
+  "created_by": "demo_user",
+  "updated_by": "demo_user",
+  "created_at": "2026-04-28T10:34:18.645Z",
+  "updated_at": "2026-04-28T10:34:18.645Z"
+}

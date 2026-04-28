@@ -1,10 +1,16 @@
 {
-  "name": "boundaryml-mvp",
-  "version": "0.2.0",
+  "name": "boundaryml",
+  "version": "0.3.0",
   "private": true,
-  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "python3 -m http.server 5173",
+    "dev": "npm run dev -w @boundaryml/studio",
+    "dev:studio": "npm run dev -w @boundaryml/studio",
+    "dev:server": "npm run dev -w @boundaryml/server",
     "check": "node scripts/check.js"
-  }
+  },
+  "type": "module"
 }
