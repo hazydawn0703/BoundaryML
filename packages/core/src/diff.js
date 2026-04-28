@@ -1,4 +1,4 @@
-import { generatePrompt } from './promptGenerator.js';
+import { generatePrompt } from '../../generators/src/promptGenerator.js';
 
 export function generateWorkflowDiff(userRequest, workflow, assets) {
   const request = userRequest.toLowerCase().trim();

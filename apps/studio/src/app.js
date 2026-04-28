@@ -1,4 +1,4 @@
-import { EXECUTION_MODES, AI_EDIT_SUGGESTIONS } from './domain/constants.js';
+import { EXECUTION_MODES, AI_EDIT_SUGGESTIONS } from '../../../packages/schema/src/constants.js';
 import { getState, setState, subscribe, getActiveProject, replaceActiveProject, recomputeValidation } from './state/store.js';
 import {
   modelGenerateWorkflowDraft,
@@ -10,7 +10,7 @@ import {
   buildContextSummary,
   getModelCallLogs,
 } from './services/mockModelService.js';
-import { applyWorkflowDiff } from './services/diffGenerator.js';
+import { applyWorkflowDiff } from '../../../packages/core/src/diff.js';
 
 const app = document.getElementById('app');
 

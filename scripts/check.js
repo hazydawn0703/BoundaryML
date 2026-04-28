@@ -1,8 +1,8 @@
-import { createExampleProject } from '../src/domain/sampleProject.js';
-import { validateWorkflow } from '../src/services/validationEngine.js';
-import { generateExecutionKit } from '../src/services/executionKitGenerator.js';
-import { generateWorkflowDraft } from '../src/services/workflowGenerator.js';
-import { generateWorkflowDiff, applyWorkflowDiff } from '../src/services/diffGenerator.js';
+import { createExampleProject } from '../packages/core/src/sampleProject.js';
+import { validateWorkflow } from '../packages/rules/src/validationEngine.js';
+import { generateExecutionKit } from '../packages/generators/src/executionKitGenerator.js';
+import { generateWorkflowDraft } from '../packages/generators/src/workflowGenerator.js';
+import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/diff.js';
 
 function assert(condition, message) {
   if (!condition) {
