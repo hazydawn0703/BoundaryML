@@ -1,4 +1,4 @@
-import { EXECUTION_MODES } from '../domain/constants.js';
+import { EXECUTION_MODES } from '../../schema/src/constants.js';
 
 function result({ id, level, targetType, targetId, title, message, suggestedAction, autoFixAvailable = false, blockingFinal = false }) {
   return { id, level, targetType, targetId, title, message, suggestedAction, autoFixAvailable, blockingFinal };

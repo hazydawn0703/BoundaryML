@@ -1,6 +1,6 @@
-import { DEFAULT_PHASES } from './constants.js';
-import { generatePrompt } from '../services/promptGenerator.js';
-import { generateChecklist } from '../services/checklistGenerator.js';
+import { DEFAULT_PHASES } from '../../schema/src/constants.js';
+import { generatePrompt } from '../../generators/src/promptGenerator.js';
+import { generateChecklist } from '../../generators/src/checklistGenerator.js';
 
 const now = () => new Date().toISOString();
 

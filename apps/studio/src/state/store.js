@@ -1,11 +1,13 @@
-import { createExampleProject } from '../domain/sampleProject.js';
-import { validateWorkflow } from '../services/validationEngine.js';
+import { createExampleProject } from '../../../packages/core/src/sampleProject.js';
+import { validateWorkflow } from '../../../packages/rules/src/validationEngine.js';
 
 const STORAGE_KEY = 'boundaryml_mvp_state_v3';
 
 function initialState() {
   const exampleProject = createExampleProject();
   return {
+    runtimeMode: 'local_demo',
+    serverAvailable: false,
     currentPage: 'projects',
     projects: [exampleProject],
     activeProjectId: exampleProject.id,
@@ -80,6 +82,14 @@ export function replaceActiveProject(updatedProject) {
       validationResults: recomputeValidation(updatedProject),
     };
   });
+}
+
+export function setRuntimeMode(runtimeMode, serverAvailable) {
+  setState((prev) => ({
+    ...prev,
+    runtimeMode,
+    serverAvailable,
+  }));
 }
 
 if (!state.projects?.length) {
