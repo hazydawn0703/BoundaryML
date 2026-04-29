@@ -23,11 +23,13 @@
 ### 已实现
 - Studio 不直接持有 LLM API Key
 - Studio 通过统一 API client 调用 Server
+- API Base URL 优先级：`import.meta.env` -> `window` -> `/api`
 - Server 统一 response envelope
 - Request context 强制注入 workspace/user（不信任前端）
+- Job 查询闭环：`GET /api/projects/:projectId/jobs/:jobId`
 
 ### Stub
-- Generation Job：支持 queued/running/succeeded/failed，当前为同步执行 mock
+- Generation Job：支持 queued/running/succeeded/failed 与 job 查询，但当前仍是**同步 mock**（非真实异步队列）
 - Workflow history/snapshot：基础结构已落地，未提供 UI 历史面板
 
 ### 未实现
@@ -41,11 +43,12 @@
 - FileStorage 按 workspace 目录隔离
 - Atomic write（tmp + rename）
 - Server 自动写入 workspace_id / created_by / updated_by
-- Schema validation（项目/工作流/job 等）
+- Schema validation（项目/工作流/job + BoundaryML 完整 Spec 校验）
 
 ### Stub
 - LLM 输出仅做基础 schema 校验
 - model status 提供 mock/real 配置状态，但真实 provider 调用未完成
+- `validateProject` 仅是实体校验；完整项目级 Spec 校验由 `validateBoundaryMLProjectSpec` 提供
 
 ### 未实现
 - 完整安全基线（速率限制、审计、密钥轮换、KMS）

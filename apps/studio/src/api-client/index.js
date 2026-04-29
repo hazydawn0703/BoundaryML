@@ -1,5 +1,6 @@
 function resolveBaseUrl() {
-  return window.BOUNDARYML_API_BASE_URL || '/api';
+  const viteBaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_BOUNDARYML_API_BASE_URL : undefined;
+  return viteBaseUrl || window.BOUNDARYML_API_BASE_URL || '/api';
 }
 
 async function request(path, options = {}, baseUrl = resolveBaseUrl()) {

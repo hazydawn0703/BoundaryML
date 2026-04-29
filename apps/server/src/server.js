@@ -78,6 +78,7 @@ function createJob(ctx, project_id, job_type) {
   const job = {
     id: `job_${randomUUID()}`,
     workspace_id: ctx.workspace_id,
+    created_by: ctx.user_id,
     project_id,
     job_type,
     status: 'queued',
@@ -216,6 +217,7 @@ const server = createServer(async (req, res) => {
     runJob(job, () => {
       const regenerated = generateWorkflowDraft(project, project.context_pack || {});
       project.workflow = regenerated.workflow;
+      project.workflow.workspace_id = ctx.workspace_id;
       project.workflow.version = (project.workflow.version || 0) + 1;
       project.workflow.updated_at = new Date().toISOString();
       const valid = validateWorkflow(project.workflow);
@@ -225,6 +227,23 @@ const server = createServer(async (req, res) => {
       return { type: 'workflow', ref_id: project.workflow.id };
     });
     return ok(res, { job_id: job.id, status: job.status, output_ref: job.output_ref, error: job.error });
+  }
+
+  const workflowPatchMatch = path.match(/^\/api\/projects\/([^/]+)\/workflow$/);
+  if (method === 'PATCH' && workflowPatchMatch) {
+    const project = ensureProject(ctx, workflowPatchMatch[1]);
+    if (!project) return fail(res, 404, 'NOT_FOUND', 'Project not found');
+    const body = await readJsonBody(req);
+    if (body === null) return fail(res, 400, 'INVALID_JSON', 'Request body is not valid JSON');
+    project.workflow = {
+      ...project.workflow,
+      ...body,
+      version: (project.workflow.version || 0) + 1,
+      updated_at: new Date().toISOString(),
+    };
+    snapshotWorkflow(project);
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, project.workflow);
   }
 
   const workflowValidateMatch = path.match(/^\/api\/projects\/([^/]+)\/workflow\/validate$/);
@@ -295,6 +314,18 @@ const server = createServer(async (req, res) => {
       return { type: 'execution_kit', ref_id: project.execution_kit.id || `kit_${project.id}` };
     });
     return ok(res, { job_id: job.id, status: job.status, output_ref: job.output_ref, error: job.error });
+  }
+
+  const jobGetMatch = path.match(/^\/api\/projects\/([^/]+)\/jobs\/([^/]+)$/);
+  if (method === 'GET' && jobGetMatch) {
+    const [, projectId, jobId] = jobGetMatch;
+    const project = ensureProject(ctx, projectId);
+    if (!project) return fail(res, 404, 'NOT_FOUND', 'Project not found');
+    const job = jobs.get(jobId);
+    if (!job || job.project_id !== projectId || job.workspace_id !== ctx.workspace_id) {
+      return fail(res, 404, 'NOT_FOUND', 'Job not found');
+    }
+    return ok(res, job);
   }
 
   return fail(res, 404, 'NOT_FOUND', `No route for ${method} ${path}`);

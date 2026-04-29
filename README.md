@@ -35,6 +35,11 @@ npm run dev:studio
 - Server: `http://localhost:8787`
 - Studio: `http://localhost:5173`
 
+Studio API Base URL 读取优先级：
+1. `import.meta.env.VITE_BOUNDARYML_API_BASE_URL`
+2. `window.BOUNDARYML_API_BASE_URL`
+3. 默认 `/api`
+
 ## API 现状（骨架阶段）
 
 ### 可用实现（基础可运行）
@@ -43,8 +48,9 @@ npm run dev:studio
 - `GET /api/projects`
 - `POST /api/projects`
 - `GET /api/projects/:projectId`
+- `GET /api/projects/:projectId/jobs/:jobId`
 - `GET/PUT /api/projects/:projectId/context-pack`
-- `GET /api/projects/:projectId/workflow`
+- `GET/PATCH /api/projects/:projectId/workflow`
 - `POST /api/projects/:projectId/workflow/validate`
 - `GET /api/projects/:projectId/assets`
 - `POST /api/projects/:projectId/execution-kits/preview`
@@ -73,5 +79,7 @@ npm run dev:server
 - 核心规则
 - diff 应用
 - execution kit 约束
-- `examples/ai-saas-feature-mvp.json` schema 校验
-- FileStorage 重启后可读取
+- `examples/ai-saas-feature-mvp.json` 的完整 BoundaryML Spec 校验（非仅 Project）
+- FileStorage 重启后可读取（通过启动 server + 创建项目 + 重启后读取 smoke test）
+- Job 查询闭环（生成 job 后可 `GET /api/projects/:projectId/jobs/:jobId`）
+- workflow generate / diff apply 的 snapshot 链路

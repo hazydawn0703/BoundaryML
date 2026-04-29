@@ -37,7 +37,7 @@ export const ENTITY_SCHEMAS = {
     required: ['id', 'project_id', 'status', 'workflow_snapshot_version', 'generated_at', 'files'],
   },
   generation_job: {
-    required: ['id', 'workspace_id', 'project_id', 'job_type', 'status', 'created_at', 'updated_at'],
+    required: ['id', 'workspace_id', 'created_by', 'project_id', 'job_type', 'status', 'created_at', 'updated_at'],
   },
 };
 
@@ -110,3 +110,96 @@ export const validateChecklistAsset = (payload) => validateSchema('checklist_ass
 export const validateWorkflowDiff = (payload) => validateSchema('workflow_diff', payload);
 export const validateExecutionKit = (payload) => validateSchema('execution_kit', payload);
 export const validateGenerationJob = (payload) => validateSchema('generation_job', payload);
+
+export function validateBoundaryMLProjectSpec(payload) {
+  const normalized = toSnakeCaseKeys(payload);
+  const errors = [];
+
+  const requiredTopLevel = [
+    'boundaryml_version',
+    'project',
+    'context_pack',
+    'workflow',
+    'assets',
+    'validation',
+    'execution_kits',
+  ];
+
+  requiredTopLevel.forEach((field) => {
+    if (!(field in normalized)) errors.push(`spec.${field} is required`);
+  });
+
+  if (normalized.project) {
+    const projectResult = validateProject(normalized.project);
+    errors.push(...projectResult.errors.map((item) => `project: ${item}`));
+  }
+
+  if (normalized.context_pack) {
+    const contextResult = validateContextPack(normalized.context_pack);
+    errors.push(...contextResult.errors.map((item) => `context_pack: ${item}`));
+  }
+
+  if (normalized.workflow) {
+    const workflowResult = validateWorkflow(normalized.workflow);
+    errors.push(...workflowResult.errors.map((item) => `workflow: ${item}`));
+
+    if (!Array.isArray(normalized.workflow.phases)) {
+      errors.push('workflow.phases must be array');
+    } else {
+      normalized.workflow.phases.forEach((phase, index) => {
+        const phaseResult = validatePhase(phase);
+        errors.push(...phaseResult.errors.map((item) => `workflow.phases[${index}]: ${item}`));
+      });
+    }
+
+    if (!Array.isArray(normalized.workflow.nodes)) {
+      errors.push('workflow.nodes must be array');
+    } else {
+      normalized.workflow.nodes.forEach((node, index) => {
+        const nodeResult = validateNode(node);
+        errors.push(...nodeResult.errors.map((item) => `workflow.nodes[${index}]: ${item}`));
+      });
+    }
+
+    if (!Array.isArray(normalized.workflow.edges)) {
+      errors.push('workflow.edges must be array');
+    } else {
+      normalized.workflow.edges.forEach((edge, index) => {
+        const edgeResult = validateEdge(edge);
+        errors.push(...edgeResult.errors.map((item) => `workflow.edges[${index}]: ${item}`));
+      });
+    }
+  }
+
+  if (!normalized.assets || typeof normalized.assets !== 'object') {
+    errors.push('assets must be object');
+  } else {
+    if (!Array.isArray(normalized.assets.prompts)) errors.push('assets.prompts must be array');
+    if (!Array.isArray(normalized.assets.checklists)) errors.push('assets.checklists must be array');
+    if (!Array.isArray(normalized.assets.artifact_templates)) errors.push('assets.artifact_templates must be array');
+
+    (normalized.assets.prompts || []).forEach((prompt, index) => {
+      const promptResult = validatePromptAsset(prompt);
+      errors.push(...promptResult.errors.map((item) => `assets.prompts[${index}]: ${item}`));
+    });
+
+    (normalized.assets.checklists || []).forEach((checklist, index) => {
+      const checklistResult = validateChecklistAsset(checklist);
+      errors.push(...checklistResult.errors.map((item) => `assets.checklists[${index}]: ${item}`));
+    });
+  }
+
+  if (!Array.isArray(normalized.validation)) errors.push('validation must be array');
+  if (!Array.isArray(normalized.execution_kits)) errors.push('execution_kits must be array');
+
+  (normalized.execution_kits || []).forEach((kit, index) => {
+    const kitResult = validateExecutionKit(kit);
+    errors.push(...kitResult.errors.map((item) => `execution_kits[${index}]: ${item}`));
+  });
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    normalized,
+  };
+}
