@@ -10,7 +10,9 @@
     "dev": "npm run dev -w @boundaryml/studio",
     "dev:studio": "npm run dev -w @boundaryml/studio",
     "dev:server": "npm run dev -w @boundaryml/server",
-    "check": "node scripts/check.js"
+    "check": "node scripts/check.js",
+    "test": "node scripts/check.js",
+    "typecheck": "node --check packages/schema/src/schema.js && node --check packages/core/src/engine.js && node --check packages/rules/src/validationEngine.js"
   },
   "type": "module"
 }

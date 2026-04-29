@@ -72,7 +72,9 @@ Studio API Base URL 读取优先级：
 ## 校验
 
 ```bash
-npm run dev:server
+npm run check
+npm run test
+npm run typecheck
 ```
 
 `check` 会验证：
