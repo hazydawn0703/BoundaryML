@@ -21,7 +21,7 @@ export const ENTITY_SCHEMAS = {
   validation_result: { required: ['id', 'level', 'target_type', 'target_id', 'title', 'message'] },
   execution_kit: { required: ['id', 'project_id', 'status', 'workflow_snapshot_version', 'generated_at', 'files'] },
   workflow_snapshot: { required: ['workflow_snapshot_version', 'captured_at', 'workflow'] },
-  generation_job: { required: ['id', 'workspace_id', 'created_by', 'project_id', 'job_type', 'status', 'created_at', 'updated_at'] },
+  generation_job: { required: ['id', 'workspace_id', 'created_by', 'project_id', 'type', 'status', 'created_at', 'updated_at', 'input_snapshot', 'progress', 'cancel_requested'] },
   model_call_log: { required: ['id', 'workspace_id', 'model', 'purpose', 'status', 'created_at'] },
   template: { required: ['id', 'name', 'template_type', 'version', 'content'] },
 };

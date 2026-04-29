@@ -136,3 +136,14 @@
 ### Phase 2 Readiness
 - Ready
 - Blockers if any: none
+
+## Phase 2B Update (Generation Job 生命周期)
+- Job 对象补齐：新增 `input_snapshot`, `progress{stage,message}`, `error{stage,retryable,...}`, `idempotency_key`, `retry_of`, `cancel_requested`，并统一使用 `type` 字段。
+- Job status 覆盖：`queued/running/succeeded/failed/cancelled/expired`（`expired`预留）。
+- 生成 API 均支持 `Idempotency-Key`，命中 `queued/running/succeeded` 时复用已有 Job，避免重复正式产物。
+- 新增 Job API：
+  - `POST /api/projects/:projectId/jobs/:jobId/retry`
+  - `POST /api/projects/:projectId/jobs/:jobId/cancel`
+- Retry 语义：新建 job，`retry_of` 指向原 job，复用原 `input_snapshot`。
+- Cancel 语义：标记 `cancel_requested=true` 且 `status=cancelled`；若已 succeeded 返回 `JOB_ALREADY_COMPLETED`。
+- Jobs 改为 project 内持久化（`generation_jobs`），重启后可通过 Job API 读取。

@@ -20,7 +20,7 @@ const runtimeMode = 'local_server';
 const storageAdapter = process.env.BOUNDARYML_STORAGE_ADAPTER || (process.env.STORAGE_MODE === 'file' ? 'file' : 'memory');
 const dataDir = process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || './data';
 const storage = storageAdapter === 'file' ? new FileStorage(dataDir) : new MemoryStorage();
-const jobs = new Map();
+const ACTIVE_JOB_STATUS = new Set(['queued', 'running', 'succeeded']);
 const modelCalls = [];
 
 function makeContext() {
@@ -76,20 +76,72 @@ function writeOwnership(ctx, obj, isCreate = false) {
   return { ...obj, workspace_id: ctx.workspace_id, created_by: isCreate ? ctx.user_id : (obj.created_by || ctx.user_id), updated_by: ctx.user_id, created_at: isCreate ? now : (obj.created_at || now), updated_at: now, boundaryml_version: obj.boundaryml_version || 'v0.1', schema_version: obj.schema_version || 'boundaryml-schema-v0.1' };
 }
 
-function createJob(ctx, projectId, type) {
+function ensureJobStore(project) {
+  if (!Array.isArray(project.generation_jobs)) project.generation_jobs = [];
+}
+
+function readIdempotencyKey(req) {
+  const raw = req.headers['idempotency-key'];
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+function createJob(ctx, project, type, inputSnapshot, idempotencyKey = null, retryOf = null) {
   const now = new Date().toISOString();
-  const job = { id: `job_${randomUUID()}`, type, status: 'queued', project_id: projectId, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: now, updated_at: now, output_ref: null };
+  ensureJobStore(project);
+  if (idempotencyKey) {
+    const existing = project.generation_jobs.find((j) => j.type === type && j.idempotency_key === idempotencyKey && ACTIVE_JOB_STATUS.has(j.status));
+    if (existing) return existing;
+  }
+  const job = {
+    id: `job_${randomUUID()}`,
+    workspace_id: ctx.workspace_id,
+    project_id: project.id,
+    type,
+    status: 'queued',
+    created_by: ctx.user_id,
+    created_at: now,
+    updated_at: now,
+    input_snapshot: inputSnapshot || {},
+    output_ref: null,
+    error: null,
+    progress: { stage: 'queued', message: 'Waiting to start generation.' },
+    idempotency_key: idempotencyKey,
+    retry_of: retryOf,
+    cancel_requested: false,
+  };
   const v = validateGenerationJob(job);
   if (!v.ok) throw new Error(v.errors.join('; '));
-  jobs.set(job.id, job);
+  project.generation_jobs.push(job);
+  storage.saveProject(ctx.workspace_id, project);
   return job;
 }
 
-function runJob(job, fn) {
+function setJobProgress(job, stage, message) {
+  job.progress = { stage, message };
+  job.updated_at = new Date().toISOString();
+}
+
+function runJob(ctx, project, job, fn) {
+  if (job.status === 'cancelled') return;
   job.status = 'running';
+  setJobProgress(job, 'preparing_input', 'Preparing generation input.');
+  try {
+    const outputRef = fn((stage, message) => setJobProgress(job, stage, message));
+    if (job.cancel_requested) {
+      job.status = 'cancelled';
+      setJobProgress(job, 'failed', 'Cancelled before apply.');
+    } else {
+      job.output_ref = outputRef;
+      job.status = 'succeeded';
+      setJobProgress(job, 'completed', 'Generation completed.');
+    }
+  } catch (e) {
+    job.status = 'failed';
+    job.error = { code: 'JOB_FAILED', stage: job.progress?.stage || 'failed', retryable: true, message: e.message };
+    setJobProgress(job, 'failed', e.message);
+  }
   job.updated_at = new Date().toISOString();
-  try { job.output_ref = fn(); job.status = 'succeeded'; } catch (e) { job.status = 'failed'; job.error = { code: 'JOB_FAILED', message: e.message }; }
-  job.updated_at = new Date().toISOString();
+  storage.saveProject(ctx.workspace_id, project);
 }
 
 const server = createServer(async (req, res) => {
@@ -141,8 +193,8 @@ const server = createServer(async (req, res) => {
   const cpSumm = path.match(/^\/api\/projects\/([^/]+)\/context-pack\/summarize$/);
   if (method === 'POST' && cpSumm) {
     const project = getProject(ctx, cpSumm[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const job = createJob(ctx, project.id, 'context_pack_summarize');
-    runJob(job, () => { project.context_pack.summary = { recognized_roles: project.context_pack.team_roles || [], risk_warnings: ['mock_summary_warning'] }; storage.saveProject(ctx.workspace_id, project); return { type: 'context_pack', id: project.id }; });
+    const job = createJob(ctx, project, 'summarize_context_pack', { context_pack: structuredClone(project.context_pack || {}) }, readIdempotencyKey(req));
+    runJob(ctx, project, job, (progress) => { progress('calling_model', 'Summarizing context pack'); project.context_pack.summary = { recognized_roles: project.context_pack.team_roles || [], risk_warnings: ['mock_summary_warning'] }; return { type: 'context_pack_summary', project_id: project.id }; });
     return ok(res, ctx, { job_id: job.id, status: job.status, output_ref: job.output_ref });
   }
   const cpImpact = path.match(/^\/api\/projects\/([^/]+)\/context-pack\/refresh-impact$/);
@@ -166,11 +218,14 @@ const server = createServer(async (req, res) => {
   const wfGen = path.match(/^\/api\/projects\/([^/]+)\/workflow\/generate$/);
   if (method === 'POST' && wfGen) {
     const project = getProject(ctx, wfGen[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const job = createJob(ctx, project.id, 'workflow_generate');
-    runJob(job, () => {
+    const job = createJob(ctx, project, 'generate_workflow_draft', { context_pack: structuredClone(project.context_pack || {}), workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
+    runJob(ctx, project, job, (progress) => {
+      progress('calling_model', 'Generating workflow draft');
       const drafted = generateWorkflowDraft(project, project.context_pack || {});
+      progress('parsing_output', 'Parsing generated output');
       const workflow = createWorkflowFromTemplate(project, project.context_pack, drafted.workflow);
       const schema = validateWorkflow(workflow); if (!schema.ok) throw new Error(schema.errors.join('; '));
+      progress('running_boundary_rules', 'Running boundary rules');
       const validation = validateRulesWorkflow(workflow, project.assets, { forGeneration: true, modelConfig: null });
       project.workflow = workflow;
       project.validation = validation;
@@ -178,7 +233,7 @@ const server = createServer(async (req, res) => {
       if (!specCheck.ok) throw new Error(specCheck.errors.join('; '));
       project.workflow_history.push(createWorkflowSnapshot(project, project.context_pack, workflow, project.assets, validation));
       storage.saveProject(ctx.workspace_id, project);
-      return { type: 'workflow', id: workflow.id };
+      return { type: 'workflow', workflow_id: workflow.id, workflow_version: workflow.version };
     });
     return ok(res, ctx, { job_id: job.id, status: job.status, workflow: project.workflow, validation_results: project.validation });
   }
@@ -223,13 +278,14 @@ const server = createServer(async (req, res) => {
     const project = getProject(ctx, nodePrompt[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const node = project.workflow.nodes.find((n) => n.id === nodePrompt[2]); if (!node) return fail(res, ctx, 404, 'NODE_NOT_FOUND', 'Node not found');
     if (node.executionMode === 'human_only') return fail(res, ctx, 400, 'HUMAN_ONLY_NO_PROMPT', 'Human only node cannot generate AI prompt');
-    const job = createJob(ctx, project.id, 'generate_prompt');
-    runJob(job, () => {
+    const job = createJob(ctx, project, 'generate_prompt', { node_id: node.id, node: structuredClone(node) }, readIdempotencyKey(req));
+    runJob(ctx, project, job, (progress) => {
+      progress('calling_model', 'Generating prompt');
       const prompt = generatePrompt(node);
       project.assets.prompts = project.assets.prompts.filter((p) => p.nodeId !== node.id).concat(prompt);
       project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
       storage.saveProject(ctx.workspace_id, project);
-      return { type: 'prompt', id: prompt.id };
+      return { type: 'prompt_asset', asset_id: prompt.id };
     });
     return ok(res, ctx, { job_id: job.id, status: job.status });
   }
@@ -238,12 +294,13 @@ const server = createServer(async (req, res) => {
   if (method === 'POST' && nodeChecklist) {
     const project = getProject(ctx, nodeChecklist[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const node = project.workflow.nodes.find((n) => n.id === nodeChecklist[2]); if (!node) return fail(res, ctx, 404, 'NODE_NOT_FOUND', 'Node not found');
-    const job = createJob(ctx, project.id, 'generate_checklist');
-    runJob(job, () => {
+    const job = createJob(ctx, project, 'generate_checklist', { node_id: node.id, review_gate: structuredClone(node.reviewGate || {}) }, readIdempotencyKey(req));
+    runJob(ctx, project, job, (progress) => {
+      progress('calling_model', 'Generating checklist');
       const checklist = generateChecklist(node.reviewGate, node);
       project.assets.checklists = project.assets.checklists.filter((c) => c.nodeId !== node.id).concat(checklist);
       storage.saveProject(ctx.workspace_id, project);
-      return { type: 'checklist', id: checklist.id };
+      return { type: 'checklist_asset', asset_id: checklist.id };
     });
     return ok(res, ctx, { job_id: job.id, status: job.status });
   }
@@ -252,8 +309,8 @@ const server = createServer(async (req, res) => {
   if (method === 'POST' && diffGenerate) {
     const project = getProject(ctx, diffGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
-    const job = createJob(ctx, project.id, 'generate_diff');
-    runJob(job, () => { project.last_diff = generateWorkflowDiff(body.request || 'default', project.workflow, project.assets); storage.saveProject(ctx.workspace_id, project); return { type: 'diff', id: project.last_diff.id }; });
+    const job = createJob(ctx, project, 'generate_workflow_diff', { request: body.request || 'default', workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
+    runJob(ctx, project, job, (progress) => { progress('calling_model', 'Generating workflow diff'); project.last_diff = generateWorkflowDiff(body.request || 'default', project.workflow, project.assets); return { type: 'workflow_diff', diff_id: project.last_diff.id }; });
     return ok(res, ctx, { job_id: job.id, diff: project.last_diff });
   }
 
@@ -318,8 +375,8 @@ const server = createServer(async (req, res) => {
   const kitPreview = path.match(/^\/api\/projects\/([^/]+)\/execution-kits\/preview$/);
   if (method === 'POST' && kitPreview) {
     const project = getProject(ctx, kitPreview[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const job = createJob(ctx, project.id, 'execution_kit_preview');
-    runJob(job, () => ({ type: 'execution_kit_preview', id: `preview_${project.id}` }));
+    const job = createJob(ctx, project, 'generate_execution_kit_preview', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets) }, readIdempotencyKey(req));
+    runJob(ctx, project, job, (progress) => { progress('generating_files', 'Generating preview files'); return { type: 'execution_kit_preview', project_id: project.id }; });
     const preview = exportExecutionKit(generateExecutionKit(project.workflow, project.assets, project.validation || []));
     return ok(res, ctx, { job_id: job.id, preview });
   }
@@ -327,13 +384,13 @@ const server = createServer(async (req, res) => {
   const kitGenerate = path.match(/^\/api\/projects\/([^/]+)\/execution-kits\/generate$/);
   if (method === 'POST' && kitGenerate) {
     const project = getProject(ctx, kitGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const job = createJob(ctx, project.id, 'execution_kit_generate');
-    runJob(job, () => {
+    const job = createJob(ctx, project, 'generate_execution_kit', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets) }, readIdempotencyKey(req));
+    runJob(ctx, project, job, (progress) => {
+      progress('generating_files', 'Generating execution kit');
       const kit = generateExecutionKit(project.workflow, project.assets, project.validation || []);
       const rec = { id: `kit_${Date.now()}`, project_id: project.id, workspace_id: project.workspace_id, created_by: ctx.user_id, updated_by: ctx.user_id, workflow_snapshot_version: project.workflow.version, status: 'draft_only', files: kit.files, generated_at: new Date().toISOString() };
       project.execution_kits = (project.execution_kits || []).concat(rec);
-      storage.saveProject(ctx.workspace_id, project);
-      return { type: 'execution_kit', id: rec.id };
+      return { type: 'execution_kit', kit_id: rec.id };
     });
     return ok(res, ctx, { job_id: job.id, status: job.status, output_ref: job.output_ref });
   }
@@ -363,13 +420,39 @@ const server = createServer(async (req, res) => {
   const jobsList = path.match(/^\/api\/projects\/([^/]+)\/jobs$/);
   if (method === 'GET' && jobsList) {
     const project = getProject(ctx, jobsList[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    return ok(res, ctx, Array.from(jobs.values()).filter((j) => j.project_id === project.id && j.workspace_id === ctx.workspace_id));
+    ensureJobStore(project);
+    return ok(res, ctx, project.generation_jobs.filter((j) => j.workspace_id === ctx.workspace_id));
   }
   const jobsGet = path.match(/^\/api\/projects\/([^/]+)\/jobs\/([^/]+)$/);
   if (method === 'GET' && jobsGet) {
     const project = getProject(ctx, jobsGet[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const job = jobs.get(jobsGet[2]);
+    ensureJobStore(project);
+    const job = project.generation_jobs.find((j) => j.id === jobsGet[2]);
     if (!job || job.project_id !== project.id || job.workspace_id !== ctx.workspace_id) return fail(res, ctx, 404, 'JOB_NOT_FOUND', 'Job not found');
+    return ok(res, ctx, job);
+  }
+  const jobsRetry = path.match(/^\/api\/projects\/([^/]+)\/jobs\/([^/]+)\/retry$/);
+  if (method === 'POST' && jobsRetry) {
+    const project = getProject(ctx, jobsRetry[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    ensureJobStore(project);
+    const original = project.generation_jobs.find((j) => j.id === jobsRetry[2]);
+    if (!original) return fail(res, ctx, 404, 'JOB_NOT_FOUND', 'Job not found');
+    if (!original.input_snapshot) return fail(res, ctx, 400, 'JOB_NOT_RETRYABLE', 'Job has no input snapshot');
+    const retried = createJob(ctx, project, original.type, structuredClone(original.input_snapshot), null, original.id);
+    runJob(ctx, project, retried, () => ({ type: 'retry_placeholder', source_job_id: original.id }));
+    return ok(res, ctx, retried);
+  }
+  const jobsCancel = path.match(/^\/api\/projects\/([^/]+)\/jobs\/([^/]+)\/cancel$/);
+  if (method === 'POST' && jobsCancel) {
+    const project = getProject(ctx, jobsCancel[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    ensureJobStore(project);
+    const job = project.generation_jobs.find((j) => j.id === jobsCancel[2]);
+    if (!job) return fail(res, ctx, 404, 'JOB_NOT_FOUND', 'Job not found');
+    if (job.status === 'succeeded') return fail(res, ctx, 409, 'JOB_ALREADY_COMPLETED', 'Job already succeeded');
+    job.cancel_requested = true;
+    job.status = 'cancelled';
+    setJobProgress(job, 'failed', 'Cancel requested by user.');
+    storage.saveProject(ctx.workspace_id, project);
     return ok(res, ctx, job);
   }
 
