@@ -1,6 +1,6 @@
-import { DEFAULT_PHASES } from './constants.js';
-import { generatePrompt } from '../services/promptGenerator.js';
-import { generateChecklist } from '../services/checklistGenerator.js';
+import { DEFAULT_PHASES } from '../../schema/src/constants.js';
+import { generatePrompt } from '../../generators/src/promptGenerator.js';
+import { generateChecklist } from '../../generators/src/checklistGenerator.js';
 
 const now = () => new Date().toISOString();
 
@@ -75,11 +75,20 @@ export function createExampleProject() {
   const prompts = nodes
     .filter((node) => node.executionMode !== 'human_only')
     .map((node) => generatePrompt(node));
+  if (prompts[0]) {
+    prompts[0].status = 'outdated';
+    prompts[0].outdatedReason = 'Contract updated after review gate change';
+  }
 
   const checklists = nodes.map((node) => generateChecklist(node.reviewGate, node));
 
   return {
     id: 'project-ai-saas-feature-mvp',
+    workspace_id: 'demo_workspace',
+    created_by: 'demo_user',
+    updated_by: 'demo_user',
+    created_at: now(),
+    updated_at: now(),
     name: 'AI SaaS Feature MVP',
     type: 'AI Feature',
     goal: 'Build an AI SaaS feature MVP with explicit human-AI boundaries',
@@ -100,6 +109,7 @@ export function createExampleProject() {
     },
     workflow: {
       id: 'workflow-1',
+      workspace_id: 'demo_workspace',
       version: 1,
       status: 'draft',
       phases,
@@ -118,6 +128,14 @@ export function createExampleProject() {
         status: 'draft',
       })),
     },
+    model_call_logs: [{
+      id: 'model-call-1',
+      workspace_id: 'demo_workspace',
+      model: 'mock-planning-model',
+      purpose: 'workflow_generate',
+      status: 'succeeded',
+      created_at: now(),
+    }],
     executionKit: null,
   };
 }

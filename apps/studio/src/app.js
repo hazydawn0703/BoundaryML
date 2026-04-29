@@ -1,5 +1,6 @@
-import { EXECUTION_MODES, AI_EDIT_SUGGESTIONS } from './domain/constants.js';
-import { getState, setState, subscribe, getActiveProject, replaceActiveProject, recomputeValidation } from './state/store.js';
+import { EXECUTION_MODES, AI_EDIT_SUGGESTIONS } from '../../../packages/schema/src/constants.js';
+import { getState, setState, subscribe, getActiveProject, replaceActiveProject, recomputeValidation, setRuntimeMode } from './state/store.js';
+import { apiClient } from './api-client/index.js';
 import {
   modelGenerateWorkflowDraft,
   recommendExecutionMode,
@@ -10,7 +11,7 @@ import {
   buildContextSummary,
   getModelCallLogs,
 } from './services/mockModelService.js';
-import { applyWorkflowDiff } from './services/diffGenerator.js';
+import { applyWorkflowDiff } from '../../../packages/core/src/diff.js';
 
 const app = document.getElementById('app');
 
@@ -74,8 +75,11 @@ function renderSidebar(state) {
 function renderTopbar(state) {
   const project = getActiveProject(state);
   const stats = project ? countProjectStats(project) : { nodes: 0, aiNodes: 0, gates: 0 };
+  const runtimeBadge = state.serverAvailable
+    ? `<span class="badge">Mode: Local Server</span>`
+    : `<span class="badge risk-high">Mode: Local Demo (Server unavailable)</span>`;
   return `<header class="topbar"><div><h1>${project?.name || 'BoundaryML'}</h1><p>Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates</p></div>
-  <button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></header>`;
+  <div class="row">${runtimeBadge}<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></header>`;
 }
 
 function renderProjects(state) {
@@ -579,6 +583,24 @@ function handleSubmit(event) {
 
 subscribe(render);
 render();
+
+async function bootstrapRuntimeMode() {
+  try {
+    await apiClient.health();
+    const projects = await apiClient.listProjects();
+    if (projects?.length) {
+      setState((prev) => ({
+        ...prev,
+        projects: prev.projects,
+      }));
+    }
+    setRuntimeMode('local_server', true);
+  } catch {
+    setRuntimeMode('local_demo', false);
+  }
+}
+
+bootstrapRuntimeMode();
 
 document.addEventListener('click', handleAction);
 document.addEventListener('input', handleInput);
