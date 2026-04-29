@@ -1,8 +1,8 @@
-import { generateWorkflowDraft } from './workflowGenerator.js';
-import { generatePrompt } from './promptGenerator.js';
-import { generateChecklist } from './checklistGenerator.js';
-import { generateWorkflowDiff } from './diffGenerator.js';
-import { generateExecutionKit } from './executionKitGenerator.js';
+import { generateWorkflowDraft } from '../../../packages/generators/src/workflowGenerator.js';
+import { generatePrompt } from '../../../packages/generators/src/promptGenerator.js';
+import { generateChecklist } from '../../../packages/generators/src/checklistGenerator.js';
+import { generateWorkflowDiff } from '../../../packages/core/src/diff.js';
+import { generateExecutionKit } from '../../../packages/generators/src/executionKitGenerator.js';
 
 const callLog = [];
 
