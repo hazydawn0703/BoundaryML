@@ -75,6 +75,48 @@ function writeOwnership(ctx, obj, isCreate = false) {
   const now = new Date().toISOString();
   return { ...obj, workspace_id: ctx.workspace_id, created_by: isCreate ? ctx.user_id : (obj.created_by || ctx.user_id), updated_by: ctx.user_id, created_at: isCreate ? now : (obj.created_at || now), updated_at: now, boundaryml_version: obj.boundaryml_version || 'v0.1', schema_version: obj.schema_version || 'boundaryml-schema-v0.1' };
 }
+function ensureWorkflowHistory(project) {
+  if (!Array.isArray(project.workflow_history_items)) project.workflow_history_items = [];
+  if (!Array.isArray(project.workflow_snapshots)) project.workflow_snapshots = [];
+}
+function recordWorkflowHistory(ctx, project, changeSource, summary, diffId = null) {
+  ensureWorkflowHistory(project);
+  const previousVersion = (project.workflow.version || 1) - 1;
+  const snapshot = createWorkflowSnapshot(project, project.context_pack, project.workflow, project.assets, project.validation || []);
+  const snapshotRef = `workflow_snapshot_v${project.workflow.version}`;
+  project.workflow_snapshots = project.workflow_snapshots.filter((s) => s.workflow_version !== project.workflow.version);
+  project.workflow_snapshots.push({
+    id: snapshotRef,
+    workspace_id: project.workspace_id,
+    project_id: project.id,
+    workflow_id: project.workflow.id,
+    workflow_version: project.workflow.version,
+    project_summary: { name: project.name, goal: project.goal },
+    context_pack_version: project.context_pack?.version || 1,
+    phases: snapshot.workflow.phases,
+    nodes: snapshot.workflow.nodes,
+    edges: snapshot.workflow.edges,
+    asset_references: { prompts: (project.assets?.prompts || []).map((a) => a.id), checklists: (project.assets?.checklists || []).map((a) => a.id) },
+    validation_results: snapshot.validation,
+    created_at: new Date().toISOString(),
+    created_by: ctx.user_id,
+    change_source: changeSource,
+  });
+  project.workflow_history_items.push({
+    id: `history_${randomUUID()}`,
+    workspace_id: project.workspace_id,
+    project_id: project.id,
+    workflow_id: project.workflow.id,
+    version: project.workflow.version,
+    previous_version: previousVersion > 0 ? previousVersion : null,
+    change_source: changeSource,
+    summary,
+    created_by: ctx.user_id,
+    created_at: new Date().toISOString(),
+    diff_id: diffId,
+    snapshot_ref: snapshotRef,
+  });
+}
 
 function ensureJobStore(project) {
   if (!Array.isArray(project.generation_jobs)) project.generation_jobs = [];
@@ -160,8 +202,9 @@ const server = createServer(async (req, res) => {
     const project = writeOwnership(ctx, { ...base, id: body.id || `project_${Date.now()}`, name: body.name || base.name, goal: body.goal || base.goal, context_pack: base.contextPack, deleted_at: null }, true);
     const v = validateProject(project); if (!v.ok) return fail(res, ctx, 400, 'SCHEMA_INVALID', 'Project invalid', v.errors);
     project.workflow = normalizeWorkflowSpec({ workflow: project.workflow }).workflow;
+    project.workflow.version = 0;
     project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
-    project.workflow_history = [createWorkflowSnapshot(project, project.context_pack, project.workflow, project.assets, project.validation)];
+    ensureWorkflowHistory(project);
     storage.saveProject(ctx.workspace_id, project);
     return ok(res, ctx, project, 201);
   }
@@ -198,7 +241,14 @@ const server = createServer(async (req, res) => {
     return ok(res, ctx, { job_id: job.id, status: job.status, output_ref: job.output_ref });
   }
   const cpImpact = path.match(/^\/api\/projects\/([^/]+)\/context-pack\/refresh-impact$/);
-  if (method === 'POST' && cpImpact) return ok(res, ctx, { affected_nodes: [], affected_assets: [], note: 'skeleton' });
+  if (method === 'POST' && cpImpact) {
+    const project = getProject(ctx, cpImpact[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    project.workflow = applyWorkflowPatch(project.workflow, { context_pack_version: project.context_pack?.version || 1 });
+    project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    recordWorkflowHistory(ctx, project, 'context_refresh', 'Refreshed workflow impact from context pack.');
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { affected_nodes: [], affected_assets: [], note: 'skeleton', workflow_version: project.workflow.version });
+  }
 
   const wfRoute = path.match(/^\/api\/projects\/([^/]+)\/workflow$/);
   if (wfRoute) {
@@ -210,6 +260,7 @@ const server = createServer(async (req, res) => {
       const schema = validateWorkflow(merged); if (!schema.ok) return fail(res, ctx, 400, 'WORKFLOW_SCHEMA_INVALID', 'Workflow schema invalid', schema.errors);
       const validation = validateRulesWorkflow(merged, project.assets, { forGeneration: false, modelConfig: {} });
       project.workflow = merged; project.validation = validation; project.workflow_history.push(createWorkflowSnapshot(project, project.context_pack, merged, project.assets, validation));
+      recordWorkflowHistory(ctx, project, 'manual_edit', 'Patched workflow.');
       storage.saveProject(ctx.workspace_id, project);
       return ok(res, ctx, { workflow: merged, validation_results: validation });
     }
@@ -231,7 +282,7 @@ const server = createServer(async (req, res) => {
       project.validation = validation;
       const specCheck = validateBoundaryMLProjectSpec({ boundaryml_version: 'v0.1', project, context_pack: project.context_pack, workflow, assets: project.assets, validation, execution_kits: project.execution_kits || [] });
       if (!specCheck.ok) throw new Error(specCheck.errors.join('; '));
-      project.workflow_history.push(createWorkflowSnapshot(project, project.context_pack, workflow, project.assets, validation));
+      recordWorkflowHistory(ctx, project, 'model_generation', 'Generated workflow draft.');
       storage.saveProject(ctx.workspace_id, project);
       return { type: 'workflow', workflow_id: workflow.id, workflow_version: workflow.version };
     });
@@ -251,7 +302,9 @@ const server = createServer(async (req, res) => {
     const project = getProject(ctx, wfFinal[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
     if (validation.some((v) => v.level === 'error' && v.blockingFinal)) return fail(res, ctx, 400, 'WORKFLOW_BLOCKING_ERRORS', 'Workflow has blocking errors', validation.filter((v) => v.level === 'error'));
-    project.workflow.status = 'final'; project.validation = validation; storage.saveProject(ctx.workspace_id, project);
+    project.workflow = applyWorkflowPatch(project.workflow, { status: 'final' }); project.validation = validation;
+    recordWorkflowHistory(ctx, project, 'mark_final', 'Marked workflow as final.');
+    storage.saveProject(ctx.workspace_id, project);
     return ok(res, ctx, { workflow_version: project.workflow.version, validation_summary: { errors: 0, warnings: validation.filter((v) => v.level === 'warning').length } });
   }
 
@@ -267,7 +320,7 @@ const server = createServer(async (req, res) => {
       project.workflow = applyWorkflowPatch(project.workflow, { nodes: project.workflow.nodes });
       project.assets = markAffectedAssetsOutdated([{ target_type: 'node', target_id: node.id }], project.assets);
       project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
-      project.workflow_history.push(createWorkflowSnapshot(project, project.context_pack, project.workflow, project.assets, project.validation));
+      recordWorkflowHistory(ctx, project, 'manual_edit', 'Updated workflow node.');
       storage.saveProject(ctx.workspace_id, project);
       return ok(res, ctx, { node: project.workflow.nodes[idx], workflow_summary: { version: project.workflow.version }, validation_results: project.validation });
     }
@@ -328,7 +381,7 @@ const server = createServer(async (req, res) => {
     project.workflow = applyDiff(project.workflow, diff, diff.changes.filter((c) => c.selected).map((c) => c.id));
     project.assets = markAffectedAssetsOutdated(diff.changes, project.assets);
     project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
-    project.workflow_history.push(createWorkflowSnapshot(project, project.context_pack, project.workflow, project.assets, project.validation));
+    recordWorkflowHistory(ctx, project, 'ai_diff_apply', 'Applied workflow diff.', diff.id);
     diff.status = 'applied';
     storage.saveProject(ctx.workspace_id, project);
     return ok(res, ctx, { workflow: project.workflow, validation_results: project.validation });
@@ -422,6 +475,21 @@ const server = createServer(async (req, res) => {
     const project = getProject(ctx, jobsList[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     ensureJobStore(project);
     return ok(res, ctx, project.generation_jobs.filter((j) => j.workspace_id === ctx.workspace_id));
+  }
+  const wfHistory = path.match(/^\/api\/projects\/([^/]+)\/workflow\/history$/);
+  if (method === 'GET' && wfHistory) {
+    const project = getProject(ctx, wfHistory[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    ensureWorkflowHistory(project);
+    return ok(res, ctx, project.workflow_history_items);
+  }
+  const wfVersion = path.match(/^\/api\/projects\/([^/]+)\/workflow\/versions\/([^/]+)$/);
+  if (method === 'GET' && wfVersion) {
+    const project = getProject(ctx, wfVersion[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    ensureWorkflowHistory(project);
+    const version = Number(wfVersion[2]);
+    const snap = project.workflow_snapshots.find((s) => s.workflow_version === version);
+    if (!snap) return fail(res, ctx, 404, 'WORKFLOW_VERSION_NOT_FOUND', 'Workflow version snapshot not found');
+    return ok(res, ctx, snap);
   }
   const jobsGet = path.match(/^\/api\/projects\/([^/]+)\/jobs\/([^/]+)$/);
   if (method === 'GET' && jobsGet) {

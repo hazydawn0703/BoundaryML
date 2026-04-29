@@ -147,3 +147,12 @@
 - Retry 语义：新建 job，`retry_of` 指向原 job，复用原 `input_snapshot`。
 - Cancel 语义：标记 `cancel_requested=true` 且 `status=cancelled`；若已 succeeded 返回 `JOB_ALREADY_COMPLETED`。
 - Jobs 改为 project 内持久化（`generation_jobs`），重启后可通过 Job API 读取。
+
+## Phase 2C Update (Workflow History / Version / Snapshot)
+- 关键 workflow 变更统一推进 version：workflow generate、workflow patch、node patch、diff apply、mark final、context refresh。
+- 新增 `workflow_history_items`（history item）与 `workflow_snapshots`（按 version 保存快照）并持久化到 project。
+- 新增 API：
+  - `GET /api/projects/:projectId/workflow/history`
+  - `GET /api/projects/:projectId/workflow/versions/:version`
+- Snapshot 记录 project summary、context_pack_version、workflow topology、asset refs、validation、change_source、created_by/at。
+- Execution kit preview/generate 继续记录并返回 `workflow_snapshot_version`（与当前 workflow version 绑定）。
