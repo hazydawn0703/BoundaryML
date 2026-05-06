@@ -169,3 +169,69 @@
 - Workflow PATCH / Node PATCH / Diff Apply / Mark Final 支持 `workflow_version` optimistic lock，不匹配返回 `VERSION_CONFLICT`。
 - Execution kit 状态强化：生成成功标记 `generated`；下载时 `failed/generating` 禁止；`stale` 可下载且返回 stale 标记。
 - Workflow version 变化后，已有 generated/exported kit 自动转为 stale。
+
+## Phase 3 Summary
+
+### Pre-coding Audit
+- Existing Studio data flow: 当前由 `apps/studio/src/app.js` 与 `state/store.js` 驱动，本地 state + mock service 为主。
+- Existing API client: 仅有 health/listProjects/getExampleProject，封装不足。
+- Existing localStorage usage: 持久化整份 studio state（含 projects），与 server-first 冲突。
+- Existing demo mode: 有基础 health check 与 badge，但 server 可用时也未真正切换数据源。
+- Gaps found: 缺统一 API 模块、缺 jobs/model/context/workflow server 接入、缺显式 demo 边界。
+
+### Completed
+- 扩展统一 API Client（health/projects/context/workflow/jobs/model/assets/execution kits）。
+- 改造 Studio store：localStorage 仅保留 UI 状态，不再作为正式项目数据源。
+- 将 Create Project / Context Pack / Runtime bootstrap 初步接入真实 server API。
+
+### Files Changed
+- apps/studio/src/api-client/index.js
+- apps/studio/src/state/store.js
+- apps/studio/src/app.js
+- docs/development-memory.md
+
+### API Client Changes
+- 统一 base URL 优先级：VITE -> window -> /api
+- 统一 envelope 解析、requestId/meta 提取、server unavailable 与 envelope 异常处理
+- 模块化 API 方法：healthApi/projectsApi/contextPackApi/workflowApi/jobsApi/modelApi/assetsApi/executionKitsApi
+
+### Pages Connected
+- Projects: bootstrap 时读取 server projects（初步）
+- Create Project: 调用 POST /api/projects（初步）
+- Context Pack: 调用 PUT context-pack + workflow generate（初步）
+- Workflow Studio: 待完善
+- Node Detail: 待完善
+- Validation Results: 待完善
+- Job Status: 待完善
+- Model Status: bootstrap 获取 status（初步）
+
+### Local Demo Mode Changes
+- server 异常时写入 `serverError` 并回到 local demo runtime mode。
+
+### Tests Added / Updated
+- 暂未新增单测（下一步补 API client tests 与 Studio 接入 smoke）。
+
+### Validation
+- typecheck: pending
+- lint: n/a
+- test: pending
+- check: pending
+- smoke:server: pending
+
+### Known Limitations
+- app.js 仍较大，部分页面仍依赖本地 mock/service。
+- workflow/node/validation/job/model UI 仍需按 Phase 3 完整验收项补齐。
+
+### Risks / Follow-ups
+- 需要进一步规范 server response shape 映射（snake_case -> UI）。
+- 需要逐页移除 mock-only 行为，避免 local/server 混用。
+
+### Phase 4 Readiness
+- Blocked
+- Blockers if any: Phase 3 尚未完成全部验收条目。
+
+## Phase 3 Progress Update (Projects → Create → Context → Studio 主链继续)
+- Projects 页补充空状态文案与 Create First Project 入口；卡片增加 snake_case 字段兼容展示（project_type/risk_level/current_stage/execution_kit）。
+- Open Project 动作改为并行加载 project/workflow/jobs，进入 Studio 时尽量展示真实 workflow + assets + validation + jobs。
+- Validate 按钮优先调用 server `POST /workflow/validate`，失败时回退本地 validation 作为兜底显示。
+- Runtime badge 文案改为 `Mode: Local Demo / Mock Model`，避免模糊 fallback。
