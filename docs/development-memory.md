@@ -254,3 +254,72 @@
 - `update-prompt-content` 在 server mode 下改为 `assetsApi.update`，并回拉 assets。
 - `edit-asset-prompt` 在 server mode 下改为 `assetsApi.update`，并回拉 assets。
 - `assetsApi` 新增 `update(projectId, assetId, payload)`。
+
+## Phase 4 Summary
+
+### Pre-coding Audit
+- docs/development-memory.md review: 已确认 Phase 0–3 的 server-first 约束、mock 限制与未完成 Studio 编辑能力边界。
+- Workflow Canvas: 已按 phase lane 展示，但 phase 卡片信息不足（缺 node count/high-risk count/validation count/status）。
+- Node Detail: 已有 overview/boundary/io/gate/assets/history 轻量结构；overview 多为只读，缺完整 server edit 表单。
+- Add/Delete Node: add-node 仍是本地 push；delete-node 不存在。
+- Edge Editing: 仅有 edge hints 展示，无 add/delete/edit。
+- Validation: validate 按钮已接 server，但编辑后未统一 refresh workflow/validation/history/assets/jobs。
+- History/Undo/Restore: 有 server API client 基础（history/version），UI 入口不足，undo/restore 未接。
+- Version Conflict: 节点 patch 可能返回冲突，但 UI 未统一文案与 refresh 引导。
+- Demo Mode: 已有本地 fallback；仍需更显式标记，避免误判为 server 持久化。
+- Gaps found: Server mode 下 workflow 核心编辑（add/delete/edge/undo/restore）缺失，编辑后全链刷新机制缺失。
+
+### Completed
+- 在 Studio 工具栏新增 Undo / History 入口，并在 Demo 模式显式展示 `Mode: Local Demo / Mock Model`。
+- 为 Server Mode 新增统一刷新函数，编辑后并行刷新 workflow/jobs/assets/history。
+- Add Node 在 Server Mode 下改为调用 `PATCH /workflow`（携带 `workflow_version` 与完整 nodes）。
+- 新增 Delete Node（overview 区域按钮），删除前显示影响提示（related edges/downstream nodes），并走 Server patch。
+- 扩展 API client：workflow patch/undo/restore 接口。
+- Node Card 增加 owner 与输入/输出摘要，强化 Phase 4 要求的卡片信息密度。
+
+### Files Changed
+- apps/studio/src/api-client/index.js
+- apps/studio/src/app.js
+- docs/development-memory.md
+
+### Workflow Studio Changes
+- Toolbar 新增 `Undo` 与 `History`；保留 Validate。
+- Demo 模式显式 warning banner。
+- Phase 区域新增 `Add Node to this phase` 快捷入口。
+
+### Node Editing Changes
+- Overview 增加 `Delete Node` 按钮。
+- Server mode `add-node` 改为 server patch（optimistic lock）。
+- 新增 server mode `delete-node`，并在删除前展示影响。
+
+### Edge Editing Changes
+- 本次仅保持现有 edge hints 展示；未完成 add/delete edge 表单与 server patch。
+
+### Validation / History Changes
+- `refreshProjectRuntime` 在编辑后刷新 workflow + validation + jobs + assets + history。
+- History 按钮可拉取 history 并显示 latest 版本摘要。
+- Undo 调用 server `POST /workflow/undo` 并刷新。
+
+### Error Handling Changes
+- add/delete node 对 `VERSION_CONFLICT` 统一展示：`Workflow has been updated by another operation. Please refresh and try again.`
+- 其余 API 错误继续透出 message。
+
+### Tests Added / Updated
+- 本轮未新增前端自动化测试；需在后续补 store/script 级覆盖（node patch/add/delete/edge/undo/restore/conflict/mock-path/localStorage）。
+
+### Validation
+- typecheck: pending
+- lint: n/a
+- test: pending
+- smoke:server: pending
+- check: pending
+
+### Known Limitations
+- Phase card 统计字段（node/high-risk/validation/status）仍未完整。
+- Node detail 中 Review Gate / Artifact Contract 仍为轻量编辑，未覆盖全部字段。
+- Edge add/delete/edit 仍未实现。
+- Restore/version detail UI 仍未实现。
+
+### Phase 5 Readiness
+- Blocked
+- Blockers if any: 仍有 Phase 4 验收条目未闭合（edge editing、restore UI、测试覆盖、完整字段编辑）。

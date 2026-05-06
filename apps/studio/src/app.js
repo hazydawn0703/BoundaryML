@@ -149,8 +149,9 @@ function renderNodeCard(node, selected) {
   return `<button class="node-card ${selected ? 'selected' : ''} ${node.muted ? 'muted-node' : ''}" data-action="select-node" data-node-id="${node.id}">
     <div class="node-head"><strong>${node.name}</strong>${badge(node.riskLevel, `risk-${node.riskLevel}`)}</div>
     <div class="mode-pill" style="border-color:${mode.color};color:${mode.color}">${mode.label}</div>
-    <div class="meta">Gate: ${node.reviewGate?.name || 'none'}</div>
+    <div class="meta">Gate: ${node.reviewGate?.name || 'none'} · Owner: ${node.humanOwnerRole || 'n/a'}</div>
     <div class="meta">Prompt: ${node.promptStatus} · Status: ${node.status}</div>
+    <div class="meta">In: ${(node.inputs || []).join(', ') || 'none'} · Out: ${(node.outputs || []).join(', ') || 'none'}</div>
   </button>`;
 }
 
@@ -174,7 +175,7 @@ function renderNodeDetail(state, project, node) {
   const checklist = project.assets.checklists.find((item) => item.nodeId === node.id);
 
   const body = {
-    overview: `<p><strong>${node.name}</strong></p><p>${node.goal}</p><p>Phase: ${project.workflow.phases.find((p) => p.id === node.phaseId)?.name}</p><p>Status: ${node.status} · Risk: ${node.riskLevel}</p><p>Upstream: ${upstream.join(', ') || 'none'}</p><p>Downstream: ${downstream.join(', ') || 'none'}</p>`,
+    overview: `<p><strong>${node.name}</strong></p><p>${node.goal}</p><p>Phase: ${project.workflow.phases.find((p) => p.id === node.phaseId)?.name}</p><p>Status: ${node.status} · Risk: ${node.riskLevel}</p><p>Upstream: ${upstream.join(', ') || 'none'}</p><p>Downstream: ${downstream.join(', ') || 'none'}</p><button data-action="delete-node" data-node-id="${node.id}">Delete Node</button>`,
     boundary: `<label>Execution Mode<select data-action="update-node-field" data-field="executionMode" data-node-id="${node.id}">${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${node.executionMode === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
     <label>Human Owner<input data-action="update-node-field" data-field="humanOwnerRole" data-node-id="${node.id}" value="${node.humanOwnerRole}"/></label>
     <label>AI Role<input data-action="update-node-field" data-field="aiRole" data-node-id="${node.id}" value="${node.aiRole || ''}"/></label>
@@ -208,7 +209,8 @@ function renderStudio(state) {
 
   const recentJobs = (state.jobs || []).slice(0, 3);
   return `<section class="page"><div class="toolbar card"><div><strong>${project.name}</strong><p class="muted">v${project.workflow.version} · ${project.workflow.status}</p></div>
-    <div class="row"><button data-action="add-node">Add Node</button><button data-action="toggle-ai-edit">AI Edit</button><button data-action="validate">Validate</button><button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>
+    <div class="row"><button data-action="add-node">Add Node</button><button data-action="undo-workflow">Undo</button><button data-action="toggle-history">History</button><button data-action="validate">Validate</button><button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>
+  ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model</div>'}
   ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
   <div class="studio-grid">
     <aside class="card panel"><h3>Filters & Legend</h3>
@@ -220,7 +222,7 @@ function renderStudio(state) {
     </aside>
     <div class="card canvas">${project.workflow.phases.map((phase) => {
       const phaseNodes = nodes.filter((node) => node.phaseId === phase.id);
-      return `<div class="lane"><h4>${phase.name}</h4>${phaseNodes.map((node) => renderNodeCard(node, node.id === selectedNode.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, phaseNodes)}</ul></div>`;
+      return `<div class="lane"><h4>${phase.name}</h4><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${phaseNodes.map((node) => renderNodeCard(node, node.id === selectedNode.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, phaseNodes)}</ul></div>`;
     }).join('')}</div>
     ${renderNodeDetail(state, project, selectedNode)}
   </div>
@@ -250,6 +252,22 @@ function renderDiffDrawer(state) {
   return `<div class="drawer"><div class="card panel"><h3>Diff Review</h3><p>${diff.request}</p>
   <ul>${diff.changes.map((change) => `<li><label class="check"><input type="checkbox" data-action="toggle-diff-change" data-change-id="${change.id}" ${change.selected ? 'checked' : ''}/> <strong>${change.type}</strong> ${change.targetType} ${change.targetId}<br/>Reason: ${change.reason}<br/>Impact: ${change.impact}</label></li>`).join('')}</ul>
   <div class="actions"><button data-action="apply-diff-all" class="primary">Apply All</button><button data-action="apply-diff-selected">Apply Selected</button><button data-action="reject-diff">Reject All</button></div></div></div>`;
+}
+
+async function refreshProjectRuntime(projectId) {
+  const [workflowResult, jobsResult, assetsResult, historyResult] = await Promise.all([
+    apiClient.workflowApi.get(projectId),
+    apiClient.jobsApi.list(projectId),
+    apiClient.assetsApi.list(projectId),
+    apiClient.workflowApi.history(projectId),
+  ]);
+  const workflowEnvelope = workflowResult.data?.workflow || workflowResult.data || {};
+  const workflow = workflowEnvelope.workflow || workflowEnvelope;
+  updateActiveProject((draft) => {
+    draft.workflow = workflow;
+    draft.assets = workflowEnvelope.assets || assetsResult.data?.assets || assetsResult.data || draft.assets;
+  });
+  setState((prev) => ({ ...prev, jobs: jobsResult.data?.jobs || jobsResult.data || [], validationResults: workflowEnvelope.validation || prev.validationResults, workflowHistory: historyResult.data || [] }));
 }
 
 function getFilteredAssets(state, project) {
@@ -397,6 +415,22 @@ function handleAction(event) {
       .then(({ data }) => setState((prev) => ({ ...prev, validationResults: data.validation || data.results || [] })))
       .catch(() => setState((prev) => ({ ...prev, validationResults: recomputeValidation(project) })));
   }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.dataset.suggestion } }));
@@ -532,7 +566,20 @@ function handleAction(event) {
     }, 'Review gate changed', [nodeId]);
   }
 
-  if (action === 'add-node') {
+  if (action === 'add-node' || action === 'add-node-phase') {
+    const phaseId = target.dataset.phaseId;
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      const selectedPhase = phaseId || project.workflow.phases.at(-1)?.id;
+      const id = `node-${Date.now()}`;
+      const nextNodes = [...project.workflow.nodes, {
+        id, phaseId: selectedPhase, name: 'New Node', goal: 'Describe node goal', executionMode: 'human_lead_ai_assist', riskLevel: 'medium', status: 'draft', humanOwnerRole: 'Project Manager', aiRole: 'Assistant', inputs: ['input'], outputs: ['output'], artifactContract: { id: `artifact-${id}`, format: 'markdown', outputFormat: 'markdown', acceptanceCriteria: ['complete'] }, reviewGate: { id: `gate-${id}`, name: 'Review', reviewerRole: 'Project Manager', criteria: ['quality'], passCondition: 'approved', rejectCondition: 'rework', allowAiRevision: true, required: true }, promptStatus: 'draft', checklistStatus: 'draft', history: [{ at: new Date().toISOString(), action: 'Added manually' }],
+      }];
+      apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, nodes: nextNodes }).then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : (error.message || 'Failed to add node') })));
+      return;
+    }
     updateActiveProject((draft) => {
       const phase = draft.workflow.phases.at(-1);
       const id = `node-${Date.now()}`;
@@ -556,6 +603,20 @@ function handleAction(event) {
       });
       draft.workflow.version += 1;
     }, 'Node added');
+  }
+
+  if (action === 'delete-node') {
+    const st = getState();
+    const project = getActiveProject(st);
+    const nodeId = target.dataset.nodeId;
+    if (!project?.id || !nodeId || !st.serverAvailable) return;
+    const downstream = project.workflow.edges.filter((e) => e.from === nodeId).map((e) => e.to);
+    const edgeCount = project.workflow.edges.filter((e) => e.from === nodeId || e.to === nodeId).length;
+    if (!window.confirm(`Delete node impact:\nrelated edges: ${edgeCount}\ndownstream nodes: ${downstream.join(', ') || 'none'}`)) return;
+    const nextNodes = project.workflow.nodes.filter((n) => n.id !== nodeId);
+    const nextEdges = project.workflow.edges.filter((e) => e.from !== nodeId && e.to !== nodeId);
+    apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, nodes: nextNodes, edges: nextEdges }).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : (error.message || 'Failed to delete node') })));
   }
 
   if (action === 'copy-kit') {
