@@ -117,6 +117,17 @@ function recordWorkflowHistory(ctx, project, changeSource, summary, diffId = nul
     snapshot_ref: snapshotRef,
   });
 }
+function rehydrateFromSnapshot(project, snapshot) {
+  project.workflow = {
+    ...project.workflow,
+    id: snapshot.workflow_id,
+    version: snapshot.workflow_version,
+    phases: structuredClone(snapshot.phases || []),
+    nodes: structuredClone(snapshot.nodes || []),
+    edges: structuredClone(snapshot.edges || []),
+    updated_at: new Date().toISOString(),
+  };
+}
 
 function ensureJobStore(project) {
   if (!Array.isArray(project.generation_jobs)) project.generation_jobs = [];
@@ -307,6 +318,39 @@ const server = createServer(async (req, res) => {
     storage.saveProject(ctx.workspace_id, project);
     return ok(res, ctx, { workflow_version: project.workflow.version, validation_summary: { errors: 0, warnings: validation.filter((v) => v.level === 'warning').length } });
   }
+  const wfRestore = path.match(/^\/api\/projects\/([^/]+)\/workflow\/restore$/);
+  if (method === 'POST' && wfRestore) {
+    const project = getProject(ctx, wfRestore[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    ensureWorkflowHistory(project);
+    const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
+    const version = Number(body.version);
+    const source = project.workflow_snapshots.find((s) => s.workflow_version === version);
+    if (!source) return fail(res, ctx, 404, 'WORKFLOW_VERSION_NOT_FOUND', 'Workflow version snapshot not found');
+    const nextVersion = (project.workflow.version || 0) + 1;
+    rehydrateFromSnapshot(project, { ...source, workflow_version: nextVersion });
+    project.assets = markAffectedAssetsOutdated([{ target_type: 'workflow', target_id: project.workflow.id }], project.assets);
+    project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    recordWorkflowHistory(ctx, project, 'restore_version', `Restored from workflow version ${version}.`);
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { workflow: project.workflow, validation_results: project.validation, history_item: project.workflow_history_items.at(-1) });
+  }
+
+  const wfUndo = path.match(/^\/api\/projects\/([^/]+)\/workflow\/undo$/);
+  if (method === 'POST' && wfUndo) {
+    const project = getProject(ctx, wfUndo[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    ensureWorkflowHistory(project);
+    if (project.workflow_history_items.length < 2) return fail(res, ctx, 400, 'UNDO_NOT_AVAILABLE', 'No undo snapshot available');
+    const targetHistory = project.workflow_history_items[project.workflow_history_items.length - 2];
+    const source = project.workflow_snapshots.find((s) => s.id === targetHistory.snapshot_ref || s.workflow_version === targetHistory.version);
+    if (!source) return fail(res, ctx, 404, 'UNDO_SNAPSHOT_NOT_FOUND', 'Undo snapshot not found');
+    const nextVersion = (project.workflow.version || 0) + 1;
+    rehydrateFromSnapshot(project, { ...source, workflow_version: nextVersion });
+    project.assets = markAffectedAssetsOutdated([{ target_type: 'workflow', target_id: project.workflow.id }], project.assets);
+    project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    recordWorkflowHistory(ctx, project, 'undo', `Undo based on version ${targetHistory.version}.`);
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { workflow: project.workflow, validation_results: project.validation, history_item: project.workflow_history_items.at(-1) });
+  }
 
   const nodeGet = path.match(/^\/api\/projects\/([^/]+)\/nodes\/([^/]+)$/);
   if (nodeGet) {
@@ -392,6 +436,24 @@ const server = createServer(async (req, res) => {
     const project = getProject(ctx, diffReject[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     if (!project.last_diff || project.last_diff.id !== diffReject[2]) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
     project.last_diff.status = 'rejected'; storage.saveProject(ctx.workspace_id, project); return ok(res, ctx, { diff_id: project.last_diff.id, status: 'rejected' });
+  }
+  const diffRevert = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)\/revert$/);
+  if (method === 'POST' && diffRevert) {
+    const project = getProject(ctx, diffRevert[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    const diff = project.last_diff; if (!diff || diff.id !== diffRevert[2]) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
+    if (diff.status !== 'applied') return fail(res, ctx, 400, 'DIFF_NOT_APPLIED', 'Only applied diff can be reverted');
+    ensureWorkflowHistory(project);
+    const before = project.workflow_history_items.find((h) => h.diff_id === diff.id)?.previous_version;
+    const source = project.workflow_snapshots.find((s) => s.workflow_version === before);
+    if (!source) return fail(res, ctx, 404, 'REVERT_SNAPSHOT_NOT_FOUND', 'Pre-diff snapshot not found');
+    const nextVersion = (project.workflow.version || 0) + 1;
+    rehydrateFromSnapshot(project, { ...source, workflow_version: nextVersion });
+    project.assets = markAffectedAssetsOutdated(diff.changes || [], project.assets);
+    project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    recordWorkflowHistory(ctx, project, 'revert_diff', `Reverted diff ${diff.id}.`, diff.id);
+    diff.status = 'reverted';
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { workflow: project.workflow, validation_results: project.validation, diff });
   }
 
   const assetsRoute = path.match(/^\/api\/projects\/([^/]+)\/assets$/);

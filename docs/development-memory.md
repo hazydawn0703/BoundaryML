@@ -156,3 +156,9 @@
   - `GET /api/projects/:projectId/workflow/versions/:version`
 - Snapshot 记录 project summary、context_pack_version、workflow topology、asset refs、validation、change_source、created_by/at。
 - Execution kit preview/generate 继续记录并返回 `workflow_snapshot_version`（与当前 workflow version 绑定）。
+
+## Phase 2D Update (Undo / Restore / Diff Revert)
+- 新增 Restore API：`POST /api/projects/:projectId/workflow/restore`，基于历史 snapshot 创建新 workflow version（`change_source=restore_version`）。
+- 新增 Undo API：`POST /api/projects/:projectId/workflow/undo`，P0 回退到上一个可用 snapshot 并创建新 version（`change_source=undo`）。
+- 新增 Diff Revert API：`POST /api/projects/:projectId/diffs/:diffId/revert`，仅允许对 `applied` diff 恢复到 diff 前 snapshot，新建 version（`change_source=revert_diff`），并将 diff 标记为 `reverted`。
+- Restore/Undo/Revert 均重新跑 validation，且触发/记录 assets outdated 影响，不删除历史项与旧 snapshot。
