@@ -225,7 +225,11 @@ function renderStudio(state) {
     ${renderNodeDetail(state, project, selectedNode)}
   </div>
   <article class="card panel"><h3>Recent Jobs</h3>
-  <ul>${recentJobs.length ? recentJobs.map((job) => `<li>${job.id || job.job_id} · ${job.type} · ${job.status} · ${(job.progress?.stage || 'n/a')}</li>`).join('') : '<li>No jobs yet</li>'}</ul>
+  <ul>${recentJobs.length ? recentJobs.map((job) => `<li>${job.id || job.job_id} · ${job.type} · ${job.status} · ${(job.progress?.stage || 'n/a')}
+    <div class="row">
+      <button data-action="job-retry" data-job-id="${job.id || job.job_id}">Retry</button>
+      <button data-action="job-cancel" data-job-id="${job.id || job.job_id}" ${job.status === 'succeeded' ? 'disabled' : ''}>Cancel</button>
+    </div></li>`).join('') : '<li>No jobs yet</li>'}</ul>
   </article>
   ${renderAiEdit(state)}
   ${renderDiffDrawer(state)}
@@ -453,6 +457,24 @@ function handleAction(event) {
       .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to refresh model status' })));
   }
 
+  if (action === 'job-retry') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.jobsApi.retry(project.id, target.dataset.jobId)
+      .then(() => apiClient.jobsApi.list(project.id))
+      .then(({ data }) => setState((prev) => ({ ...prev, jobs: data.jobs || data || [] })))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to retry job' })));
+  }
+
+  if (action === 'job-cancel') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.jobsApi.cancel(project.id, target.dataset.jobId)
+      .then(() => apiClient.jobsApi.list(project.id))
+      .then(({ data }) => setState((prev) => ({ ...prev, jobs: data.jobs || data || [] })))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to cancel job' })));
+  }
+
   if (action === 'preview-file') setState((prev) => ({ ...prev, exportPreviewType: target.dataset.file }));
 
   if (action === 'build-context-summary') {
@@ -473,15 +495,31 @@ function handleAction(event) {
 
   if (action === 'generate-prompt') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const node = draft.workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      const prompt = modelGeneratePrompt(node);
-      const index = draft.assets.prompts.findIndex((p) => p.nodeId === nodeId);
-      if (index >= 0) draft.assets.prompts[index] = prompt;
-      else if (prompt) draft.assets.prompts.push(prompt);
-      node.promptStatus = 'draft';
-    }, 'Prompt generated', [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      apiClient.nodesApi.generatePrompt(project.id, nodeId)
+        .then(() => Promise.all([apiClient.assetsApi.list(project.id), apiClient.jobsApi.list(project.id)]))
+        .then(([assetsResult, jobsResult]) => {
+          const assets = assetsResult.data?.assets || assetsResult.data || {};
+          const jobs = jobsResult.data?.jobs || jobsResult.data || [];
+          updateActiveProject((draft) => {
+            draft.assets = assets;
+          }, 'Prompt generated', [nodeId]);
+          setState((prev) => ({ ...prev, jobs }));
+        })
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Generation failed. View error details or retry from the job panel.' })));
+    } else {
+      updateActiveProject((draft) => {
+        const node = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const prompt = modelGeneratePrompt(node);
+        const index = draft.assets.prompts.findIndex((p) => p.nodeId === nodeId);
+        if (index >= 0) draft.assets.prompts[index] = prompt;
+        else if (prompt) draft.assets.prompts.push(prompt);
+        node.promptStatus = 'draft';
+      }, 'Prompt generated', [nodeId]);
+    }
   }
 
   if (action === 'toggle-gate-required') {
@@ -552,23 +590,42 @@ function handleInput(event) {
 
   if (target.dataset.action === 'update-node-field') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const node = draft.workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      const field = target.dataset.field;
-      if (field === 'inputs' || field === 'outputs') node[field] = target.value.split('\n').map((x) => x.trim()).filter(Boolean);
-      else node[field] = target.value;
-      node.history.push({ at: new Date().toISOString(), action: `${field} updated` });
-    }, `${target.dataset.field} updated`, [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    const field = target.dataset.field;
+    const value = (field === 'inputs' || field === 'outputs') ? target.value.split('\n').map((x) => x.trim()).filter(Boolean) : target.value;
+    if (st.serverAvailable && project?.id) {
+      apiClient.nodesApi.patch(project.id, nodeId, { [field]: value })
+        .then(({ data }) => {
+          const updatedProject = data.project || data;
+          if (updatedProject?.id && updatedProject?.workflow) replaceActiveProject(updatedProject);
+        })
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || `Failed to update ${field}` })));
+    } else {
+      updateActiveProject((draft) => {
+        const node = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        if (field === 'inputs' || field === 'outputs') node[field] = value;
+        else node[field] = value;
+        node.history.push({ at: new Date().toISOString(), action: `${field} updated` });
+      }, `${target.dataset.field} updated`, [nodeId]);
+    }
   }
 
   if (target.dataset.action === 'update-artifact-format') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const node = draft.workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      node.artifactContract.outputFormat = target.value;
-    }, 'Artifact contract updated', [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      apiClient.nodesApi.patch(project.id, nodeId, { artifactContract: { outputFormat: target.value } })
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update artifact contract' })));
+    } else {
+      updateActiveProject((draft) => {
+        const node = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        node.artifactContract.outputFormat = target.value;
+      }, 'Artifact contract updated', [nodeId]);
+    }
   }
 
   if (target.dataset.action === 'update-gate-field') {

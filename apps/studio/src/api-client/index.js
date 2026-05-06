@@ -77,6 +77,11 @@ export const workflowApi = {
   history: (projectId) => get(`/projects/${projectId}/workflow/history`),
   version: (projectId, version) => get(`/projects/${projectId}/workflow/versions/${version}`),
 };
+export const nodesApi = {
+  patch: (projectId, nodeId, payload) => patch(`/projects/${projectId}/nodes/${nodeId}`, payload),
+  generatePrompt: (projectId, nodeId) => post(`/projects/${projectId}/nodes/${nodeId}/generate-prompt`, {}),
+  generateChecklist: (projectId, nodeId) => post(`/projects/${projectId}/nodes/${nodeId}/generate-checklist`, {}),
+};
 export const jobsApi = {
   list: (projectId) => get(`/projects/${projectId}/jobs`),
   get: (projectId, jobId) => get(`/projects/${projectId}/jobs/${jobId}`),
@@ -103,6 +108,7 @@ export const apiClient = {
   projectsApi,
   contextPackApi,
   workflowApi,
+  nodesApi,
   jobsApi,
   modelApi,
   assetsApi,
