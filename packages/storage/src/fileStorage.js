@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, renameSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
 export class FileStorage {
@@ -22,8 +22,15 @@ export class FileStorage {
   atomicWrite(filePath, data) {
     mkdirSync(dirname(filePath), { recursive: true });
     const tempPath = `${filePath}.tmp-${Date.now()}`;
-    writeFileSync(tempPath, JSON.stringify(data, null, 2));
-    renameSync(tempPath, filePath);
+    try {
+      writeFileSync(tempPath, JSON.stringify(data, null, 2));
+      renameSync(tempPath, filePath);
+    } catch (e) {
+      try { if (existsSync(tempPath)) unlinkSync(tempPath); } catch {}
+      const err = new Error(e.message || 'Storage write failed');
+      err.code = 'STORAGE_WRITE_FAILED';
+      throw err;
+    }
   }
 
   listProjects(workspace_id) {
@@ -31,13 +38,15 @@ export class FileStorage {
     if (!existsSync(dir)) return [];
     return readdirSync(dir)
       .filter((name) => name.endsWith('.json'))
-      .map((name) => JSON.parse(readFileSync(join(dir, name), 'utf-8')));
+      .map((name) => {
+        try { return JSON.parse(readFileSync(join(dir, name), 'utf-8')); } catch (e) { const err = new Error('Storage object corrupted'); err.code = 'STORAGE_OBJECT_CORRUPTED'; throw err; }
+      });
   }
 
   getProject(workspace_id, project_id) {
     const file = this.projectFile(workspace_id, project_id);
     if (!existsSync(file)) return null;
-    return JSON.parse(readFileSync(file, 'utf-8'));
+    try { return JSON.parse(readFileSync(file, 'utf-8')); } catch (e) { const err = new Error('Storage object corrupted'); err.code = 'STORAGE_OBJECT_CORRUPTED'; throw err; }
   }
 
   saveProject(workspace_id, project) {

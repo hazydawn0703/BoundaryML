@@ -14,6 +14,7 @@ import { validateProject, validateWorkflow, validateBoundaryMLProjectSpec, valid
 import { MemoryStorage } from '../../../packages/storage/src/memoryStorage.js';
 import { FileStorage } from '../../../packages/storage/src/fileStorage.js';
 import { getModelStatus, runModel } from './llmAccess.js';
+import { detectSchemaVersion, migrateObjectIfNeeded } from '../../../packages/schema/src/migrations.js';
 
 const port = Number(process.env.BOUNDARYML_SERVER_PORT || process.env.PORT || 8787);
 const runtimeMode = 'local_server';
@@ -41,6 +42,17 @@ function ok(res, ctx, data, statusCode = 200) {
 
 function fail(res, ctx, statusCode, code, message, details = []) {
   respond(res, statusCode, { ok: false, error: { code, message, details }, meta: { requestId: ctx.request_id } });
+}
+function validateSchemaCompatibility(obj) {
+  const version = detectSchemaVersion(obj);
+  if (!version) return;
+  migrateObjectIfNeeded(obj);
+}
+function markKitsStaleIfNeeded(project, previousVersion) {
+  if ((project.workflow?.version || 0) === previousVersion) return;
+  project.execution_kits = (project.execution_kits || []).map((k) => (
+    (k.status === 'generated' || k.status === 'exported') ? { ...k, status: 'stale', stale_since_workflow_version: project.workflow.version } : k
+  ));
 }
 
 async function readJsonBody(req) {
@@ -267,11 +279,14 @@ const server = createServer(async (req, res) => {
     if (method === 'GET') return ok(res, ctx, project.workflow);
     if (method === 'PATCH') {
       const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
+      if (body.workflow_version && Number(body.workflow_version) !== Number(project.workflow.version)) return fail(res, ctx, 409, 'VERSION_CONFLICT', 'Workflow has been updated by another operation. Please refresh and try again.');
+      const previousVersion = project.workflow.version;
       const merged = applyWorkflowPatch(project.workflow, body);
       const schema = validateWorkflow(merged); if (!schema.ok) return fail(res, ctx, 400, 'WORKFLOW_SCHEMA_INVALID', 'Workflow schema invalid', schema.errors);
       const validation = validateRulesWorkflow(merged, project.assets, { forGeneration: false, modelConfig: {} });
       project.workflow = merged; project.validation = validation; project.workflow_history.push(createWorkflowSnapshot(project, project.context_pack, merged, project.assets, validation));
       recordWorkflowHistory(ctx, project, 'manual_edit', 'Patched workflow.');
+      markKitsStaleIfNeeded(project, previousVersion);
       storage.saveProject(ctx.workspace_id, project);
       return ok(res, ctx, { workflow: merged, validation_results: validation });
     }
@@ -311,10 +326,14 @@ const server = createServer(async (req, res) => {
   const wfFinal = path.match(/^\/api\/projects\/([^/]+)\/workflow\/mark-final$/);
   if (method === 'POST' && wfFinal) {
     const project = getProject(ctx, wfFinal[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
+    if (body.workflow_version && Number(body.workflow_version) !== Number(project.workflow.version)) return fail(res, ctx, 409, 'VERSION_CONFLICT', 'Workflow has been updated by another operation. Please refresh and try again.');
     const validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
     if (validation.some((v) => v.level === 'error' && v.blockingFinal)) return fail(res, ctx, 400, 'WORKFLOW_BLOCKING_ERRORS', 'Workflow has blocking errors', validation.filter((v) => v.level === 'error'));
+    const previousVersion = project.workflow.version;
     project.workflow = applyWorkflowPatch(project.workflow, { status: 'final' }); project.validation = validation;
     recordWorkflowHistory(ctx, project, 'mark_final', 'Marked workflow as final.');
+    markKitsStaleIfNeeded(project, previousVersion);
     storage.saveProject(ctx.workspace_id, project);
     return ok(res, ctx, { workflow_version: project.workflow.version, validation_summary: { errors: 0, warnings: validation.filter((v) => v.level === 'warning').length } });
   }
@@ -359,12 +378,15 @@ const server = createServer(async (req, res) => {
     if (method === 'GET') return ok(res, ctx, node);
     if (method === 'PATCH') {
       const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
+      if (body.workflow_version && Number(body.workflow_version) !== Number(project.workflow.version)) return fail(res, ctx, 409, 'VERSION_CONFLICT', 'Workflow has been updated by another operation. Please refresh and try again.');
+      const previousVersion = project.workflow.version;
       const idx = project.workflow.nodes.findIndex((n) => n.id === node.id);
       project.workflow.nodes[idx] = { ...node, ...body };
       project.workflow = applyWorkflowPatch(project.workflow, { nodes: project.workflow.nodes });
       project.assets = markAffectedAssetsOutdated([{ target_type: 'node', target_id: node.id }], project.assets);
       project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
       recordWorkflowHistory(ctx, project, 'manual_edit', 'Updated workflow node.');
+      markKitsStaleIfNeeded(project, previousVersion);
       storage.saveProject(ctx.workspace_id, project);
       return ok(res, ctx, { node: project.workflow.nodes[idx], workflow_summary: { version: project.workflow.version }, validation_results: project.validation });
     }
@@ -421,11 +443,15 @@ const server = createServer(async (req, res) => {
   const diffApply = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)\/apply$/);
   if (method === 'POST' && diffApply) {
     const project = getProject(ctx, diffApply[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
+    if (body.workflow_version && Number(body.workflow_version) !== Number(project.workflow.version)) return fail(res, ctx, 409, 'VERSION_CONFLICT', 'Workflow has been updated by another operation. Please refresh and try again.');
     const diff = project.last_diff; if (!diff || diff.id !== diffApply[2]) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
+    const previousVersion = project.workflow.version;
     project.workflow = applyDiff(project.workflow, diff, diff.changes.filter((c) => c.selected).map((c) => c.id));
     project.assets = markAffectedAssetsOutdated(diff.changes, project.assets);
     project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
     recordWorkflowHistory(ctx, project, 'ai_diff_apply', 'Applied workflow diff.', diff.id);
+    markKitsStaleIfNeeded(project, previousVersion);
     diff.status = 'applied';
     storage.saveProject(ctx.workspace_id, project);
     return ok(res, ctx, { workflow: project.workflow, validation_results: project.validation });
@@ -503,7 +529,8 @@ const server = createServer(async (req, res) => {
     runJob(ctx, project, job, (progress) => {
       progress('generating_files', 'Generating execution kit');
       const kit = generateExecutionKit(project.workflow, project.assets, project.validation || []);
-      const rec = { id: `kit_${Date.now()}`, project_id: project.id, workspace_id: project.workspace_id, created_by: ctx.user_id, updated_by: ctx.user_id, workflow_snapshot_version: project.workflow.version, status: 'draft_only', files: kit.files, generated_at: new Date().toISOString() };
+      if (!kit?.files?.length) throw new Error('EXECUTION_KIT_GENERATION_FAILED');
+      const rec = { id: `kit_${Date.now()}`, project_id: project.id, workspace_id: project.workspace_id, created_by: ctx.user_id, updated_by: ctx.user_id, workflow_snapshot_version: project.workflow.version, status: 'generated', files: kit.files, generated_at: new Date().toISOString(), input_snapshot: { workflow_version: project.workflow.version } };
       project.execution_kits = (project.execution_kits || []).concat(rec);
       return { type: 'execution_kit', kit_id: rec.id };
     });
@@ -521,7 +548,8 @@ const server = createServer(async (req, res) => {
   if (method === 'GET' && kitDl) {
     const project = getProject(ctx, kitDl[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const kit = (project.execution_kits || []).find((k) => k.id === kitDl[2]); if (!kit) return fail(res, ctx, 404, 'KIT_NOT_FOUND', 'Kit not found');
-    return ok(res, ctx, { filename: `${kit.id}.json`, content: JSON.stringify(kit, null, 2) });
+    if (kit.status === 'failed' || kit.status === 'generating') return fail(res, ctx, 400, 'EXECUTION_KIT_GENERATION_FAILED', 'Execution kit is not downloadable in current status');
+    return ok(res, ctx, { filename: `${kit.id}.json`, content: JSON.stringify(kit, null, 2), stale: kit.status === 'stale' });
   }
 
   if (method === 'GET' && path === '/api/model/status') return ok(res, ctx, getModelStatus());

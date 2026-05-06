@@ -162,3 +162,10 @@
 - 新增 Undo API：`POST /api/projects/:projectId/workflow/undo`，P0 回退到上一个可用 snapshot 并创建新 version（`change_source=undo`）。
 - 新增 Diff Revert API：`POST /api/projects/:projectId/diffs/:diffId/revert`，仅允许对 `applied` diff 恢复到 diff 前 snapshot，新建 version（`change_source=revert_diff`），并将 diff 标记为 `reverted`。
 - Restore/Undo/Revert 均重新跑 validation，且触发/记录 assets outdated 影响，不删除历史项与旧 snapshot。
+
+## Phase 2E Update (Storage Integrity / Optimistic Lock / Kit 状态)
+- 新增 schema migration skeleton：`detectSchemaVersion / migrateObjectIfNeeded / registerMigration`，未知版本抛 `SCHEMA_VERSION_UNSUPPORTED`，迁移失败抛 `SCHEMA_MIGRATION_FAILED`。
+- FileStorage 原子写增强：tmp write + rename，失败清理 tmp 并抛 `STORAGE_WRITE_FAILED`；读取损坏 JSON 抛 `STORAGE_OBJECT_CORRUPTED`。
+- Workflow PATCH / Node PATCH / Diff Apply / Mark Final 支持 `workflow_version` optimistic lock，不匹配返回 `VERSION_CONFLICT`。
+- Execution kit 状态强化：生成成功标记 `generated`；下载时 `failed/generating` 禁止；`stale` 可下载且返回 stale 标记。
+- Workflow version 变化后，已有 generated/exported kit 自动转为 stale。
