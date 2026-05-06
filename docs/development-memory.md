@@ -229,3 +229,9 @@
 ### Phase 4 Readiness
 - Blocked
 - Blockers if any: Phase 3 尚未完成全部验收条目。
+
+## Phase 3 Progress Update (Projects → Create → Context → Studio 主链继续)
+- Projects 页补充空状态文案与 Create First Project 入口；卡片增加 snake_case 字段兼容展示（project_type/risk_level/current_stage/execution_kit）。
+- Open Project 动作改为并行加载 project/workflow/jobs，进入 Studio 时尽量展示真实 workflow + assets + validation + jobs。
+- Validate 按钮优先调用 server `POST /workflow/validate`，失败时回退本地 validation 作为兜底显示。
+- Runtime badge 文案改为 `Mode: Local Demo / Mock Model`，避免模糊 fallback。

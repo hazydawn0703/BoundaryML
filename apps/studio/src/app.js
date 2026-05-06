@@ -77,19 +77,23 @@ function renderTopbar(state) {
   const stats = project ? countProjectStats(project) : { nodes: 0, aiNodes: 0, gates: 0 };
   const runtimeBadge = state.serverAvailable
     ? `<span class="badge">Mode: Local Server</span>`
-    : `<span class="badge risk-high">Mode: Local Demo (Server unavailable)</span>`;
+    : `<span class="badge risk-high">Mode: Local Demo / Mock Model</span>`;
   return `<header class="topbar"><div><h1>${project?.name || 'BoundaryML'}</h1><p>Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates</p></div>
   <div class="row">${runtimeBadge}<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></header>`;
 }
 
 function renderProjects(state) {
+  if (!state.projects.length) {
+    return `<section class="page"><div class="card panel"><h2>Projects</h2><p>Start with a project goal.<br/>BoundaryML will generate a human-AI workflow boundary draft.</p><button class="primary" data-action="goto" data-page="create">Create First Project</button></div></section>`;
+  }
   return `<section class="page"><div class="page-head"><h2>Projects</h2><button class="primary" data-action="goto" data-page="create">+ New Project</button></div>
   <p class="muted">Data-driven projects powered by BoundaryML domain model.</p>
   <div class="project-grid">${state.projects.map((project) => {
     const stats = countProjectStats(project);
-    return `<article class="card project"><h3>${project.name}</h3><p>${project.type} · ${project.riskLevel} risk · ${project.workflow.status}</p>
+    return `<article class="card project"><h3>${project.name}</h3><p>${project.project_type || project.type} · ${(project.risk_level || project.riskLevel)} risk · ${(project.workflow?.status || 'draft')}</p>
       <div class="kv-row"><span>Nodes ${stats.nodes}</span><span>AI ${stats.aiNodes}</span><span>Gates ${stats.gates}</span></div>
-      <div class="kv-row"><span>Execution Kit</span><strong>${project.executionKit ? project.executionKit.status : 'not generated'}</strong></div>
+      <div class="kv-row"><span>Stage</span><strong>${project.current_stage || project.currentStage || 'n/a'}</strong></div>
+      <div class="kv-row"><span>Execution Kit</span><strong>${project.execution_kit?.status || project.executionKit?.status || 'not generated'}</strong></div>
       <button data-action="open-project" data-project-id="${project.id}">Open Studio</button></article>`;
   }).join('')}</div></section>`;
 }
@@ -336,7 +340,32 @@ function handleAction(event) {
   const action = target.dataset.action;
 
   if (action === 'goto') setState((prev) => ({ ...prev, currentPage: target.dataset.page }));
-  if (action === 'open-project') setState((prev) => ({ ...prev, activeProjectId: target.dataset.projectId, currentPage: 'studio' }));
+  if (action === 'open-project') {
+    const projectId = target.dataset.projectId;
+    Promise.all([
+      apiClient.projectsApi.getById(projectId),
+      apiClient.workflowApi.get(projectId),
+      apiClient.jobsApi.list(projectId),
+    ]).then(([projectResult, workflowResult, jobsResult]) => {
+      const rawProject = projectResult.data?.project || projectResult.data;
+      const workflow = workflowResult.data?.workflow || workflowResult.data || {};
+      const jobs = jobsResult.data?.jobs || jobsResult.data || [];
+      const merged = {
+        ...rawProject,
+        workflow: workflow.workflow || rawProject.workflow || workflow,
+        assets: workflow.assets || rawProject.assets || { prompts: [], checklists: [], artifactTemplates: [] },
+      };
+      setState((prev) => ({
+        ...prev,
+        projects: prev.projects.map((p) => (p.id === projectId ? merged : p)),
+        activeProjectId: projectId,
+        currentPage: 'studio',
+        jobs,
+        validationResults: workflow.validation || prev.validationResults,
+        selectedNodeId: merged.workflow?.nodes?.[0]?.id || prev.selectedNodeId,
+      }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load project workflow' })));
+  }
   if (action === 'select-node') setState((prev) => ({ ...prev, selectedNodeId: target.dataset.nodeId }));
   if (action === 'node-tab') setState((prev) => ({ ...prev, activeNodeDetailTab: target.dataset.tab }));
   if (action === 'set-filter-mode') setState((prev) => ({ ...prev, studioFilter: { ...prev.studioFilter, mode: target.value } }));
@@ -344,7 +373,10 @@ function handleAction(event) {
 
   if (action === 'validate') {
     const project = getActiveProject();
-    setState((prev) => ({ ...prev, validationResults: recomputeValidation(project) }));
+    if (!project?.id) return;
+    apiClient.workflowApi.validate(project.id)
+      .then(({ data }) => setState((prev) => ({ ...prev, validationResults: data.validation || data.results || [] })))
+      .catch(() => setState((prev) => ({ ...prev, validationResults: recomputeValidation(project) })));
   }
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
