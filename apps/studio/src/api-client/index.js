@@ -76,6 +76,9 @@ export const workflowApi = {
   validate: (projectId) => post(`/projects/${projectId}/workflow/validate`, {}),
   history: (projectId) => get(`/projects/${projectId}/workflow/history`),
   version: (projectId, version) => get(`/projects/${projectId}/workflow/versions/${version}`),
+  patch: (projectId, payload) => patch(`/projects/${projectId}/workflow`, payload),
+  undo: (projectId) => post(`/projects/${projectId}/workflow/undo`, {}),
+  restore: (projectId, version) => post(`/projects/${projectId}/workflow/restore`, { version }),
 };
 export const nodesApi = {
   patch: (projectId, nodeId, payload) => patch(`/projects/${projectId}/nodes/${nodeId}`, payload),
