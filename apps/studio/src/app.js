@@ -545,39 +545,50 @@ function handleSubmit(event) {
       sensitiveAreas: data.sensitiveAreas.split(',').map((x) => x.trim()),
     };
 
-    const project = modelGenerateWorkflowDraft(projectInput, {});
-    setState((prev) => ({ ...prev, projects: [...prev.projects, project], activeProjectId: project.id, currentPage: data.setupMode === 'org_aware' ? 'context' : 'studio', selectedNodeId: project.workflow.nodes[0]?.id }));
+    apiClient.projectsApi.create({
+      name: data.name,
+      goal: data.goal,
+      project_type: data.type,
+      current_stage: data.currentStage,
+      risk_level: data.riskLevel,
+      target_deliverables: projectInput.deliveryScope,
+      expected_ai_scope: projectInput.expectedAiScope,
+      sensitive_areas: projectInput.sensitiveAreas,
+      setup_mode: data.setupMode,
+      output_language: 'en',
+    }).then(async ({ data: createdProject }) => {
+      if (data.setupMode === 'quick_start') {
+        const generateResult = await apiClient.workflowApi.generate(createdProject.id);
+        setState((prev) => ({ ...prev, jobs: [generateResult.data, ...prev.jobs].slice(0, 10) }));
+      }
+      const projectsResult = await apiClient.projectsApi.list();
+      const projects = projectsResult.data?.projects || projectsResult.data || [];
+      setState((prev) => ({ ...prev, projects, activeProjectId: createdProject.id, currentPage: data.setupMode === 'org_aware' ? 'context' : 'studio' }));
+    }).catch((error) => {
+      setState((prev) => ({ ...prev, serverError: error.message || 'Failed to create project' }));
+    });
   }
 
   if (event.target.dataset.form === 'context-pack') {
     event.preventDefault();
     const raw = Object.fromEntries(new FormData(event.target));
-    const contextPack = {
-      teamRoles: raw.teamRoles.split(',').map((x) => x.trim()).filter(Boolean),
-      approvalProcess: raw.approvalProcess.split(',').map((x) => x.trim()).filter(Boolean),
-      toolStack: raw.toolStack.split(',').map((x) => x.trim()).filter(Boolean),
-      riskConstraints: raw.riskConstraints.split(',').map((x) => x.trim()).filter(Boolean),
-      historicalProcessMaterials: raw.historicalProcessMaterials,
-      summary: buildContextSummary(raw),
-    };
-
     const state = getState();
     const active = getActiveProject(state);
-    const regenerated = modelGenerateWorkflowDraft({
-      name: active.name,
-      goal: active.goal,
-      type: active.type,
-      currentStage: active.currentStage,
-      riskLevel: active.riskLevel,
-      deliveryScope: active.deliveryScope,
-      expectedAiScope: active.expectedAiScope,
-      sensitiveAreas: active.sensitiveAreas,
-      setupMode: 'org_aware',
-    }, contextPack);
-    regenerated.id = active.id;
-
-    replaceActiveProject(regenerated);
-    setState((prev) => ({ ...prev, currentPage: 'studio', selectedNodeId: regenerated.workflow.nodes[0]?.id }));
+    apiClient.contextPackApi.save(active.id, {
+      roles: raw.teamRoles.split(',').map((x) => x.trim()).filter(Boolean),
+      approval_processes: raw.approvalProcess.split(',').map((x) => x.trim()).filter(Boolean),
+      tool_stack: raw.toolStack.split(',').map((x) => x.trim()).filter(Boolean),
+      risk_constraints: raw.riskConstraints.split(',').map((x) => x.trim()).filter(Boolean),
+      source_materials: [{ type: 'text', content: raw.historicalProcessMaterials }],
+    }).then(async () => {
+      await apiClient.workflowApi.generate(active.id);
+      const projectResult = await apiClient.projectsApi.getById(active.id);
+      const updatedProject = projectResult.data?.project || projectResult.data;
+      replaceActiveProject(updatedProject);
+      setState((prev) => ({ ...prev, currentPage: 'studio' }));
+    }).catch((error) => {
+      setState((prev) => ({ ...prev, serverError: error.message || 'Failed to save context pack' }));
+    });
   }
 }
 
@@ -586,16 +597,18 @@ render();
 
 async function bootstrapRuntimeMode() {
   try {
-    await apiClient.health();
-    const projects = await apiClient.listProjects();
-    if (projects?.length) {
-      setState((prev) => ({
-        ...prev,
-        projects: prev.projects,
-      }));
+    await apiClient.healthApi.check();
+    const [{ data: projectsData }, { data: modelStatus }] = await Promise.all([
+      apiClient.projectsApi.list(),
+      apiClient.modelApi.status(),
+    ]);
+    const projects = projectsData?.projects || projectsData || [];
+    if (projects.length) {
+      setState((prev) => ({ ...prev, projects, activeProjectId: projects[0].id, modelStatus }));
     }
     setRuntimeMode('local_server', true);
-  } catch {
+  } catch (error) {
+    setState((prev) => ({ ...prev, serverError: error.message || 'Server disconnected' }));
     setRuntimeMode('local_demo', false);
   }
 }
