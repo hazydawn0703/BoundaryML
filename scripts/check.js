@@ -49,6 +49,7 @@ async function runServerSmoke() {
 }
 
 async function main() {
+  await import('./studio-api-client-check.js');
   const exampleSpec = JSON.parse(readFileSync(new URL('../examples/ai-saas-feature-mvp.json', import.meta.url), 'utf-8'));
 
   const validSpec = validateBoundaryMLProjectSpec(exampleSpec);

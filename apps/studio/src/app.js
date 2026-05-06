@@ -9,7 +9,6 @@ import {
   modelGenerateWorkflowDiff,
   modelGenerateExecutionKit,
   buildContextSummary,
-  getModelCallLogs,
 } from './services/mockModelService.js';
 import { applyWorkflowDiff } from '../../../packages/core/src/diff.js';
 
@@ -77,19 +76,23 @@ function renderTopbar(state) {
   const stats = project ? countProjectStats(project) : { nodes: 0, aiNodes: 0, gates: 0 };
   const runtimeBadge = state.serverAvailable
     ? `<span class="badge">Mode: Local Server</span>`
-    : `<span class="badge risk-high">Mode: Local Demo (Server unavailable)</span>`;
+    : `<span class="badge risk-high">Mode: Local Demo / Mock Model</span>`;
   return `<header class="topbar"><div><h1>${project?.name || 'BoundaryML'}</h1><p>Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates</p></div>
   <div class="row">${runtimeBadge}<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></header>`;
 }
 
 function renderProjects(state) {
+  if (!state.projects.length) {
+    return `<section class="page"><div class="card panel"><h2>Projects</h2><p>Start with a project goal.<br/>BoundaryML will generate a human-AI workflow boundary draft.</p><button class="primary" data-action="goto" data-page="create">Create First Project</button></div></section>`;
+  }
   return `<section class="page"><div class="page-head"><h2>Projects</h2><button class="primary" data-action="goto" data-page="create">+ New Project</button></div>
   <p class="muted">Data-driven projects powered by BoundaryML domain model.</p>
   <div class="project-grid">${state.projects.map((project) => {
     const stats = countProjectStats(project);
-    return `<article class="card project"><h3>${project.name}</h3><p>${project.type} · ${project.riskLevel} risk · ${project.workflow.status}</p>
+    return `<article class="card project"><h3>${project.name}</h3><p>${project.project_type || project.type} · ${(project.risk_level || project.riskLevel)} risk · ${(project.workflow?.status || 'draft')}</p>
       <div class="kv-row"><span>Nodes ${stats.nodes}</span><span>AI ${stats.aiNodes}</span><span>Gates ${stats.gates}</span></div>
-      <div class="kv-row"><span>Execution Kit</span><strong>${project.executionKit ? project.executionKit.status : 'not generated'}</strong></div>
+      <div class="kv-row"><span>Stage</span><strong>${project.current_stage || project.currentStage || 'n/a'}</strong></div>
+      <div class="kv-row"><span>Execution Kit</span><strong>${project.execution_kit?.status || project.executionKit?.status || 'not generated'}</strong></div>
       <button data-action="open-project" data-project-id="${project.id}">Open Studio</button></article>`;
   }).join('')}</div></section>`;
 }
@@ -203,8 +206,10 @@ function renderStudio(state) {
     warnings: state.validationResults.filter((x) => x.level === 'warning').length,
   };
 
+  const recentJobs = (state.jobs || []).slice(0, 3);
   return `<section class="page"><div class="toolbar card"><div><strong>${project.name}</strong><p class="muted">v${project.workflow.version} · ${project.workflow.status}</p></div>
     <div class="row"><button data-action="add-node">Add Node</button><button data-action="toggle-ai-edit">AI Edit</button><button data-action="validate">Validate</button><button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>
+  ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
   <div class="studio-grid">
     <aside class="card panel"><h3>Filters & Legend</h3>
       <label>Execution Mode<select data-action="set-filter-mode"><option value="all">All</option>${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${(state.studioFilter?.mode || 'all') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
@@ -219,6 +224,13 @@ function renderStudio(state) {
     }).join('')}</div>
     ${renderNodeDetail(state, project, selectedNode)}
   </div>
+  <article class="card panel"><h3>Recent Jobs</h3>
+  <ul>${recentJobs.length ? recentJobs.map((job) => `<li>${job.id || job.job_id} · ${job.type} · ${job.status} · ${(job.progress?.stage || 'n/a')}
+    <div class="row">
+      <button data-action="job-retry" data-job-id="${job.id || job.job_id}">Retry</button>
+      <button data-action="job-cancel" data-job-id="${job.id || job.job_id}" ${job.status === 'succeeded' ? 'disabled' : ''}>Cancel</button>
+    </div></li>`).join('') : '<li>No jobs yet</li>'}</ul>
+  </article>
   ${renderAiEdit(state)}
   ${renderDiffDrawer(state)}
   </section>`;
@@ -283,7 +295,7 @@ function renderExport(state) {
   return `<section class="page"><h2>Export Execution Kit</h2>
   <p class="muted">Blocking errors => Final kit disabled.</p>
   <div class="split-2"><article class="card panel"><h3>Export Options</h3>
-    <div class="actions"><button data-action="generate-kit" class="primary">Generate Preview</button><button data-action="copy-kit">Copy Preview</button></div>
+    <div class="actions"><button data-action="generate-kit" class="primary">Generate Preview</button><button data-action="copy-kit">Copy Preview</button><button data-action="refresh-jobs">Refresh Jobs</button></div>
     <p>${preview ? `Kit status: ${preview.status} · snapshot v${preview.snapshotVersion}` : 'No preview yet.'}</p>
     <p>Blocking errors: ${preview?.blockingErrors ?? 'N/A'}</p>
   </article>
@@ -295,11 +307,20 @@ function renderExport(state) {
   </article></div></section>`;
 }
 
-function renderSettings() {
-  const logs = getModelCallLogs();
-  return `<section class="page"><h2>Settings / Model Access</h2><div class="card panel"><p>Provider: OpenAI-compatible (mock connected)</p>
-  <p>Default Model: mock-default</p><p>Planning Model: mock-planning-model</p><p>Prompt Model: mock-prompt-model</p><p>Diff Model: mock-diff-model</p>
-  <h3>Recent Model Calls</h3><ul>${logs.map((log) => `<li>${log.at} · ${log.name}</li>`).join('') || '<li>No calls yet</li>'}</ul></div></section>`;
+function renderSettings(state) {
+  const logs = state.modelCalls || [];
+  const modelStatus = state.modelStatus || {};
+  const mode = modelStatus?.mode || modelStatus?.model_mode || (state.serverAvailable ? 'unknown' : 'mock');
+  return `<section class="page"><h2>Settings / Model Access</h2><div class="card panel">
+  <p>Model Mode: ${mode}</p>
+  <p>Provider: ${modelStatus.provider || 'n/a'}</p>
+  <p>Default Model: ${modelStatus.default_model || modelStatus.defaultModel || 'n/a'}</p>
+  <p>Planning Model: ${modelStatus.planning_model || 'n/a'}</p>
+  <p>Prompt Model: ${modelStatus.prompt_model || 'n/a'}</p>
+  <p>Diff Model: ${modelStatus.diff_model || 'n/a'}</p>
+  <p>Structured Output: ${(modelStatus.structured_output_enabled ?? modelStatus.structuredOutputEnabled) ? 'enabled' : 'disabled'}</p>
+  <div class="actions"><button data-action="refresh-model-status">Refresh Model Status</button></div>
+  <h3>Recent Model Calls</h3><ul>${logs.map((log) => `<li>${log.created_at || log.at} · ${log.purpose || log.name} · ${log.status}</li>`).join('') || '<li>No calls yet</li>'}</ul></div></section>`;
 }
 
 function renderPage(state) {
@@ -310,7 +331,7 @@ function renderPage(state) {
     case 'studio': return renderStudio(state);
     case 'assets': return renderAssets(state);
     case 'export': return renderExport(state);
-    case 'settings': return renderSettings();
+    case 'settings': return renderSettings(state);
     default: return renderProjects(state);
   }
 }
@@ -336,7 +357,34 @@ function handleAction(event) {
   const action = target.dataset.action;
 
   if (action === 'goto') setState((prev) => ({ ...prev, currentPage: target.dataset.page }));
-  if (action === 'open-project') setState((prev) => ({ ...prev, activeProjectId: target.dataset.projectId, currentPage: 'studio' }));
+  if (action === 'open-project') {
+    const projectId = target.dataset.projectId;
+    Promise.all([
+      apiClient.projectsApi.getById(projectId),
+      apiClient.workflowApi.get(projectId),
+      apiClient.jobsApi.list(projectId),
+      apiClient.assetsApi.list(projectId),
+    ]).then(([projectResult, workflowResult, jobsResult, assetsResult]) => {
+      const rawProject = projectResult.data?.project || projectResult.data;
+      const workflow = workflowResult.data?.workflow || workflowResult.data || {};
+      const jobs = jobsResult.data?.jobs || jobsResult.data || [];
+      const assets = assetsResult.data?.assets || assetsResult.data || {};
+      const merged = {
+        ...rawProject,
+        workflow: workflow.workflow || rawProject.workflow || workflow,
+        assets: workflow.assets || assets || rawProject.assets || { prompts: [], checklists: [], artifactTemplates: [] },
+      };
+      setState((prev) => ({
+        ...prev,
+        projects: prev.projects.map((p) => (p.id === projectId ? merged : p)),
+        activeProjectId: projectId,
+        currentPage: 'studio',
+        jobs,
+        validationResults: workflow.validation || prev.validationResults,
+        selectedNodeId: merged.workflow?.nodes?.[0]?.id || prev.selectedNodeId,
+      }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load project workflow' })));
+  }
   if (action === 'select-node') setState((prev) => ({ ...prev, selectedNodeId: target.dataset.nodeId }));
   if (action === 'node-tab') setState((prev) => ({ ...prev, activeNodeDetailTab: target.dataset.tab }));
   if (action === 'set-filter-mode') setState((prev) => ({ ...prev, studioFilter: { ...prev.studioFilter, mode: target.value } }));
@@ -344,13 +392,20 @@ function handleAction(event) {
 
   if (action === 'validate') {
     const project = getActiveProject();
-    setState((prev) => ({ ...prev, validationResults: recomputeValidation(project) }));
+    if (!project?.id) return;
+    apiClient.workflowApi.validate(project.id)
+      .then(({ data }) => setState((prev) => ({ ...prev, validationResults: data.validation || data.results || [] })))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'VALIDATION_ERROR'} (${error.requestId || 'n/a'}): ${error.message || 'Validation failed'}` })));
   }
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.dataset.suggestion } }));
 
   if (action === 'generate-diff') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'AI Assisted Edit is disabled in Phase 3 server mode.' }));
+      return;
+    }
     const st = getState();
     const project = getActiveProject(st);
     const diff = modelGenerateWorkflowDiff(st.aiEdit.request, project.workflow, project.assets);
@@ -362,6 +417,10 @@ function handleAction(event) {
   }
 
   if (action === 'apply-diff-all' || action === 'apply-diff-selected') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'Diff apply from local mock is disabled in server mode.' }));
+      return;
+    }
     const st = getState();
     const project = getActiveProject(st);
     const updated = applyWorkflowDiff(project, st.aiEdit.diff, action === 'apply-diff-selected');
@@ -375,11 +434,53 @@ function handleAction(event) {
   if (action === 'generate-kit') {
     const st = getState();
     const project = getActiveProject(st);
-    const validationResults = recomputeValidation(project);
-    const kit = modelGenerateExecutionKit(project.workflow, project.assets, validationResults);
-    updateActiveProject((draft) => {
-      draft.executionKit = kit;
-    }, 'Execution kit generated');
+    if (st.serverAvailable && project?.id) {
+      apiClient.executionKitsApi.preview(project.id).then(({ data }) => {
+        updateActiveProject((draft) => {
+          draft.executionKit = data.execution_kit || data.kit || data;
+        }, 'Execution kit generated');
+      }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Generation failed. View error details or retry from the job panel.' })));
+    } else {
+      const validationResults = recomputeValidation(project);
+      const kit = modelGenerateExecutionKit(project.workflow, project.assets, validationResults);
+      updateActiveProject((draft) => {
+        draft.executionKit = kit;
+      }, 'Execution kit generated');
+    }
+  }
+
+  if (action === 'refresh-jobs') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.jobsApi.list(project.id).then(({ data }) => {
+      setState((prev) => ({ ...prev, jobs: data.jobs || data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to refresh jobs' })));
+  }
+
+  if (action === 'refresh-model-status') {
+    Promise.all([apiClient.modelApi.status(), apiClient.modelApi.calls()])
+      .then(([statusResult, callsResult]) => {
+        setState((prev) => ({ ...prev, modelStatus: statusResult.data || {}, modelCalls: callsResult.data?.calls || callsResult.data || [] }));
+      })
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to refresh model status' })));
+  }
+
+  if (action === 'job-retry') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.jobsApi.retry(project.id, target.dataset.jobId)
+      .then(() => apiClient.jobsApi.list(project.id))
+      .then(({ data }) => setState((prev) => ({ ...prev, jobs: data.jobs || data || [] })))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to retry job' })));
+  }
+
+  if (action === 'job-cancel') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.jobsApi.cancel(project.id, target.dataset.jobId)
+      .then(() => apiClient.jobsApi.list(project.id))
+      .then(({ data }) => setState((prev) => ({ ...prev, jobs: data.jobs || data || [] })))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to cancel job' })));
   }
 
   if (action === 'preview-file') setState((prev) => ({ ...prev, exportPreviewType: target.dataset.file }));
@@ -391,6 +492,10 @@ function handleAction(event) {
   }
 
   if (action === 'recommend-mode') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'Mock mode recommendation is disabled in server mode.' }));
+      return;
+    }
     const nodeId = target.dataset.nodeId;
     updateActiveProject((draft) => {
       const node = draft.workflow.nodes.find((n) => n.id === nodeId);
@@ -402,15 +507,31 @@ function handleAction(event) {
 
   if (action === 'generate-prompt') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const node = draft.workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      const prompt = modelGeneratePrompt(node);
-      const index = draft.assets.prompts.findIndex((p) => p.nodeId === nodeId);
-      if (index >= 0) draft.assets.prompts[index] = prompt;
-      else if (prompt) draft.assets.prompts.push(prompt);
-      node.promptStatus = 'draft';
-    }, 'Prompt generated', [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      apiClient.nodesApi.generatePrompt(project.id, nodeId)
+        .then(() => Promise.all([apiClient.assetsApi.list(project.id), apiClient.jobsApi.list(project.id)]))
+        .then(([assetsResult, jobsResult]) => {
+          const assets = assetsResult.data?.assets || assetsResult.data || {};
+          const jobs = jobsResult.data?.jobs || jobsResult.data || [];
+          updateActiveProject((draft) => {
+            draft.assets = assets;
+          }, 'Prompt generated', [nodeId]);
+          setState((prev) => ({ ...prev, jobs }));
+        })
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Generation failed. View error details or retry from the job panel.' })));
+    } else {
+      updateActiveProject((draft) => {
+        const node = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const prompt = modelGeneratePrompt(node);
+        const index = draft.assets.prompts.findIndex((p) => p.nodeId === nodeId);
+        if (index >= 0) draft.assets.prompts[index] = prompt;
+        else if (prompt) draft.assets.prompts.push(prompt);
+        node.promptStatus = 'draft';
+      }, 'Prompt generated', [nodeId]);
+    }
   }
 
   if (action === 'toggle-gate-required') {
@@ -424,6 +545,10 @@ function handleAction(event) {
   }
 
   if (action === 'add-node') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'Local add-node is disabled in server mode for Phase 3.' }));
+      return;
+    }
     updateActiveProject((draft) => {
       const phase = draft.workflow.phases.at(-1);
       const id = `node-${Date.now()}`;
@@ -481,56 +606,116 @@ function handleInput(event) {
 
   if (target.dataset.action === 'update-node-field') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const node = draft.workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      const field = target.dataset.field;
-      if (field === 'inputs' || field === 'outputs') node[field] = target.value.split('\n').map((x) => x.trim()).filter(Boolean);
-      else node[field] = target.value;
-      node.history.push({ at: new Date().toISOString(), action: `${field} updated` });
-    }, `${target.dataset.field} updated`, [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    const field = target.dataset.field;
+    const value = (field === 'inputs' || field === 'outputs') ? target.value.split('\n').map((x) => x.trim()).filter(Boolean) : target.value;
+    if (st.serverAvailable && project?.id) {
+      apiClient.nodesApi.patch(project.id, nodeId, { [field]: value })
+        .then(({ data }) => {
+          const updatedProject = data.project || data;
+          if (updatedProject?.id && updatedProject?.workflow) replaceActiveProject(updatedProject);
+        })
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || `Failed to update ${field}` })));
+    } else {
+      updateActiveProject((draft) => {
+        const node = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        if (field === 'inputs' || field === 'outputs') node[field] = value;
+        else node[field] = value;
+        node.history.push({ at: new Date().toISOString(), action: `${field} updated` });
+      }, `${target.dataset.field} updated`, [nodeId]);
+    }
   }
 
   if (target.dataset.action === 'update-artifact-format') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const node = draft.workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      node.artifactContract.outputFormat = target.value;
-    }, 'Artifact contract updated', [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      apiClient.nodesApi.patch(project.id, nodeId, { artifactContract: { outputFormat: target.value } })
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update artifact contract' })));
+    } else {
+      updateActiveProject((draft) => {
+        const node = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        node.artifactContract.outputFormat = target.value;
+      }, 'Artifact contract updated', [nodeId]);
+    }
   }
 
   if (target.dataset.action === 'update-gate-field') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const node = draft.workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      if (!node.reviewGate) return;
-      if (target.dataset.field === 'criteria') node.reviewGate.criteria = target.value.split('\n').filter(Boolean);
-      else node.reviewGate[target.dataset.field] = target.value;
-    }, 'Review gate updated', [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      const activeNode = project.workflow.nodes.find((n) => n.id === nodeId);
+      if (!activeNode?.reviewGate) return;
+      const nextGate = structuredClone(activeNode.reviewGate);
+      if (target.dataset.field === 'criteria') nextGate.criteria = target.value.split('\n').filter(Boolean);
+      else nextGate[target.dataset.field] = target.value;
+      apiClient.nodesApi.patch(project.id, nodeId, { reviewGate: nextGate })
+        .then(({ data }) => {
+          const updatedProject = data.project || data;
+          if (updatedProject?.id && updatedProject?.workflow) replaceActiveProject(updatedProject);
+        })
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update review gate' })));
+    } else {
+      updateActiveProject((draft) => {
+        const node = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        if (!node.reviewGate) return;
+        if (target.dataset.field === 'criteria') node.reviewGate.criteria = target.value.split('\n').filter(Boolean);
+        else node.reviewGate[target.dataset.field] = target.value;
+      }, 'Review gate updated', [nodeId]);
+    }
   }
 
   if (target.dataset.action === 'update-prompt-content') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const prompt = draft.assets.prompts.find((p) => p.nodeId === nodeId);
-      if (prompt) {
-        prompt.content = target.value;
-        prompt.status = 'draft';
-        prompt.outdatedReason = '';
-      }
-    }, 'Prompt edited', [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      const prompt = project.assets.prompts.find((p) => p.nodeId === nodeId || p.node_id === nodeId);
+      if (!prompt?.id) return;
+      apiClient.assetsApi.update(project.id, prompt.id, { content: target.value, status: 'draft' })
+        .then(() => apiClient.assetsApi.list(project.id))
+        .then(({ data }) => updateActiveProject((draft) => {
+          draft.assets = data.assets || data || draft.assets;
+        }, 'Prompt edited', [nodeId]))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update prompt content' })));
+    } else {
+      updateActiveProject((draft) => {
+        const prompt = draft.assets.prompts.find((p) => p.nodeId === nodeId);
+        if (prompt) {
+          prompt.content = target.value;
+          prompt.status = 'draft';
+          prompt.outdatedReason = '';
+        }
+      }, 'Prompt edited', [nodeId]);
+    }
   }
 
   if (target.dataset.action === 'edit-asset-prompt') {
-    updateActiveProject((draft) => {
-      const prompt = draft.assets.prompts.find((p) => p.id === target.dataset.assetId);
-      if (prompt) {
-        prompt.content = target.value;
-        prompt.status = 'draft';
-      }
-    }, 'Prompt edited from assets', [getActiveProject().assets.prompts.find((p) => p.id === target.dataset.assetId)?.nodeId].filter(Boolean));
+    const st = getState();
+    const project = getActiveProject(st);
+    const assetId = target.dataset.assetId;
+    if (st.serverAvailable && project?.id) {
+      apiClient.assetsApi.update(project.id, assetId, { content: target.value, status: 'draft' })
+        .then(() => apiClient.assetsApi.list(project.id))
+        .then(({ data }) => updateActiveProject((draft) => {
+          draft.assets = data.assets || data || draft.assets;
+        }, 'Prompt edited from assets'))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to edit asset prompt' })));
+    } else {
+      updateActiveProject((draft) => {
+        const prompt = draft.assets.prompts.find((p) => p.id === assetId);
+        if (prompt) {
+          prompt.content = target.value;
+          prompt.status = 'draft';
+        }
+      }, 'Prompt edited from assets', [getActiveProject().assets.prompts.find((p) => p.id === assetId)?.nodeId].filter(Boolean));
+    }
   }
 }
 
@@ -545,39 +730,50 @@ function handleSubmit(event) {
       sensitiveAreas: data.sensitiveAreas.split(',').map((x) => x.trim()),
     };
 
-    const project = modelGenerateWorkflowDraft(projectInput, {});
-    setState((prev) => ({ ...prev, projects: [...prev.projects, project], activeProjectId: project.id, currentPage: data.setupMode === 'org_aware' ? 'context' : 'studio', selectedNodeId: project.workflow.nodes[0]?.id }));
+    apiClient.projectsApi.create({
+      name: data.name,
+      goal: data.goal,
+      project_type: data.type,
+      current_stage: data.currentStage,
+      risk_level: data.riskLevel,
+      target_deliverables: projectInput.deliveryScope,
+      expected_ai_scope: projectInput.expectedAiScope,
+      sensitive_areas: projectInput.sensitiveAreas,
+      setup_mode: data.setupMode,
+      output_language: 'en',
+    }).then(async ({ data: createdProject }) => {
+      if (data.setupMode === 'quick_start') {
+        const generateResult = await apiClient.workflowApi.generate(createdProject.id);
+        setState((prev) => ({ ...prev, jobs: [generateResult.data, ...prev.jobs].slice(0, 10) }));
+      }
+      const projectsResult = await apiClient.projectsApi.list();
+      const projects = projectsResult.data?.projects || projectsResult.data || [];
+      setState((prev) => ({ ...prev, projects, activeProjectId: createdProject.id, currentPage: data.setupMode === 'org_aware' ? 'context' : 'studio' }));
+    }).catch((error) => {
+      setState((prev) => ({ ...prev, serverError: error.message || 'Failed to create project' }));
+    });
   }
 
   if (event.target.dataset.form === 'context-pack') {
     event.preventDefault();
     const raw = Object.fromEntries(new FormData(event.target));
-    const contextPack = {
-      teamRoles: raw.teamRoles.split(',').map((x) => x.trim()).filter(Boolean),
-      approvalProcess: raw.approvalProcess.split(',').map((x) => x.trim()).filter(Boolean),
-      toolStack: raw.toolStack.split(',').map((x) => x.trim()).filter(Boolean),
-      riskConstraints: raw.riskConstraints.split(',').map((x) => x.trim()).filter(Boolean),
-      historicalProcessMaterials: raw.historicalProcessMaterials,
-      summary: buildContextSummary(raw),
-    };
-
     const state = getState();
     const active = getActiveProject(state);
-    const regenerated = modelGenerateWorkflowDraft({
-      name: active.name,
-      goal: active.goal,
-      type: active.type,
-      currentStage: active.currentStage,
-      riskLevel: active.riskLevel,
-      deliveryScope: active.deliveryScope,
-      expectedAiScope: active.expectedAiScope,
-      sensitiveAreas: active.sensitiveAreas,
-      setupMode: 'org_aware',
-    }, contextPack);
-    regenerated.id = active.id;
-
-    replaceActiveProject(regenerated);
-    setState((prev) => ({ ...prev, currentPage: 'studio', selectedNodeId: regenerated.workflow.nodes[0]?.id }));
+    apiClient.contextPackApi.save(active.id, {
+      roles: raw.teamRoles.split(',').map((x) => x.trim()).filter(Boolean),
+      approval_processes: raw.approvalProcess.split(',').map((x) => x.trim()).filter(Boolean),
+      tool_stack: raw.toolStack.split(',').map((x) => x.trim()).filter(Boolean),
+      risk_constraints: raw.riskConstraints.split(',').map((x) => x.trim()).filter(Boolean),
+      source_materials: [{ type: 'text', content: raw.historicalProcessMaterials }],
+    }).then(async () => {
+      await apiClient.workflowApi.generate(active.id);
+      const projectResult = await apiClient.projectsApi.getById(active.id);
+      const updatedProject = projectResult.data?.project || projectResult.data;
+      replaceActiveProject(updatedProject);
+      setState((prev) => ({ ...prev, currentPage: 'studio' }));
+    }).catch((error) => {
+      setState((prev) => ({ ...prev, serverError: error.message || 'Failed to save context pack' }));
+    });
   }
 }
 
@@ -586,16 +782,16 @@ render();
 
 async function bootstrapRuntimeMode() {
   try {
-    await apiClient.health();
-    const projects = await apiClient.listProjects();
-    if (projects?.length) {
-      setState((prev) => ({
-        ...prev,
-        projects: prev.projects,
-      }));
-    }
+    await apiClient.healthApi.check();
+    const [{ data: projectsData }, { data: modelStatus }] = await Promise.all([
+      apiClient.projectsApi.list(),
+      apiClient.modelApi.status(),
+    ]);
+    const projects = projectsData?.projects || projectsData || [];
+    setState((prev) => ({ ...prev, projects, activeProjectId: projects[0]?.id || null, modelStatus }));
     setRuntimeMode('local_server', true);
-  } catch {
+  } catch (error) {
+    setState((prev) => ({ ...prev, serverError: error.message || 'Server disconnected' }));
     setRuntimeMode('local_demo', false);
   }
 }

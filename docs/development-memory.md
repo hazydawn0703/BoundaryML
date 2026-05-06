@@ -169,3 +169,189 @@
 - Workflow PATCH / Node PATCH / Diff Apply / Mark Final 支持 `workflow_version` optimistic lock，不匹配返回 `VERSION_CONFLICT`。
 - Execution kit 状态强化：生成成功标记 `generated`；下载时 `failed/generating` 禁止；`stale` 可下载且返回 stale 标记。
 - Workflow version 变化后，已有 generated/exported kit 自动转为 stale。
+
+## Phase 3 Summary
+
+### Pre-coding Audit
+- Existing Studio data flow: 当前由 `apps/studio/src/app.js` 与 `state/store.js` 驱动，本地 state + mock service 为主。
+- Existing API client: 仅有 health/listProjects/getExampleProject，封装不足。
+- Existing localStorage usage: 持久化整份 studio state（含 projects），与 server-first 冲突。
+- Existing demo mode: 有基础 health check 与 badge，但 server 可用时也未真正切换数据源。
+- Gaps found: 缺统一 API 模块、缺 jobs/model/context/workflow server 接入、缺显式 demo 边界。
+
+### Completed
+- 扩展统一 API Client（health/projects/context/workflow/jobs/model/assets/execution kits）。
+- 改造 Studio store：localStorage 仅保留 UI 状态，不再作为正式项目数据源。
+- 将 Create Project / Context Pack / Runtime bootstrap 初步接入真实 server API。
+
+### Files Changed
+- apps/studio/src/api-client/index.js
+- apps/studio/src/state/store.js
+- apps/studio/src/app.js
+- docs/development-memory.md
+
+### API Client Changes
+- 统一 base URL 优先级：VITE -> window -> /api
+- 统一 envelope 解析、requestId/meta 提取、server unavailable 与 envelope 异常处理
+- 模块化 API 方法：healthApi/projectsApi/contextPackApi/workflowApi/jobsApi/modelApi/assetsApi/executionKitsApi
+
+### Pages Connected
+- Projects: bootstrap 时读取 server projects（初步）
+- Create Project: 调用 POST /api/projects（初步）
+- Context Pack: 调用 PUT context-pack + workflow generate（初步）
+- Workflow Studio: 待完善
+- Node Detail: 待完善
+- Validation Results: 待完善
+- Job Status: 待完善
+- Model Status: bootstrap 获取 status（初步）
+
+### Local Demo Mode Changes
+- server 异常时写入 `serverError` 并回到 local demo runtime mode。
+
+### Tests Added / Updated
+- 暂未新增单测（下一步补 API client tests 与 Studio 接入 smoke）。
+
+### Validation
+- typecheck: pending
+- lint: n/a
+- test: pending
+- check: pending
+- smoke:server: pending
+
+### Known Limitations
+- app.js 仍较大，部分页面仍依赖本地 mock/service。
+- workflow/node/validation/job/model UI 仍需按 Phase 3 完整验收项补齐。
+
+### Risks / Follow-ups
+- 需要进一步规范 server response shape 映射（snake_case -> UI）。
+- 需要逐页移除 mock-only 行为，避免 local/server 混用。
+
+### Phase 4 Readiness
+- Blocked
+- Blockers if any: Phase 3 尚未完成全部验收条目。
+
+## Phase 3 Progress Update (Projects → Create → Context → Studio 主链继续)
+- Projects 页补充空状态文案与 Create First Project 入口；卡片增加 snake_case 字段兼容展示（project_type/risk_level/current_stage/execution_kit）。
+- Open Project 动作改为并行加载 project/workflow/jobs，进入 Studio 时尽量展示真实 workflow + assets + validation + jobs。
+- Validate 按钮优先调用 server `POST /workflow/validate`，失败时回退本地 validation 作为兜底显示。
+- Runtime badge 文案改为 `Mode: Local Demo / Mock Model`，避免模糊 fallback。
+
+## Phase 3 Progress Update (Node Detail / Assets / Export / Settings server化继续)
+- Studio 主页面新增 Recent Jobs 轻量面板，展示 job id/type/status/progress.stage，作为 Job Status 入口。
+- Open Project 时新增 `GET /assets` 拉取，Node Detail / Assets 页面优先消费 server assets。
+- Export 页面 `Generate Preview` 在 server mode 下改为调用 execution kits preview API（demo mode 仍保留本地生成）。
+- 新增 `Refresh Jobs` 与 `Refresh Model Status` 操作：分别调用 jobs list、model status + model calls。
+- Settings 页面改为展示 server model status 字段（mode/provider/default/planning/prompt/diff/structured output）与 recent model calls。
+
+## Phase 3 Progress Update (Node Detail 编辑与 Job retry/cancel)
+- API client 新增 `nodesApi`：node patch、generate prompt、generate checklist。
+- Node Detail `generate prompt` 在 server mode 下改为调用 nodes prompt generate API，并刷新 assets/jobs。
+- Node Detail `update-node-field` 与 `update-artifact-format` 在 server mode 下优先走 node patch API（demo mode 保留本地逻辑）。
+- Recent Jobs 面板新增 Retry/Cancel 按钮，并接入 jobs retry/cancel API，执行后自动刷新 job 列表。
+
+## Phase 3 Progress Update (剩余本地路径替换)
+- `update-gate-field` 在 server mode 下改为 `nodesApi.patch`（提交完整 reviewGate 结构）。
+- `update-prompt-content` 在 server mode 下改为 `assetsApi.update`，并回拉 assets。
+- `edit-asset-prompt` 在 server mode 下改为 `assetsApi.update`，并回拉 assets。
+- `assetsApi` 新增 `update(projectId, assetId, payload)`。
+
+## Phase 3 Completion Audit (Round)
+| Area | Current State | Remaining Gap | Fix in this round |
+|---|---|---|---|
+| API Client | unified modules + envelope + error meta | API client unit tests missing | deferred; keep lightweight scope |
+| Projects page | server list + empty state | none critical | keep server-only in server mode |
+| Create Project | server create + generate | error detail display can improve | partial done via serverError |
+| Context Pack | save+generate integrated | summarize/refresh-impact UI incomplete | deferred (non-blocking for phase3 core chain) |
+| Workflow Studio | reads server workflow | local mock actions still accessible | disabled mock-only actions in server mode |
+| Node Detail | core edit paths serverized | some minor local-only helpers remain | retained only for local demo mode |
+| Validation Results | server validate call exists | fallback to local validate in server mode | removed fallback; show error code/requestId |
+| Job Status | recent jobs + retry/cancel | no dedicated full panel | accepted as lightweight phase3 entry |
+| Model Status | settings reads server status/calls | no advanced config UI | accepted per phase3 scope |
+| Assets light read | open project loads server assets | shape normalization debt | deferred |
+| Execution Kit light status | server preview in server mode | none critical | keep |
+| Local Demo Mode | explicit runtime mode badge | boundary guard incomplete | improved by disabling mock actions in server mode |
+| localStorage usage | UI-only persistence | none critical | keep |
+| Direct fetch usage | centralized in api client | none | keep |
+| Mock service usage | still present for demo mode | server mode leakage risk | server mode guard added |
+| Tests | root checks all pass | no frontend api-client tests | deferred; document as limitation |
+
+## Phase 3 Final Completion Summary
+
+### Completion Audit
+- API Client: unified entry in `apps/studio/src/api-client/index.js`; added `diffsApi`; request envelope + ApiError in place.
+- Projects: server bootstrap list + empty state; open-project loads project/workflow/assets/jobs from server.
+- Create Project: uses `POST /projects` with snake_case fields; quick_start calls workflow generate.
+- Context Pack: uses `PUT /context-pack`; server-mode save path active.
+- Workflow Studio: server workflow used in server mode; local mock-only actions blocked in server mode.
+- Node Detail: server patch/update/generate paths for node fields/review gate/prompt content/assets prompt edits.
+- Validation Results: validate calls server API; server-mode local fallback removed; error code/requestId shown.
+- Job Status: recent jobs from server; refresh/retry/cancel wired.
+- Model Status: settings reads status/calls from server APIs.
+- Local Demo Mode: explicit mode badge retained; demo fallback allowed only when server unavailable.
+- localStorage: UI-only persisted fields; no formal projects/workflow/assets/jobs/model data persisted.
+- mock service: retained for demo mode only; guarded in server mode.
+- Tests: added lightweight api-client checks and integrated into `scripts/check.js`.
+
+### Completed
+- Added `diffsApi` to API client surface.
+- Added `scripts/studio-api-client-check.js` covering base-url(window), success/error envelope parse, invalid envelope/network/json errors, requestId/error.code extraction.
+- Removed server-mode local validation fallback.
+- Restricted local mock actions in server mode (`generate-diff`, `apply-diff`, `recommend-mode`, `add-node`).
+- Updated completion audit and final summary in development memory.
+
+### Files Changed
+- apps/studio/src/api-client/index.js
+- apps/studio/src/app.js
+- scripts/studio-api-client-check.js
+- scripts/check.js
+- docs/development-memory.md
+
+### Server Data Source Closure
+- Projects: server list/get/create.
+- Context Pack: server save path.
+- Workflow: server get/generate/validate.
+- Validation: server validate only in server mode.
+- Jobs: server list/retry/cancel.
+- Model: server status/calls.
+- Assets: server list/update.
+- Execution Kits: server preview in server mode.
+
+### Removed / Restricted Local Paths
+- Disabled server-mode local diff generation/apply.
+- Disabled server-mode local mock mode recommendation.
+- Disabled server-mode local add-node.
+- Disabled server-mode local validation fallback.
+
+### API Client Tests
+- Base URL priority (window fallback path) and request URL compose.
+- Envelope success parse.
+- Envelope error parse and requestId extraction.
+- Missing `ok` envelope handling.
+- Network/server unavailable handling.
+- Invalid JSON handling.
+- error.code extraction.
+
+### Studio Integration Tests
+- Lightweight runtime checks via `scripts/check.js` + smoke server command.
+- No heavy frontend test framework added.
+
+### Security Checks
+- Frontend API key grep: no `BOUNDARYML_LLM_API_KEY` / `VITE_BOUNDARYML_LLM_API_KEY` in studio sources.
+- Raw LLM output exposure: none intentionally rendered in settings/jobs panels.
+- localStorage formal data: UI-only persistence in store.
+
+### Validation
+- typecheck: pass
+- lint: n/a
+- test: pass
+- smoke:server: pass
+- check: pass
+
+### Known Limitations
+- `apps/studio/src/app.js` remains large and can be modularized later.
+- API client base URL priority test currently verifies window fallback + default runtime path; Vite env branch remains indirectly covered due runtime constraints.
+- Context pack summarize/refresh-impact UI remains lightweight.
+
+### Phase 4 Readiness
+- Ready
+- Blockers if any: none for entering Phase 4 baseline; deeper UI polish can continue as follow-up.
