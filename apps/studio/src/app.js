@@ -630,35 +630,76 @@ function handleInput(event) {
 
   if (target.dataset.action === 'update-gate-field') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const node = draft.workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      if (!node.reviewGate) return;
-      if (target.dataset.field === 'criteria') node.reviewGate.criteria = target.value.split('\n').filter(Boolean);
-      else node.reviewGate[target.dataset.field] = target.value;
-    }, 'Review gate updated', [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      const activeNode = project.workflow.nodes.find((n) => n.id === nodeId);
+      if (!activeNode?.reviewGate) return;
+      const nextGate = structuredClone(activeNode.reviewGate);
+      if (target.dataset.field === 'criteria') nextGate.criteria = target.value.split('\n').filter(Boolean);
+      else nextGate[target.dataset.field] = target.value;
+      apiClient.nodesApi.patch(project.id, nodeId, { reviewGate: nextGate })
+        .then(({ data }) => {
+          const updatedProject = data.project || data;
+          if (updatedProject?.id && updatedProject?.workflow) replaceActiveProject(updatedProject);
+        })
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update review gate' })));
+    } else {
+      updateActiveProject((draft) => {
+        const node = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        if (!node.reviewGate) return;
+        if (target.dataset.field === 'criteria') node.reviewGate.criteria = target.value.split('\n').filter(Boolean);
+        else node.reviewGate[target.dataset.field] = target.value;
+      }, 'Review gate updated', [nodeId]);
+    }
   }
 
   if (target.dataset.action === 'update-prompt-content') {
     const nodeId = target.dataset.nodeId;
-    updateActiveProject((draft) => {
-      const prompt = draft.assets.prompts.find((p) => p.nodeId === nodeId);
-      if (prompt) {
-        prompt.content = target.value;
-        prompt.status = 'draft';
-        prompt.outdatedReason = '';
-      }
-    }, 'Prompt edited', [nodeId]);
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      const prompt = project.assets.prompts.find((p) => p.nodeId === nodeId || p.node_id === nodeId);
+      if (!prompt?.id) return;
+      apiClient.assetsApi.update(project.id, prompt.id, { content: target.value, status: 'draft' })
+        .then(() => apiClient.assetsApi.list(project.id))
+        .then(({ data }) => updateActiveProject((draft) => {
+          draft.assets = data.assets || data || draft.assets;
+        }, 'Prompt edited', [nodeId]))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update prompt content' })));
+    } else {
+      updateActiveProject((draft) => {
+        const prompt = draft.assets.prompts.find((p) => p.nodeId === nodeId);
+        if (prompt) {
+          prompt.content = target.value;
+          prompt.status = 'draft';
+          prompt.outdatedReason = '';
+        }
+      }, 'Prompt edited', [nodeId]);
+    }
   }
 
   if (target.dataset.action === 'edit-asset-prompt') {
-    updateActiveProject((draft) => {
-      const prompt = draft.assets.prompts.find((p) => p.id === target.dataset.assetId);
-      if (prompt) {
-        prompt.content = target.value;
-        prompt.status = 'draft';
-      }
-    }, 'Prompt edited from assets', [getActiveProject().assets.prompts.find((p) => p.id === target.dataset.assetId)?.nodeId].filter(Boolean));
+    const st = getState();
+    const project = getActiveProject(st);
+    const assetId = target.dataset.assetId;
+    if (st.serverAvailable && project?.id) {
+      apiClient.assetsApi.update(project.id, assetId, { content: target.value, status: 'draft' })
+        .then(() => apiClient.assetsApi.list(project.id))
+        .then(({ data }) => updateActiveProject((draft) => {
+          draft.assets = data.assets || data || draft.assets;
+        }, 'Prompt edited from assets'))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to edit asset prompt' })));
+    } else {
+      updateActiveProject((draft) => {
+        const prompt = draft.assets.prompts.find((p) => p.id === assetId);
+        if (prompt) {
+          prompt.content = target.value;
+          prompt.status = 'draft';
+        }
+      }, 'Prompt edited from assets', [getActiveProject().assets.prompts.find((p) => p.id === assetId)?.nodeId].filter(Boolean));
+    }
   }
 }
 

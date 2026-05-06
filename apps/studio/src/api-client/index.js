@@ -93,7 +93,10 @@ export const modelApi = {
   test: () => post('/model/test', {}),
   calls: () => get('/model/calls'),
 };
-export const assetsApi = { list: (projectId) => get(`/projects/${projectId}/assets`) };
+export const assetsApi = {
+  list: (projectId) => get(`/projects/${projectId}/assets`),
+  update: (projectId, assetId, payload) => patch(`/projects/${projectId}/assets/${assetId}`, payload),
+};
 export const executionKitsApi = {
   preview: (projectId) => post(`/projects/${projectId}/execution-kits/preview`, {}),
   generate: (projectId) => post(`/projects/${projectId}/execution-kits/generate`, {}),

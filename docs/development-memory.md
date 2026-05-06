@@ -248,3 +248,9 @@
 - Node Detail `generate prompt` 在 server mode 下改为调用 nodes prompt generate API，并刷新 assets/jobs。
 - Node Detail `update-node-field` 与 `update-artifact-format` 在 server mode 下优先走 node patch API（demo mode 保留本地逻辑）。
 - Recent Jobs 面板新增 Retry/Cancel 按钮，并接入 jobs retry/cancel API，执行后自动刷新 job 列表。
+
+## Phase 3 Progress Update (剩余本地路径替换)
+- `update-gate-field` 在 server mode 下改为 `nodesApi.patch`（提交完整 reviewGate 结构）。
+- `update-prompt-content` 在 server mode 下改为 `assetsApi.update`，并回拉 assets。
+- `edit-asset-prompt` 在 server mode 下改为 `assetsApi.update`，并回拉 assets。
+- `assetsApi` 新增 `update(projectId, assetId, payload)`。
