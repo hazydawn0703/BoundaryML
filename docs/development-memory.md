@@ -235,3 +235,10 @@
 - Open Project 动作改为并行加载 project/workflow/jobs，进入 Studio 时尽量展示真实 workflow + assets + validation + jobs。
 - Validate 按钮优先调用 server `POST /workflow/validate`，失败时回退本地 validation 作为兜底显示。
 - Runtime badge 文案改为 `Mode: Local Demo / Mock Model`，避免模糊 fallback。
+
+## Phase 3 Progress Update (Node Detail / Assets / Export / Settings server化继续)
+- Studio 主页面新增 Recent Jobs 轻量面板，展示 job id/type/status/progress.stage，作为 Job Status 入口。
+- Open Project 时新增 `GET /assets` 拉取，Node Detail / Assets 页面优先消费 server assets。
+- Export 页面 `Generate Preview` 在 server mode 下改为调用 execution kits preview API（demo mode 仍保留本地生成）。
+- 新增 `Refresh Jobs` 与 `Refresh Model Status` 操作：分别调用 jobs list、model status + model calls。
+- Settings 页面改为展示 server model status 字段（mode/provider/default/planning/prompt/diff/structured output）与 recent model calls。

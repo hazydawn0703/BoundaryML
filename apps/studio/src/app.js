@@ -9,7 +9,6 @@ import {
   modelGenerateWorkflowDiff,
   modelGenerateExecutionKit,
   buildContextSummary,
-  getModelCallLogs,
 } from './services/mockModelService.js';
 import { applyWorkflowDiff } from '../../../packages/core/src/diff.js';
 
@@ -207,8 +206,10 @@ function renderStudio(state) {
     warnings: state.validationResults.filter((x) => x.level === 'warning').length,
   };
 
+  const recentJobs = (state.jobs || []).slice(0, 3);
   return `<section class="page"><div class="toolbar card"><div><strong>${project.name}</strong><p class="muted">v${project.workflow.version} · ${project.workflow.status}</p></div>
     <div class="row"><button data-action="add-node">Add Node</button><button data-action="toggle-ai-edit">AI Edit</button><button data-action="validate">Validate</button><button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>
+  ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
   <div class="studio-grid">
     <aside class="card panel"><h3>Filters & Legend</h3>
       <label>Execution Mode<select data-action="set-filter-mode"><option value="all">All</option>${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${(state.studioFilter?.mode || 'all') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
@@ -223,6 +224,9 @@ function renderStudio(state) {
     }).join('')}</div>
     ${renderNodeDetail(state, project, selectedNode)}
   </div>
+  <article class="card panel"><h3>Recent Jobs</h3>
+  <ul>${recentJobs.length ? recentJobs.map((job) => `<li>${job.id || job.job_id} · ${job.type} · ${job.status} · ${(job.progress?.stage || 'n/a')}</li>`).join('') : '<li>No jobs yet</li>'}</ul>
+  </article>
   ${renderAiEdit(state)}
   ${renderDiffDrawer(state)}
   </section>`;
@@ -287,7 +291,7 @@ function renderExport(state) {
   return `<section class="page"><h2>Export Execution Kit</h2>
   <p class="muted">Blocking errors => Final kit disabled.</p>
   <div class="split-2"><article class="card panel"><h3>Export Options</h3>
-    <div class="actions"><button data-action="generate-kit" class="primary">Generate Preview</button><button data-action="copy-kit">Copy Preview</button></div>
+    <div class="actions"><button data-action="generate-kit" class="primary">Generate Preview</button><button data-action="copy-kit">Copy Preview</button><button data-action="refresh-jobs">Refresh Jobs</button></div>
     <p>${preview ? `Kit status: ${preview.status} · snapshot v${preview.snapshotVersion}` : 'No preview yet.'}</p>
     <p>Blocking errors: ${preview?.blockingErrors ?? 'N/A'}</p>
   </article>
@@ -299,11 +303,20 @@ function renderExport(state) {
   </article></div></section>`;
 }
 
-function renderSettings() {
-  const logs = getModelCallLogs();
-  return `<section class="page"><h2>Settings / Model Access</h2><div class="card panel"><p>Provider: OpenAI-compatible (mock connected)</p>
-  <p>Default Model: mock-default</p><p>Planning Model: mock-planning-model</p><p>Prompt Model: mock-prompt-model</p><p>Diff Model: mock-diff-model</p>
-  <h3>Recent Model Calls</h3><ul>${logs.map((log) => `<li>${log.at} · ${log.name}</li>`).join('') || '<li>No calls yet</li>'}</ul></div></section>`;
+function renderSettings(state) {
+  const logs = state.modelCalls || [];
+  const modelStatus = state.modelStatus || {};
+  const mode = modelStatus?.mode || modelStatus?.model_mode || (state.serverAvailable ? 'unknown' : 'mock');
+  return `<section class="page"><h2>Settings / Model Access</h2><div class="card panel">
+  <p>Model Mode: ${mode}</p>
+  <p>Provider: ${modelStatus.provider || 'n/a'}</p>
+  <p>Default Model: ${modelStatus.default_model || modelStatus.defaultModel || 'n/a'}</p>
+  <p>Planning Model: ${modelStatus.planning_model || 'n/a'}</p>
+  <p>Prompt Model: ${modelStatus.prompt_model || 'n/a'}</p>
+  <p>Diff Model: ${modelStatus.diff_model || 'n/a'}</p>
+  <p>Structured Output: ${(modelStatus.structured_output_enabled ?? modelStatus.structuredOutputEnabled) ? 'enabled' : 'disabled'}</p>
+  <div class="actions"><button data-action="refresh-model-status">Refresh Model Status</button></div>
+  <h3>Recent Model Calls</h3><ul>${logs.map((log) => `<li>${log.created_at || log.at} · ${log.purpose || log.name} · ${log.status}</li>`).join('') || '<li>No calls yet</li>'}</ul></div></section>`;
 }
 
 function renderPage(state) {
@@ -314,7 +327,7 @@ function renderPage(state) {
     case 'studio': return renderStudio(state);
     case 'assets': return renderAssets(state);
     case 'export': return renderExport(state);
-    case 'settings': return renderSettings();
+    case 'settings': return renderSettings(state);
     default: return renderProjects(state);
   }
 }
@@ -346,14 +359,16 @@ function handleAction(event) {
       apiClient.projectsApi.getById(projectId),
       apiClient.workflowApi.get(projectId),
       apiClient.jobsApi.list(projectId),
-    ]).then(([projectResult, workflowResult, jobsResult]) => {
+      apiClient.assetsApi.list(projectId),
+    ]).then(([projectResult, workflowResult, jobsResult, assetsResult]) => {
       const rawProject = projectResult.data?.project || projectResult.data;
       const workflow = workflowResult.data?.workflow || workflowResult.data || {};
       const jobs = jobsResult.data?.jobs || jobsResult.data || [];
+      const assets = assetsResult.data?.assets || assetsResult.data || {};
       const merged = {
         ...rawProject,
         workflow: workflow.workflow || rawProject.workflow || workflow,
-        assets: workflow.assets || rawProject.assets || { prompts: [], checklists: [], artifactTemplates: [] },
+        assets: workflow.assets || assets || rawProject.assets || { prompts: [], checklists: [], artifactTemplates: [] },
       };
       setState((prev) => ({
         ...prev,
@@ -407,11 +422,35 @@ function handleAction(event) {
   if (action === 'generate-kit') {
     const st = getState();
     const project = getActiveProject(st);
-    const validationResults = recomputeValidation(project);
-    const kit = modelGenerateExecutionKit(project.workflow, project.assets, validationResults);
-    updateActiveProject((draft) => {
-      draft.executionKit = kit;
-    }, 'Execution kit generated');
+    if (st.serverAvailable && project?.id) {
+      apiClient.executionKitsApi.preview(project.id).then(({ data }) => {
+        updateActiveProject((draft) => {
+          draft.executionKit = data.execution_kit || data.kit || data;
+        }, 'Execution kit generated');
+      }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Generation failed. View error details or retry from the job panel.' })));
+    } else {
+      const validationResults = recomputeValidation(project);
+      const kit = modelGenerateExecutionKit(project.workflow, project.assets, validationResults);
+      updateActiveProject((draft) => {
+        draft.executionKit = kit;
+      }, 'Execution kit generated');
+    }
+  }
+
+  if (action === 'refresh-jobs') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.jobsApi.list(project.id).then(({ data }) => {
+      setState((prev) => ({ ...prev, jobs: data.jobs || data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to refresh jobs' })));
+  }
+
+  if (action === 'refresh-model-status') {
+    Promise.all([apiClient.modelApi.status(), apiClient.modelApi.calls()])
+      .then(([statusResult, callsResult]) => {
+        setState((prev) => ({ ...prev, modelStatus: statusResult.data || {}, modelCalls: callsResult.data?.calls || callsResult.data || [] }));
+      })
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to refresh model status' })));
   }
 
   if (action === 'preview-file') setState((prev) => ({ ...prev, exportPreviewType: target.dataset.file }));
