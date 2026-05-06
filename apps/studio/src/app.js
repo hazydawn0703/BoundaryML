@@ -395,13 +395,17 @@ function handleAction(event) {
     if (!project?.id) return;
     apiClient.workflowApi.validate(project.id)
       .then(({ data }) => setState((prev) => ({ ...prev, validationResults: data.validation || data.results || [] })))
-      .catch(() => setState((prev) => ({ ...prev, validationResults: recomputeValidation(project) })));
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'VALIDATION_ERROR'} (${error.requestId || 'n/a'}): ${error.message || 'Validation failed'}` })));
   }
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.dataset.suggestion } }));
 
   if (action === 'generate-diff') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'AI Assisted Edit is disabled in Phase 3 server mode.' }));
+      return;
+    }
     const st = getState();
     const project = getActiveProject(st);
     const diff = modelGenerateWorkflowDiff(st.aiEdit.request, project.workflow, project.assets);
@@ -413,6 +417,10 @@ function handleAction(event) {
   }
 
   if (action === 'apply-diff-all' || action === 'apply-diff-selected') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'Diff apply from local mock is disabled in server mode.' }));
+      return;
+    }
     const st = getState();
     const project = getActiveProject(st);
     const updated = applyWorkflowDiff(project, st.aiEdit.diff, action === 'apply-diff-selected');
@@ -484,6 +492,10 @@ function handleAction(event) {
   }
 
   if (action === 'recommend-mode') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'Mock mode recommendation is disabled in server mode.' }));
+      return;
+    }
     const nodeId = target.dataset.nodeId;
     updateActiveProject((draft) => {
       const node = draft.workflow.nodes.find((n) => n.id === nodeId);
@@ -533,6 +545,10 @@ function handleAction(event) {
   }
 
   if (action === 'add-node') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'Local add-node is disabled in server mode for Phase 3.' }));
+      return;
+    }
     updateActiveProject((draft) => {
       const phase = draft.workflow.phases.at(-1);
       const id = `node-${Date.now()}`;
@@ -772,9 +788,7 @@ async function bootstrapRuntimeMode() {
       apiClient.modelApi.status(),
     ]);
     const projects = projectsData?.projects || projectsData || [];
-    if (projects.length) {
-      setState((prev) => ({ ...prev, projects, activeProjectId: projects[0].id, modelStatus }));
-    }
+    setState((prev) => ({ ...prev, projects, activeProjectId: projects[0]?.id || null, modelStatus }));
     setRuntimeMode('local_server', true);
   } catch (error) {
     setState((prev) => ({ ...prev, serverError: error.message || 'Server disconnected' }));
