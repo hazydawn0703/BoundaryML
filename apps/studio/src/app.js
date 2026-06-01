@@ -149,8 +149,9 @@ function renderNodeCard(node, selected) {
   return `<button class="node-card ${selected ? 'selected' : ''} ${node.muted ? 'muted-node' : ''}" data-action="select-node" data-node-id="${node.id}">
     <div class="node-head"><strong>${node.name}</strong>${badge(node.riskLevel, `risk-${node.riskLevel}`)}</div>
     <div class="mode-pill" style="border-color:${mode.color};color:${mode.color}">${mode.label}</div>
-    <div class="meta">Gate: ${node.reviewGate?.name || 'none'}</div>
+    <div class="meta">Gate: ${node.reviewGate?.name || 'none'} · Owner: ${node.humanOwnerRole || 'n/a'}</div>
     <div class="meta">Prompt: ${node.promptStatus} · Status: ${node.status}</div>
+    <div class="meta">In: ${(node.inputs || []).join(', ') || 'none'} · Out: ${(node.outputs || []).join(', ') || 'none'}</div>
   </button>`;
 }
 
@@ -173,25 +174,38 @@ function renderNodeDetail(state, project, node) {
   const prompt = project.assets.prompts.find((item) => item.nodeId === node.id);
   const checklist = project.assets.checklists.find((item) => item.nodeId === node.id);
 
+  const nodeEdges = project.workflow.edges.filter((e) => e.from === node.id || e.to === node.id);
   const body = {
-    overview: `<p><strong>${node.name}</strong></p><p>${node.goal}</p><p>Phase: ${project.workflow.phases.find((p) => p.id === node.phaseId)?.name}</p><p>Status: ${node.status} · Risk: ${node.riskLevel}</p><p>Upstream: ${upstream.join(', ') || 'none'}</p><p>Downstream: ${downstream.join(', ') || 'none'}</p>`,
+    overview: `<label>Name<input data-action="update-node-field" data-field="name" data-node-id="${node.id}" value="${node.name}"/></label><label>Goal<textarea data-action="update-node-field" data-field="goal" data-node-id="${node.id}">${node.goal || ''}</textarea></label><label>Phase<select data-action="update-node-field" data-field="phaseId" data-node-id="${node.id}">${project.workflow.phases.map((p) => `<option value="${p.id}" ${p.id === node.phaseId ? 'selected' : ''}>${p.name}</option>`).join('')}</select></label><label>Status<input data-action="update-node-field" data-field="status" data-node-id="${node.id}" value="${node.status || 'draft'}"/></label><label>Risk<select data-action="update-node-field" data-field="riskLevel" data-node-id="${node.id}">${['low', 'medium', 'high'].map((r) => `<option value="${r}" ${r === node.riskLevel ? 'selected' : ''}>${r}</option>`).join('')}</select></label><p>Upstream: ${upstream.join(', ') || 'none'}</p><p>Downstream: ${downstream.join(', ') || 'none'}</p><button data-action="delete-node" data-node-id="${node.id}">Delete Node</button>`,
     boundary: `<label>Execution Mode<select data-action="update-node-field" data-field="executionMode" data-node-id="${node.id}">${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${node.executionMode === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
     <label>Human Owner<input data-action="update-node-field" data-field="humanOwnerRole" data-node-id="${node.id}" value="${node.humanOwnerRole}"/></label>
     <label>AI Role<input data-action="update-node-field" data-field="aiRole" data-node-id="${node.id}" value="${node.aiRole || ''}"/></label>
     <button data-action="recommend-mode" data-node-id="${node.id}">Recommend Execution Mode</button>${rules.map((r) => `<p class="inline-${r.level}">${r.title}</p>`).join('')}`,
     io: `<label>Inputs<textarea data-action="update-node-field" data-field="inputs" data-node-id="${node.id}">${node.inputs.join('\n')}</textarea></label>
     <label>Outputs<textarea data-action="update-node-field" data-field="outputs" data-node-id="${node.id}">${node.outputs.join('\n')}</textarea></label>
-    <label>Artifact Output<input data-action="update-artifact-format" data-node-id="${node.id}" value="${node.artifactContract?.outputFormat || ''}"/></label>`,
+    <h4>Artifact Contract</h4>
+    <label>ID<input data-action="update-artifact-contract-field" data-node-id="${node.id}" data-field="id" value="${node.artifactContract?.id || ''}"/></label>
+    <label>Name<input data-action="update-artifact-contract-field" data-node-id="${node.id}" data-field="name" value="${node.artifactContract?.name || ''}"/></label>
+    <label>Type<input data-action="update-artifact-contract-field" data-node-id="${node.id}" data-field="type" value="${node.artifactContract?.type || ''}"/></label>
+    <label>Format<input data-action="update-artifact-contract-field" data-node-id="${node.id}" data-field="format" value="${node.artifactContract?.format || node.artifactContract?.outputFormat || ''}"/></label>
+    <label>Required Sections<textarea data-action="update-artifact-contract-field" data-node-id="${node.id}" data-field="required_sections">${(node.artifactContract?.required_sections || []).join('\n')}</textarea></label>
+    <label>Completion Criteria<textarea data-action="update-artifact-contract-field" data-node-id="${node.id}" data-field="completion_criteria">${(node.artifactContract?.completion_criteria || node.artifactContract?.acceptanceCriteria || []).join('\n')}</textarea></label>`,
     gate: `<p><strong>${node.reviewGate?.name || 'Missing Review Gate'}</strong></p>
+    ${node.riskLevel === 'high' && !node.reviewGate?.required ? '<p class="inline-error">This node is high risk but has no required Review Gate.</p>' : ''}
     <label>Reviewer<input data-action="update-gate-field" data-node-id="${node.id}" data-field="reviewerRole" value="${node.reviewGate?.reviewerRole || ''}"/></label>
     <label>Criteria<textarea data-action="update-gate-field" data-node-id="${node.id}" data-field="criteria">${(node.reviewGate?.criteria || []).join('\n')}</textarea></label>
-    <label class="check"><input type="checkbox" data-action="toggle-gate-required" data-node-id="${node.id}" ${node.reviewGate?.required ? 'checked' : ''}/>Required</label>`,
+    <label>Gate Name<input data-action="update-gate-field" data-node-id="${node.id}" data-field="name" value="${node.reviewGate?.name || ''}"/></label>
+    <label>Pass Condition<input data-action="update-gate-field" data-node-id="${node.id}" data-field="passCondition" value="${node.reviewGate?.passCondition || ''}"/></label>
+    <label>Reject Condition<input data-action="update-gate-field" data-node-id="${node.id}" data-field="rejectCondition" value="${node.reviewGate?.rejectCondition || ''}"/></label>
+    <label class="check"><input type="checkbox" data-action="toggle-gate-required" data-node-id="${node.id}" ${node.reviewGate?.required ? 'checked' : ''}/>Required</label>
+    <button data-action="remove-review-gate" data-node-id="${node.id}">Remove Review Gate</button>`,
     assets: node.executionMode === 'human_only'
       ? `<p>Human-only node: no AI prompt.</p><pre>${(checklist?.items || []).join('\n')}</pre>`
       : `<label>Prompt<textarea data-action="update-prompt-content" data-node-id="${node.id}">${prompt?.content || ''}</textarea></label>
       <p>Status: ${prompt?.status || 'missing'} ${prompt?.outdatedReason ? `· ${prompt.outdatedReason}` : ''}</p>
       <button data-action="generate-prompt" data-node-id="${node.id}">${prompt ? 'Regenerate Prompt' : 'Generate Prompt'}</button>`,
-    history: `<ul>${node.history.map((h) => `<li>${h.at}: ${h.action}</li>`).join('')}</ul>`,
+    history: `<ul>${node.history.map((h) => `<li>${h.at}: ${h.action}</li>`).join('')}</ul><h4>Edges</h4><ul>${nodeEdges.map((e) => `<li>${e.id || `${e.from}-${e.to}`} ${e.from}→${e.to} (${e.dependencyType || e.dependency_type || 'sequential_dependency'}) req:${(e.required_outputs || []).join(',') || '-'} gate:${e.gate_id || '-'} <button data-action="start-edge-edit" data-edge-id="${e.id || `${e.from}-${e.to}`}">Edit</button> <button data-action="delete-edge" data-edge-id="${e.id || `${e.from}-${e.to}`}">Delete</button></li>`).join('') || '<li>none</li>'}</ul><button data-action="add-edge-from-node" data-node-id="${node.id}">Add Edge</button>
+    ${state.edgeEdit?.id ? `<div class="card panel"><h5>Edit Edge ${state.edgeEdit.id}</h5><label>Dependency<select data-action="edge-edit-field" data-field="dependency_type"><option value="artifact_dependency">artifact_dependency</option><option value="approval_dependency">approval_dependency</option><option value="context_dependency">context_dependency</option><option value="sequential_dependency">sequential_dependency</option></select></label><label>Required outputs<textarea data-action="edge-edit-field" data-field="required_outputs">${(state.edgeEdit.required_outputs || []).join('\n')}</textarea></label><label>Gate ID<input data-action="edge-edit-field" data-field="gate_id" value="${state.edgeEdit.gate_id || ''}"/></label><button data-action="save-edge-edit">Save Edge</button></div>` : ''}`,
   };
 
   return `<article class="card panel"><h3>Node Detail</h3><div class="tabs">${tabNav}</div><div class="tab-body">${body[tab]}</div></article>`;
@@ -208,8 +222,10 @@ function renderStudio(state) {
 
   const recentJobs = (state.jobs || []).slice(0, 3);
   return `<section class="page"><div class="toolbar card"><div><strong>${project.name}</strong><p class="muted">v${project.workflow.version} · ${project.workflow.status}</p></div>
-    <div class="row"><button data-action="add-node">Add Node</button><button data-action="toggle-ai-edit">AI Edit</button><button data-action="validate">Validate</button><button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>
+    <div class="row"><button data-action="add-node">Add Node</button><button data-action="undo-workflow">Undo</button><button data-action="toggle-history">History</button><button data-action="validate">Validate</button><button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>
+  ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model</div>'}
   ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
+  ${(state.workflowHistory || []).length ? `<article class="card panel"><h3>History</h3><ul>${state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('')}</ul></article>` : ''}
   <div class="studio-grid">
     <aside class="card panel"><h3>Filters & Legend</h3>
       <label>Execution Mode<select data-action="set-filter-mode"><option value="all">All</option>${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${(state.studioFilter?.mode || 'all') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
@@ -218,9 +234,14 @@ function renderStudio(state) {
       <ul>${state.validationResults.slice(0, 4).map((x) => `<li class="inline-${x.level}">${x.title}</li>`).join('')}</ul>
       <h4>Phases</h4><ul>${project.workflow.phases.map((p) => `<li>${p.name}</li>`).join('')}</ul>
     </aside>
-    <div class="card canvas">${project.workflow.phases.map((phase) => {
+    <div class="card canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => {
       const phaseNodes = nodes.filter((node) => node.phaseId === phase.id);
-      return `<div class="lane"><h4>${phase.name}</h4>${phaseNodes.map((node) => renderNodeCard(node, node.id === selectedNode.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, phaseNodes)}</ul></div>`;
+      const effectiveNodes = phase.id === '__unassigned__' ? nodes.filter((n) => !project.workflow.phases.find((p) => p.id === n.phaseId)) : phaseNodes;
+      const nodeIds = effectiveNodes.map((n) => n.id);
+      const highRiskCount = effectiveNodes.filter((n) => n.riskLevel === 'high').length;
+      const issueCount = state.validationResults.filter((v) => nodeIds.includes(v.targetId)).length;
+      const phaseStatus = state.validationResults.some((v) => v.level === 'error' && nodeIds.includes(v.targetId)) ? 'error' : issueCount ? 'warning' : 'ok';
+      return `<div class="lane"><h4>${phase.name}</h4><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, node.id === selectedNode.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
     }).join('')}</div>
     ${renderNodeDetail(state, project, selectedNode)}
   </div>
@@ -250,6 +271,22 @@ function renderDiffDrawer(state) {
   return `<div class="drawer"><div class="card panel"><h3>Diff Review</h3><p>${diff.request}</p>
   <ul>${diff.changes.map((change) => `<li><label class="check"><input type="checkbox" data-action="toggle-diff-change" data-change-id="${change.id}" ${change.selected ? 'checked' : ''}/> <strong>${change.type}</strong> ${change.targetType} ${change.targetId}<br/>Reason: ${change.reason}<br/>Impact: ${change.impact}</label></li>`).join('')}</ul>
   <div class="actions"><button data-action="apply-diff-all" class="primary">Apply All</button><button data-action="apply-diff-selected">Apply Selected</button><button data-action="reject-diff">Reject All</button></div></div></div>`;
+}
+
+async function refreshProjectRuntime(projectId) {
+  const [workflowResult, jobsResult, assetsResult, historyResult] = await Promise.all([
+    apiClient.workflowApi.get(projectId),
+    apiClient.jobsApi.list(projectId),
+    apiClient.assetsApi.list(projectId),
+    apiClient.workflowApi.history(projectId),
+  ]);
+  const workflowEnvelope = workflowResult.data?.workflow || workflowResult.data || {};
+  const workflow = workflowEnvelope.workflow || workflowEnvelope;
+  updateActiveProject((draft) => {
+    draft.workflow = workflow;
+    draft.assets = workflowEnvelope.assets || assetsResult.data?.assets || assetsResult.data || draft.assets;
+  });
+  setState((prev) => ({ ...prev, jobs: jobsResult.data?.jobs || jobsResult.data || [], validationResults: workflowEnvelope.validation || prev.validationResults, workflowHistory: historyResult.data || [] }));
 }
 
 function getFilteredAssets(state, project) {
@@ -397,6 +434,36 @@ function handleAction(event) {
       .then(({ data }) => setState((prev) => ({ ...prev, validationResults: data.validation || data.results || [] })))
       .catch(() => setState((prev) => ({ ...prev, validationResults: recomputeValidation(project) })));
   }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.dataset.suggestion } }));
@@ -531,8 +598,28 @@ function handleAction(event) {
       node.reviewGate.required = !node.reviewGate.required;
     }, 'Review gate changed', [nodeId]);
   }
+  if (action === 'remove-review-gate') {
+    const st = getState(); const project = getActiveProject(st); const nodeId = target.dataset.nodeId;
+    if (st.serverAvailable && project?.id) {
+      apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, reviewGate: null }).then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+    }
+  }
 
-  if (action === 'add-node') {
+  if (action === 'add-node' || action === 'add-node-phase') {
+    const phaseId = target.dataset.phaseId;
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      const selectedPhase = phaseId || project.workflow.phases.at(-1)?.id;
+      const id = `node-${Date.now()}`;
+      const nextNodes = [...project.workflow.nodes, {
+        id, phaseId: selectedPhase, name: 'New Node', goal: 'Describe node goal', executionMode: 'human_lead_ai_assist', riskLevel: 'medium', status: 'draft', humanOwnerRole: 'Project Manager', aiRole: 'Assistant', inputs: ['input'], outputs: ['output'], artifactContract: { id: `artifact-${id}`, format: 'markdown', outputFormat: 'markdown', acceptanceCriteria: ['complete'] }, reviewGate: { id: `gate-${id}`, name: 'Review', reviewerRole: 'Project Manager', criteria: ['quality'], passCondition: 'approved', rejectCondition: 'rework', allowAiRevision: true, required: true }, promptStatus: 'draft', checklistStatus: 'draft', history: [{ at: new Date().toISOString(), action: 'Added manually' }],
+      }];
+      apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, nodes: nextNodes }).then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : (error.message || 'Failed to add node') })));
+      return;
+    }
     updateActiveProject((draft) => {
       const phase = draft.workflow.phases.at(-1);
       const id = `node-${Date.now()}`;
@@ -556,6 +643,53 @@ function handleAction(event) {
       });
       draft.workflow.version += 1;
     }, 'Node added');
+  }
+
+  if (action === 'delete-node') {
+    const st = getState();
+    const project = getActiveProject(st);
+    const nodeId = target.dataset.nodeId;
+    if (!project?.id || !nodeId || !st.serverAvailable) return;
+    const downstream = project.workflow.edges.filter((e) => e.from === nodeId).map((e) => e.to);
+    const edgeCount = project.workflow.edges.filter((e) => e.from === nodeId || e.to === nodeId).length;
+    if (!window.confirm(`Delete node impact:\nrelated edges: ${edgeCount}\ndownstream nodes: ${downstream.join(', ') || 'none'}`)) return;
+    const nextNodes = project.workflow.nodes.filter((n) => n.id !== nodeId);
+    const nextEdges = project.workflow.edges.filter((e) => e.from !== nodeId && e.to !== nodeId);
+    apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, nodes: nextNodes, edges: nextEdges }).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : (error.message || 'Failed to delete node') })));
+  }
+  if (action === 'add-edge-from-node') {
+    const st = getState(); const project = getActiveProject(st); const from = target.dataset.nodeId;
+    if (!project?.id || !st.serverAvailable) return;
+    const to = project.workflow.nodes.find((n) => n.id !== from)?.id;
+    if (!to) return;
+    const nextEdges = [...project.workflow.edges, { id: `edge-${Date.now()}`, from, to, dependency_type: 'sequential_dependency', required_outputs: [], gate_id: null }];
+    apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, edges: nextEdges }).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'delete-edge') {
+    const st = getState(); const project = getActiveProject(st); const edgeId = target.dataset.edgeId;
+    if (!project?.id || !st.serverAvailable) return;
+    const edge = project.workflow.edges.find((e) => (e.id || `${e.from}-${e.to}`) === edgeId);
+    if (!edge || !window.confirm(`Delete edge ${edge.from} -> ${edge.to}?`)) return;
+    const nextEdges = project.workflow.edges.filter((e) => (e.id || `${e.from}-${e.to}`) !== edgeId);
+    apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, edges: nextEdges }).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'start-edge-edit') {
+    const project = getActiveProject();
+    const edgeId = target.dataset.edgeId;
+    const edge = project.workflow.edges.find((e) => (e.id || `${e.from}-${e.to}`) === edgeId);
+    if (!edge) return;
+    setState((prev) => ({ ...prev, edgeEdit: { id: edgeId, dependency_type: edge.dependency_type || edge.dependencyType || 'sequential_dependency', required_outputs: edge.required_outputs || [], gate_id: edge.gate_id || '' } }));
+  }
+  if (action === 'save-edge-edit') {
+    const st = getState(); const project = getActiveProject(st); const edit = st.edgeEdit;
+    if (!project?.id || !st.serverAvailable || !edit?.id) return;
+    const nextEdges = project.workflow.edges.map((e) => ((e.id || `${e.from}-${e.to}`) === edit.id ? { ...e, dependency_type: edit.dependency_type, required_outputs: edit.required_outputs, gate_id: edit.gate_id || null } : e));
+    apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, edges: nextEdges }).then(() => refreshProjectRuntime(project.id))
+      .then(() => setState((prev) => ({ ...prev, edgeEdit: null })))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
   }
 
   if (action === 'copy-kit') {
@@ -595,12 +729,9 @@ function handleInput(event) {
     const field = target.dataset.field;
     const value = (field === 'inputs' || field === 'outputs') ? target.value.split('\n').map((x) => x.trim()).filter(Boolean) : target.value;
     if (st.serverAvailable && project?.id) {
-      apiClient.nodesApi.patch(project.id, nodeId, { [field]: value })
-        .then(({ data }) => {
-          const updatedProject = data.project || data;
-          if (updatedProject?.id && updatedProject?.workflow) replaceActiveProject(updatedProject);
-        })
-        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || `Failed to update ${field}` })));
+      apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, [field]: value })
+        .then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
       updateActiveProject((draft) => {
         const node = draft.workflow.nodes.find((n) => n.id === nodeId);
@@ -617,8 +748,9 @@ function handleInput(event) {
     const st = getState();
     const project = getActiveProject(st);
     if (st.serverAvailable && project?.id) {
-      apiClient.nodesApi.patch(project.id, nodeId, { artifactContract: { outputFormat: target.value } })
-        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update artifact contract' })));
+      apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, artifactContract: { ...(project.workflow.nodes.find((n) => n.id === nodeId)?.artifactContract || {}), outputFormat: target.value } })
+        .then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
       updateActiveProject((draft) => {
         const node = draft.workflow.nodes.find((n) => n.id === nodeId);
@@ -626,6 +758,27 @@ function handleInput(event) {
         node.artifactContract.outputFormat = target.value;
       }, 'Artifact contract updated', [nodeId]);
     }
+  }
+  if (target.dataset.action === 'update-artifact-contract-field') {
+    const nodeId = target.dataset.nodeId;
+    const field = target.dataset.field;
+    const st = getState();
+    const project = getActiveProject(st);
+    const node = project?.workflow?.nodes?.find((n) => n.id === nodeId);
+    if (!node) return;
+    const artifactContract = structuredClone(node.artifactContract || {});
+    artifactContract[field] = (field === 'required_sections' || field === 'completion_criteria') ? target.value.split('\n').map((x) => x.trim()).filter(Boolean) : target.value;
+    if (field === 'format') artifactContract.outputFormat = artifactContract.format;
+    if (st.serverAvailable && project?.id) {
+      apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, artifactContract })
+        .then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+    }
+  }
+  if (target.dataset.action === 'edge-edit-field') {
+    const field = target.dataset.field;
+    const value = field === 'required_outputs' ? target.value.split('\n').map((x) => x.trim()).filter(Boolean) : target.value;
+    setState((prev) => ({ ...prev, edgeEdit: { ...(prev.edgeEdit || {}), [field]: value } }));
   }
 
   if (target.dataset.action === 'update-gate-field') {
@@ -638,12 +791,9 @@ function handleInput(event) {
       const nextGate = structuredClone(activeNode.reviewGate);
       if (target.dataset.field === 'criteria') nextGate.criteria = target.value.split('\n').filter(Boolean);
       else nextGate[target.dataset.field] = target.value;
-      apiClient.nodesApi.patch(project.id, nodeId, { reviewGate: nextGate })
-        .then(({ data }) => {
-          const updatedProject = data.project || data;
-          if (updatedProject?.id && updatedProject?.workflow) replaceActiveProject(updatedProject);
-        })
-        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update review gate' })));
+      apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, reviewGate: nextGate })
+        .then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
       updateActiveProject((draft) => {
         const node = draft.workflow.nodes.find((n) => n.id === nodeId);
