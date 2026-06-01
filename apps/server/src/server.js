@@ -418,6 +418,7 @@ const server = createServer(async (req, res) => {
       progress('calling_model', 'Generating checklist');
       const checklist = generateChecklist(node.reviewGate, node);
       project.assets.checklists = project.assets.checklists.filter((c) => c.nodeId !== node.id).concat(checklist);
+      project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
       storage.saveProject(ctx.workspace_id, project);
       return { type: 'checklist_asset', asset_id: checklist.id };
     });
@@ -496,12 +497,13 @@ const server = createServer(async (req, res) => {
     if (method === 'GET') return ok(res, ctx, asset);
     if (method === 'PATCH') {
       const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
-      for (const key of ['prompts', 'checklists', 'artifactTemplates']) {
+      for (const key of ['prompts', 'checklists', 'artifactTemplates', 'artifact_templates']) {
         const arr = project.assets[key] || [];
         const idx = arr.findIndex((a) => a.id === asset.id);
         if (idx >= 0) { arr[idx] = { ...arr[idx], ...body, manually_edited: true, updated_at: new Date().toISOString() }; project.assets[key] = arr; break; }
       }
-      storage.saveProject(ctx.workspace_id, project); return ok(res, ctx, { updated: true });
+      project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+      storage.saveProject(ctx.workspace_id, project); return ok(res, ctx, { updated: true, assets: project.assets, validation_results: project.validation });
     }
   }
 
@@ -516,25 +518,34 @@ const server = createServer(async (req, res) => {
   const kitPreview = path.match(/^\/api\/projects\/([^/]+)\/execution-kits\/preview$/);
   if (method === 'POST' && kitPreview) {
     const project = getProject(ctx, kitPreview[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const job = createJob(ctx, project, 'generate_execution_kit_preview', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets) }, readIdempotencyKey(req));
+    const body = await readJsonBody(req) || {};
+    const validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    project.validation = validation;
+    const job = createJob(ctx, project, 'generate_execution_kit_preview', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets), kit_type: body.kit_type || 'draft' }, readIdempotencyKey(req));
     runJob(ctx, project, job, (progress) => { progress('generating_files', 'Generating preview files'); return { type: 'execution_kit_preview', project_id: project.id }; });
-    const preview = exportExecutionKit(generateExecutionKit(project.workflow, project.assets, project.validation || []));
-    return ok(res, ctx, { job_id: job.id, preview });
+    const preview = exportExecutionKit(generateExecutionKit(project.workflow, project.assets, validation, { kit_type: body.kit_type || 'draft' }));
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { job_id: job.id, preview, execution_kit: preview, validation_results: validation });
   }
 
   const kitGenerate = path.match(/^\/api\/projects\/([^/]+)\/execution-kits\/generate$/);
   if (method === 'POST' && kitGenerate) {
     const project = getProject(ctx, kitGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const job = createJob(ctx, project, 'generate_execution_kit', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets) }, readIdempotencyKey(req));
+    const body = await readJsonBody(req) || {};
+    const validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    project.validation = validation;
+    const kit = generateExecutionKit(project.workflow, project.assets, validation, { kit_type: body.kit_type || 'draft' });
+    if ((body.kit_type || 'draft') === 'final' && !kit.canExportFinal) return fail(res, ctx, 400, 'FINAL_KIT_BLOCKED', 'Final Kit cannot be generated while blocking validation errors exist', kit.validation_summary);
+    const job = createJob(ctx, project, 'generate_execution_kit', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets), kit_type: kit.kit_type }, readIdempotencyKey(req));
     runJob(ctx, project, job, (progress) => {
       progress('generating_files', 'Generating execution kit');
-      const kit = generateExecutionKit(project.workflow, project.assets, project.validation || []);
-      if (!kit?.files?.length) throw new Error('EXECUTION_KIT_GENERATION_FAILED');
-      const rec = { id: `kit_${Date.now()}`, project_id: project.id, workspace_id: project.workspace_id, created_by: ctx.user_id, updated_by: ctx.user_id, workflow_snapshot_version: project.workflow.version, status: 'generated', files: kit.files, generated_at: new Date().toISOString(), input_snapshot: { workflow_version: project.workflow.version } };
+      if (!kit?.files || Object.keys(kit.files).length === 0) throw new Error('EXECUTION_KIT_GENERATION_FAILED');
+      const rec = { id: `kit_${Date.now()}`, project_id: project.id, workspace_id: project.workspace_id, created_by: ctx.user_id, updated_by: ctx.user_id, workflow_snapshot_version: project.workflow.version, status: kit.kit_type === 'final' ? 'generated_final' : 'generated', kit_type: kit.kit_type, files: kit.files, validation_summary: kit.validation_summary, generated_at: new Date().toISOString(), input_snapshot: { workflow_version: project.workflow.version } };
       project.execution_kits = (project.execution_kits || []).concat(rec);
       return { type: 'execution_kit', kit_id: rec.id };
     });
-    return ok(res, ctx, { job_id: job.id, status: job.status, output_ref: job.output_ref });
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { job_id: job.id, status: job.status, output_ref: job.output_ref, kit: (project.execution_kits || []).at(-1), validation_results: validation });
   }
 
   const kitGet = path.match(/^\/api\/projects\/([^/]+)\/execution-kits\/([^/]+)$/);

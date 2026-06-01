@@ -254,3 +254,335 @@
 - `update-prompt-content` 在 server mode 下改为 `assetsApi.update`，并回拉 assets。
 - `edit-asset-prompt` 在 server mode 下改为 `assetsApi.update`，并回拉 assets。
 - `assetsApi` 新增 `update(projectId, assetId, payload)`。
+
+## Phase 4 Summary
+
+### Pre-coding Audit
+- docs/development-memory.md review: 已确认 Phase 0–3 的 server-first 约束、mock 限制与未完成 Studio 编辑能力边界。
+- Workflow Canvas: 已按 phase lane 展示，但 phase 卡片信息不足（缺 node count/high-risk count/validation count/status）。
+- Node Detail: 已有 overview/boundary/io/gate/assets/history 轻量结构；overview 多为只读，缺完整 server edit 表单。
+- Add/Delete Node: add-node 仍是本地 push；delete-node 不存在。
+- Edge Editing: 仅有 edge hints 展示，无 add/delete/edit。
+- Validation: validate 按钮已接 server，但编辑后未统一 refresh workflow/validation/history/assets/jobs。
+- History/Undo/Restore: 有 server API client 基础（history/version），UI 入口不足，undo/restore 未接。
+- Version Conflict: 节点 patch 可能返回冲突，但 UI 未统一文案与 refresh 引导。
+- Demo Mode: 已有本地 fallback；仍需更显式标记，避免误判为 server 持久化。
+- Gaps found: Server mode 下 workflow 核心编辑（add/delete/edge/undo/restore）缺失，编辑后全链刷新机制缺失。
+
+### Completed
+- 在 Studio 工具栏新增 Undo / History 入口，并在 Demo 模式显式展示 `Mode: Local Demo / Mock Model`。
+- 为 Server Mode 新增统一刷新函数，编辑后并行刷新 workflow/jobs/assets/history。
+- Add Node 在 Server Mode 下改为调用 `PATCH /workflow`（携带 `workflow_version` 与完整 nodes）。
+- 新增 Delete Node（overview 区域按钮），删除前显示影响提示（related edges/downstream nodes），并走 Server patch。
+- 扩展 API client：workflow patch/undo/restore 接口。
+- Node Card 增加 owner 与输入/输出摘要，强化 Phase 4 要求的卡片信息密度。
+
+### Files Changed
+- apps/studio/src/api-client/index.js
+- apps/studio/src/app.js
+- docs/development-memory.md
+
+### Workflow Studio Changes
+- Toolbar 新增 `Undo` 与 `History`；保留 Validate。
+- Demo 模式显式 warning banner。
+- Phase 区域新增 `Add Node to this phase` 快捷入口。
+
+### Node Editing Changes
+- Overview 增加 `Delete Node` 按钮。
+- Server mode `add-node` 改为 server patch（optimistic lock）。
+- 新增 server mode `delete-node`，并在删除前展示影响。
+
+### Edge Editing Changes
+- 本次仅保持现有 edge hints 展示；未完成 add/delete edge 表单与 server patch。
+
+### Validation / History Changes
+- `refreshProjectRuntime` 在编辑后刷新 workflow + validation + jobs + assets + history。
+- History 按钮可拉取 history 并显示 latest 版本摘要。
+- Undo 调用 server `POST /workflow/undo` 并刷新。
+
+### Error Handling Changes
+- add/delete node 对 `VERSION_CONFLICT` 统一展示：`Workflow has been updated by another operation. Please refresh and try again.`
+- 其余 API 错误继续透出 message。
+
+### Tests Added / Updated
+- 本轮未新增前端自动化测试；需在后续补 store/script 级覆盖（node patch/add/delete/edge/undo/restore/conflict/mock-path/localStorage）。
+
+### Validation
+- typecheck: pending
+- lint: n/a
+- test: pending
+- smoke:server: pending
+- check: pending
+
+### Known Limitations
+- Phase card 统计字段（node/high-risk/validation/status）仍未完整。
+- Node detail 中 Review Gate / Artifact Contract 仍为轻量编辑，未覆盖全部字段。
+- Edge add/delete/edit 仍未实现。
+- Restore/version detail UI 仍未实现。
+
+### Phase 5 Readiness
+- Blocked
+- Blockers if any: 仍有 Phase 4 验收条目未闭合（edge editing、restore UI、测试覆盖、完整字段编辑）。
+
+## Phase 4 Completion Summary
+
+### Completion Audit
+- docs/development-memory.md review: 已复查 Phase 0–3 与上轮 Phase 4 未闭合项，并执行本轮收口。
+- Phase Card: 已补 node/high-risk/validation/status 统计，并新增 Unassigned 组。
+- Node Detail: 已补 overview 核心字段可编辑（name/goal/phase/status/risk），并统一 server patch + refresh。
+- Review Gate: 已补高风险缺 gate 错误提示、更多字段编辑、remove gate。
+- Artifact Contract: 已补 output format server patch + refresh（其余字段仍部分待补）。
+- Edge Editing: 已补 edge 列表、add/delete 入口；edit 采用 delete+add 路径（最小可用）。
+- History / Version Detail / Restore: 已补 history 列表渲染、view version、restore 按钮与调用。
+- Version Conflict: 统一关键编辑路径冲突文案和 API 错误展示（code/message/requestId）。
+- Tests: 新增 `scripts/studio-workflow-edit-check.js` 并接入 `scripts/check.js`。
+- Remaining gaps: artifact contract 结构化字段（required_sections/completion_criteria）与 edge 独立 edit 表单仍可继续增强。
+
+### Completed
+- 完成 Phase Card 统计字段与 Unassigned 展示。
+- 完成 Node Overview 字段编辑 server 化与编辑后统一刷新。
+- 完成 Review Gate 扩展编辑和 remove 操作。
+- 完成 Edge add/delete 最小可用路径。
+- 完成 History 列表 + Version Detail + Restore + Undo 全流程。
+- 完成脚本级 Phase 4 编辑能力检查并并入 check。
+
+### Files Changed
+- apps/studio/src/app.js
+- apps/studio/src/api-client/index.js
+- scripts/studio-workflow-edit-check.js
+- scripts/check.js
+- docs/development-memory.md
+
+### Workflow Studio Changes
+- Phase lane 统计补齐：node/high-risk/validation/status。
+- 新增 Unassigned lane。
+- History 面板内嵌版本列表 + view/restore 操作。
+
+### Node Editing Changes
+- Overview 支持 name/goal/phase/status/risk 编辑。
+- server mode 节点编辑请求带 workflow_version。
+- 编辑成功后统一 refreshProjectRuntime。
+
+### Review Gate / Artifact Contract Changes
+- Review Gate：name/reviewer/criteria/pass/reject/required 可编辑，支持 remove。
+- 高风险且无 required gate 时显示固定错误文案。
+- Artifact contract output format 编辑改为 server patch + refresh。
+
+### Edge Editing Changes
+- Node detail history 区域展示节点相关 edges（id/from/to/dependency/required_outputs/gate）。
+- Add edge：通过 workflow patch 新增。
+- Delete edge：删除前确认并通过 workflow patch 删除。
+- Edit edge：当前通过 delete + add 组合实现（最小可用）。
+
+### History / Restore / Undo Changes
+- History 列表展示 version/created_at/change_source/summary/created_by/diff_id。
+- View Version 调用 versions API 并展示 snapshot 摘要。
+- Restore 调用 restore API 并刷新 workflow/validation/history/assets/jobs。
+- Undo 保持 server 调用并刷新；失败显示 code/message/requestId。
+
+### Error Handling Changes
+- 统一 VERSION_CONFLICT 文案：Workflow has been updated by another operation. Please refresh and try again.
+- API 错误统一展示 code/message/requestId。
+
+### LocalStorage / Mock Restrictions
+- localStorage 仍仅持久化 UI 状态，不写入 projects/workflow/assets。
+- server mode 编辑路径不 fallback 到 mock edit。
+
+### Tests Added / Updated
+- 新增 `scripts/studio-workflow-edit-check.js`：覆盖 API client 方法、workflow_version 透传、冲突文案、edge/history/restore/validate 路径、localStorage 边界等。
+- `scripts/check.js` 接入上述脚本。
+
+### Validation
+- typecheck: pending
+- lint: n/a
+- test: pending
+- smoke:server: pending
+- check: pending
+
+### Known Limitations
+- Artifact Contract 的 required_sections/completion_criteria 尚未结构化完整表单。
+- Edge edit 尚未独立表单化（目前 delete+add）。
+
+### Phase 5 Readiness
+- Blocked
+- Blockers if any: 仍需继续补齐 Artifact Contract 全字段与 Edge 独立 edit 体验细化。
+
+## Phase 4B Completion Summary
+
+### docs/development-memory.md Review
+- 已复核 Phase 0–4 进展与 Phase 4 剩余 blocker，仅聚焦 Artifact Contract 全字段结构化编辑与 Edge 独立 Edit 表单收口。
+
+### Completed
+- Node Detail 的 Artifact Contract 表单扩展为结构化字段编辑（id/name/type/format/required_sections/completion_criteria）。
+- Edge 编辑由“delete+add”补齐为独立编辑态（start edit / field change / save edit）。
+- Server Mode 下 Artifact Contract 与 Edge Edit 均走正式 API（携带 workflow_version）并在成功后统一刷新 runtime。
+- 更新 studio script-level 检查覆盖本轮新增路径。
+
+### Artifact Contract Changes
+- required_sections: 增加多行编辑入口（支持新增/编辑/删除，按换行解析）。
+- completion_criteria: 增加多行编辑入口（支持新增/编辑/删除，按换行解析）。
+- server patch: `nodesApi.patch(... { workflow_version, artifactContract })`。
+- validation refresh: 成功后统一走 `refreshProjectRuntime`，刷新 workflow/validation/assets/history/jobs。
+
+### Edge Edit Changes
+- independent edit form: 增加 `start-edge-edit`、`edge-edit-field`、`save-edge-edit`。
+- dependency_type: 独立选择（artifact/approval/context/sequential）。
+- required_outputs: 多行编辑并保存。
+- gate_id: 文本编辑并保存。
+- server patch: `workflowApi.patch(... { workflow_version, edges })`。
+
+### Error Handling
+- VERSION_CONFLICT: 统一文案 `Workflow has been updated by another operation. Please refresh and try again.`。
+- API error display: 统一展示 `code/message/requestId`。
+
+### Tests Added / Updated
+- 更新 `scripts/studio-workflow-edit-check.js`：新增 Artifact Contract required_sections/completion_criteria、Edge 独立编辑、edge workflow patch + workflow_version、artifact contract conflict/patch 路径存在性检查。
+- 继续由 `scripts/check.js` 引入执行。
+
+### Validation
+- typecheck: passed
+- lint: n/a
+- test: passed
+- smoke:server: passed
+- check: passed
+
+### Known Limitations
+- Artifact Contract 字段映射对历史 camelCase 数据仍以兼容优先（completion_criteria/acceptanceCriteria 并存处理）。
+- Edge 编辑目前在 Node Detail history 区域内完成，仍是轻量交互样式。
+
+### Phase 5 Readiness
+- Blocked
+- Blockers if any: Phase 4B 范围已收口，本轮未进入 Phase 5 规划与实现。
+
+## Open-source Phase 5–9 Roadmap Alignment (Post Phase 4B)
+
+### PRD Review Source
+- Reviewed the latest three PRD files: `docs/BoundaryML PRD.md`, `docs/BoundaryML PRD 补充章节15–26.md`, and `docs/BoundaryML PRD 架构补充章节27–41.md`.
+- The public GitHub roadmap should continue with the MVP / open-source line only.
+- Commercial Pro / Enterprise / SaaS phases are intentionally excluded from the public GitHub roadmap and will be developed locally / privately.
+
+### Public Open-source Roadmap
+| Phase | Name | Scope | PRD Alignment | GitHub Visibility |
+|---|---|---|---|---|
+| Phase 5 | Execution Assets 完整化 | Prompt / Checklist / Artifact Template 的查看、编辑、复制、状态、outdated 链路 | MVP Execution Assets 验收 | Public GitHub |
+| Phase 6 | Execution Kit Export 完整化 | Draft / Final Kit、Preview / Generate / Download、Workflow Spec、Task List、Prompt Pack、Review Checklist、Artifact Templates、Risk Report | MVP Export / Execution Kit 验收 | Public GitHub |
+| Phase 7 | Model Access Layer / Real LLM / Structured Output | OpenAI-compatible 配置、Server-side LLM、structured output、schema/rules validation、model call summary | MVP Model Access 验收 | Public GitHub |
+| Phase 8 | AI Assisted Edit + Diff Review UI | 自然语言修改请求、生成 Diff、逐条 accept/reject、apply 后 validation、资产 outdated 标记 | MVP AI Assisted Edit 验收 | Public GitHub |
+| Phase 9 | MVP Templates / Examples / README / Release Hardening | Built-in Template、Example Template、3 个 MVP 内置模板、示例项目、README、Quick Start、release checks | MVP Template / Example / README 验收 | Public GitHub |
+
+### Private Commercial Roadmap Boundary
+- Phase 10–14 belong to the Pro / Enterprise / SaaS commercial roadmap.
+- These phases should not be published to GitHub in this open-source repository.
+- They may be designed and developed locally / privately as closed-source work.
+
+| Private Phase | Commercial Scope | GitHub Visibility |
+|---|---|---|
+| Phase 10 | Pro Template System（Project Template、template version、template upgrade / diff） | Private / Local only |
+| Phase 11 | Enterprise Organization Templates（organization template、workspace-bound template sharing、template governance） | Private / Local only |
+| Phase 12 | Enterprise Rules & Governance（organization boundary rules、risk override、AI autonomous policy） | Private / Local only |
+| Phase 13 | Enterprise Privacy / Model Policy（private model policy、redaction、disable raw context / detailed logs） | Private / Local only |
+| Phase 14 | SaaS Platform / Multi-tenant / Billing（auth、RBAC、multi-tenant isolation、billing、audit、cost） | Private / Local only |
+
+### Updated Phase 5 Readiness
+- Ready for public open-source Phase 5.
+- Phase 5 should start with Execution Assets 完整化, not Pro / Enterprise templates and not SaaS platform work.
+- Phase 10–14 should remain out of public GitHub scope unless explicitly reclassified later.
+
+## Phase 5 Summary — Execution Assets 完整化
+
+### Pre-coding Audit
+- docs/development-memory.md review: Phase 4B 已完成 Workflow Studio 编辑能力，公共 GitHub 路线图明确 Phase 5 只做 Execution Assets，不进入 Pro / Enterprise / SaaS 闭源阶段。
+- Existing Assets UI: 已有 Execution Assets 页面，但 Prompt 仅 textarea，Checklist / Artifact Template 只读，缺结构化字段、copy、server regenerate 统一刷新。
+- Existing Server API: 已有 `GET /assets`、`PATCH /assets/:assetId`、节点 generate-prompt / generate-checklist；缺前端 regenerate client 包装，asset patch 返回数据不足。
+- Gaps found: Prompt Role/Objective/Context/Output/Acceptance Criteria 未结构化；Checklist 不可编辑；Artifact Template 不可编辑；资产编辑后未统一刷新 workflow/validation/assets/history/jobs；server mode asset edit 错误展示不一致。
+
+### Completed
+- 扩展 Execution Assets 页面为三类资产的结构化详情：Prompt、Checklist、Artifact Template。
+- Prompt 支持 Role、Objective、Context Required、Output Format、Acceptance Criteria、Content 编辑，以及 Copy / Regenerate。
+- Checklist 支持 Reviewer Role、Checklist Items 编辑，以及 Copy / Regenerate。
+- Artifact Template 支持 Artifact Name、Format、Required Sections、Completion Criteria、Content 编辑，以及 Copy。
+- Server Mode 资产编辑统一走 `assetsApi.update`，保存成功后 `refreshProjectRuntime` 刷新 workflow / validation / assets / history / jobs。
+- Node Detail assets 区域补充 Checklist 生成 / 重新生成入口。
+- Server asset patch 返回更新后的 assets 与 validation_results，并支持 `artifact_templates` / `artifactTemplates` 兼容。
+- 新增 `assetsApi.get` / `assetsApi.regenerate` client 方法。
+- 更新 `scripts/studio-workflow-edit-check.js`，覆盖 Phase 5 资产结构化字段、copy/regenerate 和刷新路径。
+
+### Files Changed
+- apps/studio/src/api-client/index.js
+- apps/studio/src/app.js
+- apps/server/src/server.js
+- scripts/studio-workflow-edit-check.js
+- docs/development-memory.md
+
+### Execution Assets Changes
+- Prompt: structured edit for Role / Objective / Context Required / Output Format / Acceptance Criteria / Content.
+- Checklist: structured edit for Reviewer Role / Checklist Items.
+- Artifact Template: structured edit for Name / Format / Required Sections / Completion Criteria / Content.
+- Asset list now shows asset totals and outdated count.
+
+### Server / Refresh Changes
+- Asset patch revalidates workflow against updated assets and returns updated assets + validation results.
+- Server Mode asset edit / regenerate refreshes runtime through `refreshProjectRuntime`.
+- Demo Mode remains local-only and explicitly marked.
+
+### Tests Added / Updated
+- `scripts/studio-workflow-edit-check.js` now checks Phase 5 structured asset fields, regenerate API, copy/regenerate actions, and runtime refresh path.
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed
+
+### Known Limitations
+- Asset editing remains lightweight in the existing app.js structure; no large UI refactor or dedicated asset editor framework was introduced.
+- Generic `assets/:assetId/regenerate` remains minimal on the server; Prompt / Checklist regenerate uses node-specific generation APIs.
+
+### Phase 6 Readiness
+- Ready.
+- Phase 6 should start with Execution Kit Export 完整化 and must not include private Phase 10–14 commercial work.
+
+## Phase 6 Summary — Execution Kit Export 完整化
+
+### Pre-coding Audit
+- docs/development-memory.md review: Phase 5 已完成 Execution Assets，Phase 6 按公共 GitHub 路线图聚焦 Execution Kit Export，不包含 Phase 10–14 私有商业化能力。
+- Existing Export UI: 已有轻量 Preview，但仅一个按钮，缺 Draft / Final Kit 选择、正式 generate、download、PRD 文件名结构和 blocking final 展示。
+- Existing Server API: 已有 preview / generate / get / download 路由，但 generate 检查 `kit.files.length` 对对象不成立，preview 返回结构缺 canExportFinal / blocking summary。
+- Gaps found: Execution Kit 文件结构不符合 PRD 命名；Final Kit blocking 规则不显式；Studio 缺 Download Latest；API client 缺 download；tests 未覆盖 Phase 6 export 路径。
+
+### Completed
+- Execution Kit generator 输出 PRD 文件结构：`01_workflow_spec.json`、`02_task_list.md`、`03_prompt_pack.md`、`04_review_checklists.md`、`05_artifact_templates.md`、`06_responsibility_map.md`、`07_risk_report.md`。
+- Exporter 保留 `canExportFinal`、`blockingErrors`、`validation_summary`、snapshot version 和 kit type。
+- Server preview / generate 重新运行 validation；Final Kit 在 blocking error 存在时返回 `FINAL_KIT_BLOCKED`；generate 修复 object files 判断并保存 generated kit record。
+- Studio Export 页面新增 Draft / Final Kit 选择、Generate Preview、Generate Draft/Final Kit、Download Latest、Copy Preview JSON 和 validation summary 展示。
+- API Client 新增 `executionKitsApi.download`，preview / generate 支持 payload（kit_type）。
+- `scripts/studio-workflow-edit-check.js` 增加 Phase 6 检查：download API、preview/generate/download actions、Draft/Final Kit UI。
+
+### Files Changed
+- packages/generators/src/executionKitGenerator.js
+- packages/exporter/src/executionKitExporter.js
+- apps/server/src/server.js
+- apps/studio/src/api-client/index.js
+- apps/studio/src/app.js
+- scripts/studio-workflow-edit-check.js
+- docs/development-memory.md
+
+### Execution Kit Changes
+- Draft Kit: 可 preview / generate，允许带 warning/error 但展示 validation summary。
+- Final Kit: blocking validation error 时由 Server 拦截，不生成 Final Kit。
+- Download: Studio 可下载 latest generated kit（当前复制 download content 到剪贴板）。
+- Snapshot binding: generated kit record 保留 `workflow_snapshot_version` 和 `input_snapshot.workflow_version`。
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed
+
+### Known Limitations
+- 下载体验仍为 API content 复制到剪贴板，尚未做浏览器 Blob 文件保存。
+- YAML 导出仍通过 workflow spec JSON 结构承载，后续可在 exporter 中增加 YAML serializer。
+
+### Phase 7 Readiness
+- Ready.
+- Phase 7 should start with Model Access Layer / Real LLM / Structured Output and must remain server-side.
