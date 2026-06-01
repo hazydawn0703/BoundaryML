@@ -200,10 +200,11 @@ function renderNodeDetail(state, project, node) {
     <label class="check"><input type="checkbox" data-action="toggle-gate-required" data-node-id="${node.id}" ${node.reviewGate?.required ? 'checked' : ''}/>Required</label>
     <button data-action="remove-review-gate" data-node-id="${node.id}">Remove Review Gate</button>`,
     assets: node.executionMode === 'human_only'
-      ? `<p>Human-only node: no AI prompt.</p><pre>${(checklist?.items || []).join('\n')}</pre>`
+      ? `<p>Human-only node: no AI prompt.</p><p>Checklist: ${checklist?.status || 'missing'}</p><pre>${(checklist?.items || []).join('\n')}</pre><button data-action="generate-checklist" data-node-id="${node.id}">${checklist ? 'Regenerate Checklist' : 'Generate Checklist'}</button>`
       : `<label>Prompt<textarea data-action="update-prompt-content" data-node-id="${node.id}">${prompt?.content || ''}</textarea></label>
-      <p>Status: ${prompt?.status || 'missing'} ${prompt?.outdatedReason ? `· ${prompt.outdatedReason}` : ''}</p>
-      <button data-action="generate-prompt" data-node-id="${node.id}">${prompt ? 'Regenerate Prompt' : 'Generate Prompt'}</button>`,
+      <p>Prompt Status: ${prompt?.status || 'missing'} ${prompt?.outdatedReason ? `· ${prompt.outdatedReason}` : ''}</p>
+      <p>Checklist Status: ${checklist?.status || 'missing'} ${checklist?.outdatedReason ? `· ${checklist.outdatedReason}` : ''}</p>
+      <button data-action="generate-prompt" data-node-id="${node.id}">${prompt ? 'Regenerate Prompt' : 'Generate Prompt'}</button><button data-action="generate-checklist" data-node-id="${node.id}">${checklist ? 'Regenerate Checklist' : 'Generate Checklist'}</button>`,
     history: `<ul>${node.history.map((h) => `<li>${h.at}: ${h.action}</li>`).join('')}</ul><h4>Edges</h4><ul>${nodeEdges.map((e) => `<li>${e.id || `${e.from}-${e.to}`} ${e.from}→${e.to} (${e.dependencyType || e.dependency_type || 'sequential_dependency'}) req:${(e.required_outputs || []).join(',') || '-'} gate:${e.gate_id || '-'} <button data-action="start-edge-edit" data-edge-id="${e.id || `${e.from}-${e.to}`}">Edit</button> <button data-action="delete-edge" data-edge-id="${e.id || `${e.from}-${e.to}`}">Delete</button></li>`).join('') || '<li>none</li>'}</ul><button data-action="add-edge-from-node" data-node-id="${node.id}">Add Edge</button>
     ${state.edgeEdit?.id ? `<div class="card panel"><h5>Edit Edge ${state.edgeEdit.id}</h5><label>Dependency<select data-action="edge-edit-field" data-field="dependency_type"><option value="artifact_dependency">artifact_dependency</option><option value="approval_dependency">approval_dependency</option><option value="context_dependency">context_dependency</option><option value="sequential_dependency">sequential_dependency</option></select></label><label>Required outputs<textarea data-action="edge-edit-field" data-field="required_outputs">${(state.edgeEdit.required_outputs || []).join('\n')}</textarea></label><label>Gate ID<input data-action="edge-edit-field" data-field="gate_id" value="${state.edgeEdit.gate_id || ''}"/></label><button data-action="save-edge-edit">Save Edge</button></div>` : ''}`,
   };
@@ -289,57 +290,135 @@ async function refreshProjectRuntime(projectId) {
   setState((prev) => ({ ...prev, jobs: jobsResult.data?.jobs || jobsResult.data || [], validationResults: workflowEnvelope.validation || prev.validationResults, workflowHistory: historyResult.data || [] }));
 }
 
+
+function getAssetCollection(project, type) {
+  if (type === 'prompt') return project.assets.prompts || [];
+  if (type === 'checklist') return project.assets.checklists || [];
+  return project.assets.artifactTemplates || project.assets.artifact_templates || [];
+}
+
+function getAssetNode(project, asset) {
+  return project.workflow.nodes.find((node) => node.id === (asset.nodeId || asset.node_id));
+}
+
+function splitLines(value) {
+  return String(value || '').split('\n').map((item) => item.trim()).filter(Boolean);
+}
+
+function formatAssetList(value) {
+  return Array.isArray(value) ? value.join('\n') : String(value || '');
+}
+
+function renderAssetStatus(asset) {
+  const status = asset.status || 'draft';
+  return `${badge(status, status)}${asset.outdatedReason || asset.outdated_reason ? `<p class="inline-warning">Outdated: ${asset.outdatedReason || asset.outdated_reason}</p>` : ''}`;
+}
+
 function getFilteredAssets(state, project) {
   const { type = 'prompt', phase = 'all', status = 'all' } = state.assetsFilter || {};
-  const source = type === 'prompt' ? project.assets.prompts : type === 'checklist' ? project.assets.checklists : project.assets.artifactTemplates;
-  return source.filter((asset) => (phase === 'all' || asset.phaseId === phase) && (status === 'all' || asset.status === status));
+  const source = getAssetCollection(project, type);
+  return source.filter((asset) => {
+    const node = getAssetNode(project, asset);
+    const phaseId = asset.phaseId || asset.phase_id || node?.phaseId || node?.phase_id;
+    return (phase === 'all' || phaseId === phase) && (status === 'all' || (asset.status || 'draft') === status);
+  });
+}
+
+function renderPromptAssetDetail(project, asset) {
+  const node = getAssetNode(project, asset);
+  const isHumanOnly = node?.executionMode === 'human_only';
+  return `<p><strong>${asset.name}</strong></p>${renderAssetStatus(asset)}
+    ${isHumanOnly ? '<p class="inline-error">Human Only nodes must not have AI execution prompts.</p>' : ''}
+    <label>Role<input data-action="edit-asset-field" data-asset-type="prompt" data-asset-id="${asset.id}" data-field="role" value="${asset.role || node?.aiRole || ''}"/></label>
+    <label>Objective<textarea data-action="edit-asset-field" data-asset-type="prompt" data-asset-id="${asset.id}" data-field="objective">${asset.objective || node?.goal || ''}</textarea></label>
+    <label>Context Required<textarea data-action="edit-asset-field" data-asset-type="prompt" data-asset-id="${asset.id}" data-field="context_required">${formatAssetList(asset.context_required || asset.contextRequired || node?.inputs || [])}</textarea></label>
+    <label>Output Format<input data-action="edit-asset-field" data-asset-type="prompt" data-asset-id="${asset.id}" data-field="outputFormat" value="${asset.outputFormat || asset.output_format || node?.artifactContract?.outputFormat || ''}"/></label>
+    <label>Acceptance Criteria<textarea data-action="edit-asset-field" data-asset-type="prompt" data-asset-id="${asset.id}" data-field="acceptanceCriteria">${formatAssetList(asset.acceptanceCriteria || asset.acceptance_criteria || node?.artifactContract?.acceptanceCriteria || [])}</textarea></label>
+    <label>Prompt Content<textarea data-action="edit-asset-field" data-asset-type="prompt" data-asset-id="${asset.id}" data-field="content">${asset.content || ''}</textarea></label>
+    <div class="actions"><button data-action="copy-asset" data-asset-type="prompt" data-asset-id="${asset.id}">Copy Prompt</button><button data-action="regenerate-asset" data-asset-type="prompt" data-asset-id="${asset.id}">Regenerate Prompt</button></div>`;
+}
+
+function renderChecklistAssetDetail(project, asset) {
+  return `<p><strong>${asset.name}</strong></p>${renderAssetStatus(asset)}
+    <label>Reviewer Role<input data-action="edit-asset-field" data-asset-type="checklist" data-asset-id="${asset.id}" data-field="reviewerRole" value="${asset.reviewerRole || asset.reviewer_role || ''}"/></label>
+    <label>Checklist Items<textarea data-action="edit-asset-field" data-asset-type="checklist" data-asset-id="${asset.id}" data-field="items">${formatAssetList(asset.items || [])}</textarea></label>
+    <div class="actions"><button data-action="copy-asset" data-asset-type="checklist" data-asset-id="${asset.id}">Copy Checklist</button><button data-action="regenerate-asset" data-asset-type="checklist" data-asset-id="${asset.id}">Regenerate Checklist</button></div>`;
+}
+
+function renderTemplateAssetDetail(project, asset) {
+  const node = getAssetNode(project, asset);
+  return `<p><strong>${asset.name}</strong></p>${renderAssetStatus(asset)}
+    <p class="muted">Node: ${node?.name || asset.nodeId || asset.node_id || 'n/a'}</p>
+    <label>Artifact Name<input data-action="edit-asset-field" data-asset-type="template" data-asset-id="${asset.id}" data-field="name" value="${asset.name || ''}"/></label>
+    <label>Format<input data-action="edit-asset-field" data-asset-type="template" data-asset-id="${asset.id}" data-field="format" value="${asset.format || node?.artifactContract?.format || 'markdown'}"/></label>
+    <label>Required Sections<textarea data-action="edit-asset-field" data-asset-type="template" data-asset-id="${asset.id}" data-field="required_sections">${formatAssetList(asset.required_sections || asset.requiredSections || node?.artifactContract?.required_sections || [])}</textarea></label>
+    <label>Completion Criteria<textarea data-action="edit-asset-field" data-asset-type="template" data-asset-id="${asset.id}" data-field="completion_criteria">${formatAssetList(asset.completion_criteria || asset.completionCriteria || node?.artifactContract?.completion_criteria || node?.artifactContract?.acceptanceCriteria || [])}</textarea></label>
+    <label>Template Content<textarea data-action="edit-asset-field" data-asset-type="template" data-asset-id="${asset.id}" data-field="content">${asset.content || ''}</textarea></label>
+    <div class="actions"><button data-action="copy-asset" data-asset-type="template" data-asset-id="${asset.id}">Copy Template</button></div>`;
 }
 
 function renderAssetDetail(project, state) {
   const { type, id } = state.selectedAsset || {};
   if (!id) return 'Select asset from list.';
-  const source = type === 'prompt' ? project.assets.prompts : type === 'checklist' ? project.assets.checklists : project.assets.artifactTemplates;
+  const source = getAssetCollection(project, type);
   const asset = source.find((item) => item.id === id);
   if (!asset) return 'Asset not found';
 
-  if (type === 'prompt') {
-    return `<p><strong>${asset.name}</strong></p><p>Status: ${asset.status}</p>${asset.outdatedReason ? `<p class="inline-warning">Reason: ${asset.outdatedReason}</p>` : ''}
-      <textarea data-action="edit-asset-prompt" data-asset-id="${asset.id}">${asset.content}</textarea>
-      <div class="actions">${asset.status === 'outdated' ? `<button data-action="regenerate-asset-prompt" data-asset-id="${asset.id}">Regenerate</button>` : ''}</div>`;
-  }
-  if (type === 'checklist') return `<p><strong>${asset.name}</strong></p><pre>${asset.items.join('\n')}</pre>`;
-  return `<p><strong>${asset.name}</strong></p><pre>${asset.content}</pre>`;
+  if (type === 'prompt') return renderPromptAssetDetail(project, asset);
+  if (type === 'checklist') return renderChecklistAssetDetail(project, asset);
+  return renderTemplateAssetDetail(project, asset);
 }
 
 function renderAssets(state) {
   const project = getActiveProject(state);
   const currentType = state.assetsFilter?.type || 'prompt';
   const filtered = getFilteredAssets(state, project);
+  const totals = {
+    prompt: (project.assets.prompts || []).length,
+    checklist: (project.assets.checklists || []).length,
+    template: (project.assets.artifactTemplates || project.assets.artifact_templates || []).length,
+    outdated: [...(project.assets.prompts || []), ...(project.assets.checklists || []), ...(project.assets.artifactTemplates || project.assets.artifact_templates || [])].filter((asset) => asset.status === 'outdated').length,
+  };
   return `<section class="page"><h2>Execution Assets</h2>
+  <p class="muted">Prompts ${totals.prompt} · Checklists ${totals.checklist} · Artifact Templates ${totals.template} · Outdated ${totals.outdated}</p>
+  ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model. Server persistence is disabled.</div>'}
   <div class="split-2"><article class="card panel"><h3>Asset List</h3>
     <label>Type<select data-action="asset-filter-type"><option value="prompt" ${currentType === 'prompt' ? 'selected' : ''}>Prompts</option><option value="checklist" ${currentType === 'checklist' ? 'selected' : ''}>Checklists</option><option value="template" ${currentType === 'template' ? 'selected' : ''}>Artifact Templates</option></select></label>
     <label>Phase<select data-action="asset-filter-phase"><option value="all">All</option>${project.workflow.phases.map((p) => `<option value="${p.id}" ${(state.assetsFilter?.phase || 'all') === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}</select></label>
-    <label>Status<select data-action="asset-filter-status"><option value="all">All</option><option>draft</option><option>reviewed</option><option>outdated</option></select></label>
-    <ul>${filtered.filter((asset) => currentType !== 'prompt' || project.workflow.nodes.find((n) => n.id === asset.nodeId)?.executionMode !== 'human_only').map((asset) => `<li><button data-action="select-asset" data-asset-type="${currentType}" data-asset-id="${asset.id}">${asset.name} ${badge(asset.status || 'draft', asset.status || 'draft')}</button></li>`).join('')}</ul>
+    <label>Status<select data-action="asset-filter-status"><option value="all">All</option><option>draft</option><option>reviewed</option><option>final</option><option>outdated</option></select></label>
+    <ul>${filtered.map((asset) => { const node = getAssetNode(project, asset); return `<li><button data-action="select-asset" data-asset-type="${currentType}" data-asset-id="${asset.id}">${asset.name} ${badge(asset.status || 'draft', asset.status || 'draft')}<br/><span class="muted">${node?.name || 'No node'} · ${(node?.executionMode && EXECUTION_MODES[node.executionMode]?.label) || 'n/a'}</span></button></li>`; }).join('')}</ul>
   </article>
   <article class="card panel"><h3>Asset Detail</h3><div>${renderAssetDetail(project, state)}</div></article></div>
   </section>`;
 }
 
+function normalizeKitPreview(data) {
+  return data?.execution_kit || data?.preview || data?.kit || data;
+}
+
 function renderExport(state) {
   const project = getActiveProject(state);
-  const preview = project.executionKit;
+  const preview = project.executionKit || project.execution_kit;
+  const kitType = state.exportKitType || 'draft';
+  const files = preview?.files || {};
+  const fileKeys = Object.keys(files);
+  const activeFile = fileKeys.includes(state.exportPreviewType) ? state.exportPreviewType : fileKeys[0];
+  const validationSummary = preview?.validation_summary || {};
+  const generatedKits = project.execution_kits || [];
+  const latestKit = generatedKits.at(-1);
   return `<section class="page"><h2>Export Execution Kit</h2>
-  <p class="muted">Blocking errors => Final kit disabled.</p>
+  <p class="muted">Draft Kit may include warnings/errors. Final Kit is blocked by blocking validation errors.</p>
   <div class="split-2"><article class="card panel"><h3>Export Options</h3>
-    <div class="actions"><button data-action="generate-kit" class="primary">Generate Preview</button><button data-action="copy-kit">Copy Preview</button><button data-action="refresh-jobs">Refresh Jobs</button></div>
-    <p>${preview ? `Kit status: ${preview.status} · snapshot v${preview.snapshotVersion}` : 'No preview yet.'}</p>
-    <p>Blocking errors: ${preview?.blockingErrors ?? 'N/A'}</p>
+    <label>Kit Type<select data-action="set-kit-type"><option value="draft" ${kitType === 'draft' ? 'selected' : ''}>Draft Kit</option><option value="final" ${kitType === 'final' ? 'selected' : ''}>Final Kit</option></select></label>
+    <div class="actions"><button data-action="generate-kit-preview" class="primary">Generate Preview</button><button data-action="generate-kit">Generate ${kitType === 'final' ? 'Final' : 'Draft'} Kit</button><button data-action="copy-kit">Copy Preview</button><button data-action="download-kit" ${latestKit?.id ? '' : 'disabled'}>Download Latest</button><button data-action="refresh-jobs">Refresh Jobs</button></div>
+    <p>${preview ? `Preview status: ${preview.status} · snapshot v${preview.snapshotVersion || preview.workflow_snapshot_version}` : 'No preview yet.'}</p>
+    <p>Validation: errors ${validationSummary.errors ?? 'N/A'} · warnings ${validationSummary.warnings ?? 'N/A'} · blocking final ${preview?.blockingErrors ?? validationSummary.blocking_final ?? 'N/A'}</p>
+    <p>Latest generated kit: ${latestKit ? `${latestKit.id} · ${latestKit.status} · ${latestKit.kit_type || 'draft'} · snapshot v${latestKit.workflow_snapshot_version}` : 'none'}</p>
   </article>
   <article class="card panel"><h3>Execution Kit Preview</h3>
-    ${preview ? `<div class="tabs">${Object.keys(preview.files).map((k) => `<button class="tab ${state.exportPreviewType === k ? 'active' : ''}" data-action="preview-file" data-file="${k}">${k}</button>`).join('')}</div>
-      <pre>${typeof preview.files[state.exportPreviewType] === 'string' ? preview.files[state.exportPreviewType] : JSON.stringify(preview.files[state.exportPreviewType], null, 2)}</pre>
-      <div class="actions"><button ${preview.canExportFinal ? '' : 'disabled'}>Export Markdown</button><button ${preview.canExportFinal ? '' : 'disabled'}>Export YAML / JSON</button></div>`
+    ${preview ? `<div class="tabs">${fileKeys.map((k) => `<button class="tab ${activeFile === k ? 'active' : ''}" data-action="preview-file" data-file="${k}">${k}</button>`).join('')}</div>
+      <pre>${typeof files[activeFile] === 'string' ? files[activeFile] : JSON.stringify(files[activeFile], null, 2)}</pre>
+      <div class="actions"><button data-action="copy-kit">Copy Preview JSON</button><button ${preview.canExportFinal ? '' : 'disabled'} data-action="generate-kit" data-kit-type="final">Generate Final Kit</button></div>`
       : '<pre>Generate preview to inspect execution kit artifacts.</pre>'}
   </article></div></section>`;
 }
@@ -510,6 +589,36 @@ function handleAction(event) {
       setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
     }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
   }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.dataset.suggestion } }));
@@ -544,21 +653,28 @@ function handleAction(event) {
 
   if (action === 'reject-diff') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: null } }));
 
-  if (action === 'generate-kit') {
+  if (action === 'generate-kit-preview' || action === 'generate-kit') {
     const st = getState();
     const project = getActiveProject(st);
+    const kitType = target.dataset.kitType || st.exportKitType || 'draft';
     if (st.serverAvailable && project?.id) {
-      apiClient.executionKitsApi.preview(project.id).then(({ data }) => {
+      const request = action === 'generate-kit-preview'
+        ? apiClient.executionKitsApi.preview(project.id, { kit_type: kitType })
+        : apiClient.executionKitsApi.generate(project.id, { kit_type: kitType });
+      request.then(({ data }) => {
+        const kit = normalizeKitPreview(data);
         updateActiveProject((draft) => {
-          draft.executionKit = data.preview || data.execution_kit || data.kit || data;
-        }, 'Execution kit generated');
-      }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Generation failed. View error details or retry from the job panel.' })));
+          draft.executionKit = kit;
+          if (data.kit) draft.execution_kits = [...(draft.execution_kits || []), data.kit];
+        }, action === 'generate-kit-preview' ? 'Execution kit preview generated' : 'Execution kit generated');
+        setState((prev) => ({ ...prev, validationResults: data.validation_results || prev.validationResults, jobs: data.job_id ? prev.jobs : prev.jobs }));
+      }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
       const validationResults = recomputeValidation(project);
-      const kit = modelGenerateExecutionKit(project.workflow, project.assets, validationResults);
+      const kit = modelGenerateExecutionKit(project.workflow, project.assets, validationResults, { kit_type: kitType });
       updateActiveProject((draft) => {
         draft.executionKit = kit;
-      }, 'Execution kit generated');
+      }, action === 'generate-kit-preview' ? 'Execution kit preview generated' : 'Execution kit generated');
     }
   }
 
@@ -597,6 +713,7 @@ function handleAction(event) {
   }
 
   if (action === 'preview-file') setState((prev) => ({ ...prev, exportPreviewType: target.dataset.file }));
+  if (action === 'set-kit-type') setState((prev) => ({ ...prev, exportKitType: target.value }));
 
   if (action === 'build-context-summary') {
     updateActiveProject((draft) => {
@@ -618,32 +735,32 @@ function handleAction(event) {
     }, 'Execution mode updated', [nodeId]);
   }
 
-  if (action === 'generate-prompt') {
+  if (action === 'generate-prompt' || action === 'generate-checklist') {
     const nodeId = target.dataset.nodeId;
     const st = getState();
     const project = getActiveProject(st);
     if (st.serverAvailable && project?.id) {
-      apiClient.nodesApi.generatePrompt(project.id, nodeId)
-        .then(() => Promise.all([apiClient.assetsApi.list(project.id), apiClient.jobsApi.list(project.id)]))
-        .then(([assetsResult, jobsResult]) => {
-          const assets = assetsResult.data?.assets || assetsResult.data || {};
-          const jobs = jobsResult.data?.jobs || jobsResult.data || [];
-          updateActiveProject((draft) => {
-            draft.assets = assets;
-          }, 'Prompt generated', [nodeId]);
-          setState((prev) => ({ ...prev, jobs }));
-        })
-        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Generation failed. View error details or retry from the job panel.' })));
+      const request = action === 'generate-prompt' ? apiClient.nodesApi.generatePrompt(project.id, nodeId) : apiClient.nodesApi.generateChecklist(project.id, nodeId);
+      request.then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
       updateActiveProject((draft) => {
         const node = draft.workflow.nodes.find((n) => n.id === nodeId);
         if (!node) return;
-        const prompt = modelGeneratePrompt(node);
-        const index = draft.assets.prompts.findIndex((p) => p.nodeId === nodeId);
-        if (index >= 0) draft.assets.prompts[index] = prompt;
-        else if (prompt) draft.assets.prompts.push(prompt);
-        node.promptStatus = 'draft';
-      }, 'Prompt generated', [nodeId]);
+        if (action === 'generate-prompt') {
+          const prompt = modelGeneratePrompt(node);
+          const index = draft.assets.prompts.findIndex((p) => p.nodeId === nodeId);
+          if (index >= 0) draft.assets.prompts[index] = prompt;
+          else if (prompt) draft.assets.prompts.push(prompt);
+          node.promptStatus = 'draft';
+        } else {
+          const checklist = modelGenerateChecklist(node.reviewGate, node);
+          const index = draft.assets.checklists.findIndex((c) => c.nodeId === nodeId);
+          if (index >= 0) draft.assets.checklists[index] = checklist;
+          else draft.assets.checklists.push(checklist);
+          node.checklistStatus = 'draft';
+        }
+      }, `${action === 'generate-prompt' ? 'Prompt' : 'Checklist'} generated`, [nodeId]);
     }
   }
 
@@ -754,22 +871,59 @@ function handleAction(event) {
     const project = getActiveProject();
     if (project.executionKit) navigator.clipboard?.writeText(JSON.stringify(project.executionKit.files, null, 2));
   }
+  if (action === 'download-kit') {
+    const st = getState();
+    const project = getActiveProject(st);
+    const kit = (project.execution_kits || []).at(-1);
+    if (!kit?.id || !st.serverAvailable) return;
+    apiClient.executionKitsApi.download(project.id, kit.id)
+      .then(({ data }) => {
+        navigator.clipboard?.writeText(data.content || JSON.stringify(data, null, 2));
+        setState((prev) => ({ ...prev, serverError: `Downloaded ${data.filename || kit.id} copied to clipboard.` }));
+      })
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
 
   if (action === 'asset-filter-type') setState((prev) => ({ ...prev, assetsFilter: { ...prev.assetsFilter, type: target.value }, selectedAsset: null }));
   if (action === 'asset-filter-phase') setState((prev) => ({ ...prev, assetsFilter: { ...prev.assetsFilter, phase: target.value } }));
   if (action === 'asset-filter-status') setState((prev) => ({ ...prev, assetsFilter: { ...prev.assetsFilter, status: target.value } }));
   if (action === 'select-asset') setState((prev) => ({ ...prev, selectedAsset: { type: target.dataset.assetType, id: target.dataset.assetId } }));
 
-  if (action === 'regenerate-asset-prompt') {
-    const promptId = target.dataset.assetId;
-    updateActiveProject((draft) => {
-      const prompt = draft.assets.prompts.find((p) => p.id === promptId);
-      const node = draft.workflow.nodes.find((n) => n.id === prompt?.nodeId);
-      if (!prompt || !node) return;
-      const regenerated = modelGeneratePrompt(node);
-      Object.assign(prompt, regenerated, { status: 'draft', outdatedReason: '' });
-      node.promptStatus = 'draft';
-    }, 'Prompt regenerated');
+  if (action === 'copy-asset') {
+    const project = getActiveProject();
+    const asset = getAssetCollection(project, target.dataset.assetType).find((item) => item.id === target.dataset.assetId);
+    const content = asset?.content || (asset?.items || []).join('\n') || JSON.stringify(asset || {}, null, 2);
+    navigator.clipboard?.writeText(content);
+    setState((prev) => ({ ...prev, serverError: 'Asset copied to clipboard.' }));
+  }
+
+  if (action === 'regenerate-asset') {
+    const st = getState();
+    const project = getActiveProject(st);
+    const assetType = target.dataset.assetType;
+    const assetId = target.dataset.assetId;
+    const asset = getAssetCollection(project, assetType).find((item) => item.id === assetId);
+    const nodeId = asset?.nodeId || asset?.node_id;
+    if (!asset || !nodeId) return;
+    if (st.serverAvailable && project?.id) {
+      const regenerate = assetType === 'prompt' ? apiClient.nodesApi.generatePrompt(project.id, nodeId) : assetType === 'checklist' ? apiClient.nodesApi.generateChecklist(project.id, nodeId) : apiClient.assetsApi.regenerate(project.id, assetId);
+      regenerate.then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+    } else {
+      updateActiveProject((draft) => {
+        const node = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        if (assetType === 'prompt') {
+          const prompt = draft.assets.prompts.find((p) => p.id === assetId);
+          Object.assign(prompt, modelGeneratePrompt(node), { status: 'draft', outdatedReason: '' });
+          node.promptStatus = 'draft';
+        } else if (assetType === 'checklist') {
+          const checklist = draft.assets.checklists.find((c) => c.id === assetId);
+          Object.assign(checklist, modelGenerateChecklist(node.reviewGate, node), { status: 'draft', outdatedReason: '' });
+          node.checklistStatus = 'draft';
+        }
+      }, `${assetType} regenerated`, [nodeId]);
+    }
   }
 }
 
@@ -778,6 +932,32 @@ function handleInput(event) {
   if (target.dataset.action === 'set-ai-request') {
     setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.value } }));
     return;
+  }
+
+  if (target.dataset.action === 'edit-asset-field') {
+    const st = getState();
+    const project = getActiveProject(st);
+    const assetType = target.dataset.assetType;
+    const assetId = target.dataset.assetId;
+    const field = target.dataset.field;
+    const listFields = new Set(['items', 'context_required', 'acceptanceCriteria', 'required_sections', 'completion_criteria']);
+    const value = listFields.has(field) ? splitLines(target.value) : target.value;
+    const asset = getAssetCollection(project, assetType).find((item) => item.id === assetId);
+    if (!asset) return;
+    const payload = { [field]: value, status: field === 'status' ? value : 'draft' };
+    if (field === 'acceptanceCriteria') payload.acceptance_criteria = value;
+    if (field === 'context_required') payload.contextRequired = value;
+    if (st.serverAvailable && project?.id) {
+      apiClient.assetsApi.update(project.id, assetId, payload)
+        .then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+    } else {
+      updateActiveProject((draft) => {
+        const draftAsset = getAssetCollection(draft, assetType).find((item) => item.id === assetId);
+        if (!draftAsset) return;
+        Object.assign(draftAsset, payload, { manually_edited: true, updatedAt: new Date().toISOString() });
+      }, 'Asset edited', [asset.nodeId || asset.node_id].filter(Boolean));
+    }
   }
 
   if (target.dataset.action === 'update-node-field') {

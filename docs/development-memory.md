@@ -487,3 +487,102 @@
 - Ready for public open-source Phase 5.
 - Phase 5 should start with Execution Assets 完整化, not Pro / Enterprise templates and not SaaS platform work.
 - Phase 10–14 should remain out of public GitHub scope unless explicitly reclassified later.
+
+## Phase 5 Summary — Execution Assets 完整化
+
+### Pre-coding Audit
+- docs/development-memory.md review: Phase 4B 已完成 Workflow Studio 编辑能力，公共 GitHub 路线图明确 Phase 5 只做 Execution Assets，不进入 Pro / Enterprise / SaaS 闭源阶段。
+- Existing Assets UI: 已有 Execution Assets 页面，但 Prompt 仅 textarea，Checklist / Artifact Template 只读，缺结构化字段、copy、server regenerate 统一刷新。
+- Existing Server API: 已有 `GET /assets`、`PATCH /assets/:assetId`、节点 generate-prompt / generate-checklist；缺前端 regenerate client 包装，asset patch 返回数据不足。
+- Gaps found: Prompt Role/Objective/Context/Output/Acceptance Criteria 未结构化；Checklist 不可编辑；Artifact Template 不可编辑；资产编辑后未统一刷新 workflow/validation/assets/history/jobs；server mode asset edit 错误展示不一致。
+
+### Completed
+- 扩展 Execution Assets 页面为三类资产的结构化详情：Prompt、Checklist、Artifact Template。
+- Prompt 支持 Role、Objective、Context Required、Output Format、Acceptance Criteria、Content 编辑，以及 Copy / Regenerate。
+- Checklist 支持 Reviewer Role、Checklist Items 编辑，以及 Copy / Regenerate。
+- Artifact Template 支持 Artifact Name、Format、Required Sections、Completion Criteria、Content 编辑，以及 Copy。
+- Server Mode 资产编辑统一走 `assetsApi.update`，保存成功后 `refreshProjectRuntime` 刷新 workflow / validation / assets / history / jobs。
+- Node Detail assets 区域补充 Checklist 生成 / 重新生成入口。
+- Server asset patch 返回更新后的 assets 与 validation_results，并支持 `artifact_templates` / `artifactTemplates` 兼容。
+- 新增 `assetsApi.get` / `assetsApi.regenerate` client 方法。
+- 更新 `scripts/studio-workflow-edit-check.js`，覆盖 Phase 5 资产结构化字段、copy/regenerate 和刷新路径。
+
+### Files Changed
+- apps/studio/src/api-client/index.js
+- apps/studio/src/app.js
+- apps/server/src/server.js
+- scripts/studio-workflow-edit-check.js
+- docs/development-memory.md
+
+### Execution Assets Changes
+- Prompt: structured edit for Role / Objective / Context Required / Output Format / Acceptance Criteria / Content.
+- Checklist: structured edit for Reviewer Role / Checklist Items.
+- Artifact Template: structured edit for Name / Format / Required Sections / Completion Criteria / Content.
+- Asset list now shows asset totals and outdated count.
+
+### Server / Refresh Changes
+- Asset patch revalidates workflow against updated assets and returns updated assets + validation results.
+- Server Mode asset edit / regenerate refreshes runtime through `refreshProjectRuntime`.
+- Demo Mode remains local-only and explicitly marked.
+
+### Tests Added / Updated
+- `scripts/studio-workflow-edit-check.js` now checks Phase 5 structured asset fields, regenerate API, copy/regenerate actions, and runtime refresh path.
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed
+
+### Known Limitations
+- Asset editing remains lightweight in the existing app.js structure; no large UI refactor or dedicated asset editor framework was introduced.
+- Generic `assets/:assetId/regenerate` remains minimal on the server; Prompt / Checklist regenerate uses node-specific generation APIs.
+
+### Phase 6 Readiness
+- Ready.
+- Phase 6 should start with Execution Kit Export 完整化 and must not include private Phase 10–14 commercial work.
+
+## Phase 6 Summary — Execution Kit Export 完整化
+
+### Pre-coding Audit
+- docs/development-memory.md review: Phase 5 已完成 Execution Assets，Phase 6 按公共 GitHub 路线图聚焦 Execution Kit Export，不包含 Phase 10–14 私有商业化能力。
+- Existing Export UI: 已有轻量 Preview，但仅一个按钮，缺 Draft / Final Kit 选择、正式 generate、download、PRD 文件名结构和 blocking final 展示。
+- Existing Server API: 已有 preview / generate / get / download 路由，但 generate 检查 `kit.files.length` 对对象不成立，preview 返回结构缺 canExportFinal / blocking summary。
+- Gaps found: Execution Kit 文件结构不符合 PRD 命名；Final Kit blocking 规则不显式；Studio 缺 Download Latest；API client 缺 download；tests 未覆盖 Phase 6 export 路径。
+
+### Completed
+- Execution Kit generator 输出 PRD 文件结构：`01_workflow_spec.json`、`02_task_list.md`、`03_prompt_pack.md`、`04_review_checklists.md`、`05_artifact_templates.md`、`06_responsibility_map.md`、`07_risk_report.md`。
+- Exporter 保留 `canExportFinal`、`blockingErrors`、`validation_summary`、snapshot version 和 kit type。
+- Server preview / generate 重新运行 validation；Final Kit 在 blocking error 存在时返回 `FINAL_KIT_BLOCKED`；generate 修复 object files 判断并保存 generated kit record。
+- Studio Export 页面新增 Draft / Final Kit 选择、Generate Preview、Generate Draft/Final Kit、Download Latest、Copy Preview JSON 和 validation summary 展示。
+- API Client 新增 `executionKitsApi.download`，preview / generate 支持 payload（kit_type）。
+- `scripts/studio-workflow-edit-check.js` 增加 Phase 6 检查：download API、preview/generate/download actions、Draft/Final Kit UI。
+
+### Files Changed
+- packages/generators/src/executionKitGenerator.js
+- packages/exporter/src/executionKitExporter.js
+- apps/server/src/server.js
+- apps/studio/src/api-client/index.js
+- apps/studio/src/app.js
+- scripts/studio-workflow-edit-check.js
+- docs/development-memory.md
+
+### Execution Kit Changes
+- Draft Kit: 可 preview / generate，允许带 warning/error 但展示 validation summary。
+- Final Kit: blocking validation error 时由 Server 拦截，不生成 Final Kit。
+- Download: Studio 可下载 latest generated kit（当前复制 download content 到剪贴板）。
+- Snapshot binding: generated kit record 保留 `workflow_snapshot_version` 和 `input_snapshot.workflow_version`。
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed
+
+### Known Limitations
+- 下载体验仍为 API content 复制到剪贴板，尚未做浏览器 Blob 文件保存。
+- YAML 导出仍通过 workflow spec JSON 结构承载，后续可在 exporter 中增加 YAML serializer。
+
+### Phase 7 Readiness
+- Ready.
+- Phase 7 should start with Model Access Layer / Real LLM / Structured Output and must remain server-side.
