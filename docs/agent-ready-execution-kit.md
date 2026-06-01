@@ -18,6 +18,16 @@ Export v1 generates the following Community Core files:
 - `responsibility_map.md` — ownership by role, phase, and execution mode.
 - `risk_report.md` — high-risk nodes and validation findings.
 
+## Local Community Export
+
+The Community Core includes a local example export command:
+
+```bash
+npm run export:example
+```
+
+This writes the built-in community example kit to `execution-kit/`. The generated directory is local output and is intentionally not a Pro template or commercial asset.
+
 ## Why it matters
 
 - reduces vague prompts

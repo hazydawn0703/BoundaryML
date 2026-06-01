@@ -165,7 +165,13 @@ npm run test
 npm run typecheck
 ```
 
-`npm run check` validates core rules, diff application, execution-kit constraints, the community example spec, FileStorage restart behavior, job query closure, and the workflow-generate / diff-apply snapshot path.
+Export the community example Agent-ready Execution Kit to a local `execution-kit/` directory:
+
+```bash
+npm run export:example
+```
+
+`npm run check` validates core rules, diff application, execution-kit constraints, the community example spec, FileStorage restart behavior, job query closure, example execution-kit export, and the workflow-generate / diff-apply snapshot path.
 
 ## Roadmap
 

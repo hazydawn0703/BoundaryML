@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createExampleProject } from '../packages/core/src/sampleProject.js';
 import { validateWorkflow } from '../packages/rules/src/validationEngine.js';
@@ -6,6 +6,7 @@ import { generateExecutionKit } from '../packages/generators/src/executionKitGen
 import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/diff.js';
 import { validateBoundaryMLProjectSpec, validateNode } from '../packages/schema/src/schema.js';
 import { FileStorage } from '../packages/storage/src/fileStorage.js';
+import { exportExampleExecutionKit } from './export-example.js';
 import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus } from '../packages/core/src/engine.js';
 import './studio-workflow-edit-check.js';
 
@@ -123,6 +124,12 @@ async function main() {
   assert(kit.files['review_checklists.md'].includes('- [ ]'), 'review checklists should render human checklist items');
   assert(kit.files['risk_report.md'].includes('High-Risk Nodes'), 'risk report should include high-risk section');
 
+  const exported = exportExampleExecutionKit('.tmp-export-example-check');
+  assert(JSON.stringify(exported.fileNames) === JSON.stringify(expectedKitFiles), 'export:example should write v1 files');
+  const exportedFiles = readdirSync('.tmp-export-example-check').sort();
+  assert(JSON.stringify(exportedFiles) === JSON.stringify([...expectedKitFiles].sort()), 'exported example directory should contain only v1 files');
+  assert(readFileSync('.tmp-export-example-check/agent_task_list.md', 'utf-8').includes('BoundaryML prepares this task list before agents execute'), 'exported task list should preserve agent-ready boundary');
+
   const fsStorage = new FileStorage('.tmp-storage-check');
   fsStorage.saveProject('check_workspace', { ...project, workspace_id: 'check_workspace' });
   const restored = new FileStorage('.tmp-storage-check').getProject('check_workspace', project.id);
@@ -130,6 +137,7 @@ async function main() {
 
   await runServerSmoke();
   rmSync('.tmp-storage-check', { recursive: true, force: true });
+  rmSync('.tmp-export-example-check', { recursive: true, force: true });
   rmSync('.tmp-server-storage', { recursive: true, force: true });
 
   console.log('✅ checks passed');
