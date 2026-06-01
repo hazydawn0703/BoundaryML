@@ -7,6 +7,7 @@ import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/di
 import { validateBoundaryMLProjectSpec, validateNode } from '../packages/schema/src/schema.js';
 import { FileStorage } from '../packages/storage/src/fileStorage.js';
 import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus } from '../packages/core/src/engine.js';
+import './studio-workflow-edit-check.js';
 
 function assert(condition, message) {
   if (!condition) {
