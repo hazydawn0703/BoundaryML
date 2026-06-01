@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+dist/
+.tmp-*/
+.tmp-*
+execution-kit/
+
+!.env.example
