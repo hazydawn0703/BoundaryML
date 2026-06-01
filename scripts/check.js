@@ -8,6 +8,7 @@ import { validateBoundaryMLProjectSpec, validateNode } from '../packages/schema/
 import { FileStorage } from '../packages/storage/src/fileStorage.js';
 import { exportExampleExecutionKit } from './export-example.js';
 import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus } from '../packages/core/src/engine.js';
+import './studio-workflow-edit-check.js';
 
 function assert(condition, message) {
   if (!condition) {
