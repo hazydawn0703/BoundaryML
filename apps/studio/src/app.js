@@ -261,8 +261,10 @@ function renderStudio(state) {
 function renderAiEdit(state) {
   if (!state.aiEdit.open) return '';
   return `<div class="drawer"><div class="card panel"><h3>AI Assisted Edit</h3>
+    <p class="muted">Server Mode generates a Workflow Diff for review; it never edits the formal workflow directly.</p>
+    ${state.serverAvailable ? '<p class="inline-warning">Selected workflow context may be sent to the configured LLM provider.</p>' : '<p class="inline-warning">Mode: Local Demo / Mock Model</p>'}
     <textarea data-action="set-ai-request" placeholder="Describe edits...">${state.aiEdit.request}</textarea>
-    <div class="row">${AI_EDIT_SUGGESTIONS.map((s) => `<button data-action="use-ai-suggestion" data-suggestion="${s}">${s}</button>`).join('')}</div>
+    <div class="row">${AI_EDIT_SUGGESTIONS.map((suggestion) => `<button data-action="use-ai-suggestion" data-suggestion="${suggestion}">${suggestion}</button>`).join('')}</div>
     <div class="actions"><button data-action="generate-diff">Generate Diff</button><button data-action="toggle-ai-edit">Close</button></div></div></div>`;
 }
 
@@ -270,7 +272,8 @@ function renderDiffDrawer(state) {
   if (!state.aiEdit.diff) return '';
   const diff = state.aiEdit.diff;
   return `<div class="drawer"><div class="card panel"><h3>Diff Review</h3><p>${diff.request}</p>
-  <ul>${diff.changes.map((change) => `<li><label class="check"><input type="checkbox" data-action="toggle-diff-change" data-change-id="${change.id}" ${change.selected ? 'checked' : ''}/> <strong>${change.type}</strong> ${change.targetType} ${change.targetId}<br/>Reason: ${change.reason}<br/>Impact: ${change.impact}</label></li>`).join('')}</ul>
+  ${(diff.warnings || []).map((warning) => `<p class="inline-warning">${warning}</p>`).join('')}
+  <ul>${(diff.changes || []).map((change) => `<li><label class="check"><input type="checkbox" data-action="toggle-diff-change" data-change-id="${change.id}" ${change.selected ? 'checked' : ''}/> <strong>${change.type}</strong> ${change.targetType || change.target_type} ${change.targetId || change.target_id}<br/>Reason: ${change.reason}<br/>Impact: ${change.impact}</label></li>`).join('')}</ul>
   <div class="actions"><button data-action="apply-diff-all" class="primary">Apply All</button><button data-action="apply-diff-selected">Apply Selected</button><button data-action="reject-diff">Reject All</button></div></div></div>`;
 }
 
@@ -619,6 +622,36 @@ function handleAction(event) {
       setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
     }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
   }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.dataset.suggestion } }));
@@ -630,8 +663,14 @@ function handleAction(event) {
     }
     const st = getState();
     const project = getActiveProject(st);
-    const diff = modelGenerateWorkflowDiff(st.aiEdit.request, project.workflow, project.assets);
-    setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff } }));
+    if (st.serverAvailable && project?.id) {
+      apiClient.diffsApi.generate(project.id, { request: st.aiEdit.request, workflow_version: project.workflow.version })
+        .then(({ data }) => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: data.diff }, jobs: data.job_id ? prev.jobs : prev.jobs, modelStatus: data.model_status || prev.modelStatus })))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+    } else {
+      const diff = modelGenerateWorkflowDiff(st.aiEdit.request, project.workflow, project.assets);
+      setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff } }));
+    }
   }
 
   if (action === 'toggle-diff-change') {
@@ -645,13 +684,31 @@ function handleAction(event) {
     }
     const st = getState();
     const project = getActiveProject(st);
-    const updated = applyWorkflowDiff(project, st.aiEdit.diff, action === 'apply-diff-selected');
-    markProjectWorkflowChanged(updated, 'Diff applied', st.aiEdit.diff.changes.filter((c) => c.selected || action === 'apply-diff-all').map((c) => c.targetId));
-    replaceActiveProject(updated);
-    setState((prev) => ({ ...prev, aiEdit: { open: false, request: '', diff: null } }));
+    if (st.serverAvailable && project?.id && st.aiEdit.diff?.id) {
+      const selectedIds = action === 'apply-diff-selected' ? (st.aiEdit.diff.changes || []).filter((change) => change.selected).map((change) => change.id) : [];
+      apiClient.diffsApi.apply(project.id, st.aiEdit.diff.id, { workflow_version: project.workflow.version, selected_change_ids: selectedIds })
+        .then(() => refreshProjectRuntime(project.id))
+        .then(() => setState((prev) => ({ ...prev, aiEdit: { open: false, request: '', diff: null } })))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+    } else {
+      const updated = applyWorkflowDiff(project, st.aiEdit.diff, action === 'apply-diff-selected');
+      markProjectWorkflowChanged(updated, 'Diff applied', st.aiEdit.diff.changes.filter((change) => change.selected || action === 'apply-diff-all').map((change) => change.targetId));
+      replaceActiveProject(updated);
+      setState((prev) => ({ ...prev, aiEdit: { open: false, request: '', diff: null } }));
+    }
   }
 
-  if (action === 'reject-diff') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: null } }));
+  if (action === 'reject-diff') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id && st.aiEdit.diff?.id) {
+      apiClient.diffsApi.reject(project.id, st.aiEdit.diff.id)
+        .then(() => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: null } })))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+    } else {
+      setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: null } }));
+    }
+  }
 
   if (action === 'generate-kit-preview' || action === 'generate-kit') {
     const st = getState();

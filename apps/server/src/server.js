@@ -429,9 +429,24 @@ const server = createServer(async (req, res) => {
   if (method === 'POST' && diffGenerate) {
     const project = getProject(ctx, diffGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
-    const job = createJob(ctx, project, 'generate_workflow_diff', { request: body.request || 'default', workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
-    runJob(ctx, project, job, (progress) => { progress('calling_model', 'Generating workflow diff'); project.last_diff = generateWorkflowDiff(body.request || 'default', project.workflow, project.assets); return { type: 'workflow_diff', diff_id: project.last_diff.id }; });
-    return ok(res, ctx, { job_id: job.id, diff: project.last_diff });
+    const requestText = body.request || 'default';
+    const job = createJob(ctx, project, 'generate_workflow_diff', { request: requestText, workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
+    let modelResult = null;
+    try {
+      modelResult = await runModel('workflow_diff', { request: requestText, workflow: project.workflow, assets: project.assets });
+      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_diff', status: modelResult.status, summary: modelResult.output?.summary || `diff request: ${requestText}` });
+    } catch (error) {
+      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().diff_model, purpose: 'workflow_diff', status: 'failed', summary: error.message });
+    }
+    runJob(ctx, project, job, (progress) => {
+      progress('calling_model', 'Generating workflow diff');
+      const candidate = modelResult?.output?.diff || modelResult?.output;
+      project.last_diff = candidate?.changes ? { ...candidate, id: candidate.id || `diff-${Date.now()}`, request: requestText, warnings: candidate.warnings || [], createdAt: candidate.createdAt || new Date().toISOString() } : generateWorkflowDiff(requestText, project.workflow, project.assets);
+      project.last_diff.status = 'draft';
+      return { type: 'workflow_diff', diff_id: project.last_diff.id };
+    });
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { job_id: job.id, diff: project.last_diff, model_status: getModelStatus() });
   }
 
   const diffGet = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)$/);
@@ -448,7 +463,7 @@ const server = createServer(async (req, res) => {
     if (body.workflow_version && Number(body.workflow_version) !== Number(project.workflow.version)) return fail(res, ctx, 409, 'VERSION_CONFLICT', 'Workflow has been updated by another operation. Please refresh and try again.');
     const diff = project.last_diff; if (!diff || diff.id !== diffApply[2]) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
     const previousVersion = project.workflow.version;
-    project.workflow = applyDiff(project.workflow, diff, diff.changes.filter((c) => c.selected).map((c) => c.id));
+    project.workflow = applyDiff(project.workflow, diff, body.selected_change_ids || diff.changes.filter((c) => c.selected).map((c) => c.id));
     project.assets = markAffectedAssetsOutdated(diff.changes, project.assets);
     project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
     recordWorkflowHistory(ctx, project, 'ai_diff_apply', 'Applied workflow diff.', diff.id);
@@ -566,7 +581,7 @@ const server = createServer(async (req, res) => {
   if (method === 'GET' && path === '/api/model/status') return ok(res, ctx, getModelStatus());
   if (method === 'POST' && path === '/api/model/test') {
     const result = await runModel('test', { ping: true });
-    modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), summary: result.output.summary });
+    modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: result.model, purpose: 'test', status: result.status || 'succeeded', summary: result.output.summary });
     return ok(res, ctx, { mode: getModelStatus().using_mock ? 'mock' : 'real', result: result.output });
   }
   if (method === 'GET' && path === '/api/model/calls') return ok(res, ctx, modelCalls.slice(0, 50));

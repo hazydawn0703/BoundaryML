@@ -102,6 +102,12 @@ export const modelApi = {
   test: () => post('/model/test', {}),
   calls: () => get('/model/calls'),
 };
+export const diffsApi = {
+  generate: (projectId, payload) => post(`/projects/${projectId}/diffs/generate`, payload),
+  get: (projectId, diffId) => get(`/projects/${projectId}/diffs/${diffId}`),
+  apply: (projectId, diffId, payload = {}) => post(`/projects/${projectId}/diffs/${diffId}/apply`, payload),
+  reject: (projectId, diffId) => post(`/projects/${projectId}/diffs/${diffId}/reject`, {}),
+};
 export const assetsApi = {
   list: (projectId) => get(`/projects/${projectId}/assets`),
   get: (projectId, assetId) => get(`/projects/${projectId}/assets/${assetId}`),
@@ -127,6 +133,7 @@ export const apiClient = {
   diffsApi,
   jobsApi,
   modelApi,
+  diffsApi,
   assetsApi,
   executionKitsApi,
 };

@@ -27,6 +27,9 @@ assert(app.includes('refreshProjectRuntime(project.id)'), 'asset edits refresh r
 assert(api.includes('download: (projectId, kitId)'), 'execution kit download api exists');
 assert(app.includes('generate-kit-preview') && app.includes('set-kit-type') && app.includes('download-kit'), 'phase 6 kit preview/generate/download actions exist');
 assert(app.includes('Draft Kit') && app.includes('Final Kit'), 'draft/final kit UI exists');
+assert(api.includes('diffsApi') && api.includes('/diffs/generate') && api.includes('/apply'), 'diffs api exists');
+assert(app.includes('apiClient.diffsApi.generate') && app.includes('apiClient.diffsApi.apply') && app.includes('selected_change_ids'), 'server AI diff review path exists');
+assert(app.includes('Selected workflow context may be sent to the configured LLM provider'), 'model context warning exists');
 assert(app.includes('update-artifact-contract-field') && app.includes('required_sections'), 'artifact contract required_sections edit path exists');
 assert(app.includes('completion_criteria'), 'artifact contract completion_criteria edit path exists');
 assert(app.includes('apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, edges: nextEdges })'), 'edge edit uses workflow patch + workflow version');

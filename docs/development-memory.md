@@ -586,3 +586,42 @@
 ### Phase 7 Readiness
 - Ready.
 - Phase 7 should start with Model Access Layer / Real LLM / Structured Output and must remain server-side.
+
+## Phase 7 + Phase 8 Summary — Model Access 收口与 AI Diff Review 启动
+
+### Pre-coding Audit
+- docs/development-memory.md review: Phase 6 已完成 Execution Kit Export，Phase 7 应进入 Model Access Layer / Real LLM / Structured Output，Phase 8 应启动 AI Assisted Edit + Diff Review UI；Phase 10–14 仍为私有闭源商业化范围。
+- Existing Model Access: `llmAccess.js` 仅返回 mock / real-not-implemented，且 env key 与 `.env.example` 的 `BOUNDARYML_LLM_*` 不一致。
+- Existing Diff UI: Studio 已有 AI Edit / Diff Review 轻量 UI，但 server mode 仍走本地 mock diff / local apply，未调用 Diff API。
+- Gaps found: OpenAI-compatible call 未实现；structured output parsing 缺失；model call summary 不完整；AI Diff 生成 / apply / reject 未 server 化；AI context 发送提示缺失。
+
+### Completed
+- Phase 7：`llmAccess.js` 支持 `BOUNDARYML_LLM_*` 配置、OpenAI-compatible `/chat/completions` 调用、structured JSON output parsing、timeout、mock fallback、model status 扩展。
+- Phase 7：Model status 返回 provider / mode / default / planning / prompt / diff model / structured output / log level；model calls 记录 purpose/status/model/summary。
+- Phase 8：API Client 新增 `diffsApi.generate/get/apply/reject`。
+- Phase 8：Server diff generation 会先尝试 `runModel('workflow_diff')`，若模型输出没有结构化 diff 则 fallback 到 deterministic diff generator；生成结果保存为 draft diff。
+- Phase 8：Studio AI Assisted Edit 在 server mode 下调用 Diff API，显示 context-to-LLM 提示，Diff Review 支持 warnings、逐条选择、server apply selected/all、server reject。
+- Phase 8：Diff apply 携带 `workflow_version` 和 `selected_change_ids`；成功后刷新 workflow / validation / assets / jobs / history，冲突显示统一 VERSION_CONFLICT 文案。
+- 更新 script-level checks 覆盖 diffs API、server AI diff review path、selected_change_ids 和 LLM context warning。
+
+### Files Changed
+- apps/server/src/llmAccess.js
+- apps/server/src/server.js
+- apps/studio/src/api-client/index.js
+- apps/studio/src/app.js
+- scripts/studio-workflow-edit-check.js
+- docs/development-memory.md
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed
+
+### Known Limitations
+- Real LLM workflow generation/prompt generation 仍可继续深化；本轮重点是 Model Access Layer 基础能力与 AI Diff Review server 化。
+- Diff UI 仍是轻量列表，不做复杂 Diff Viewer。
+
+### Phase 9 Readiness
+- Ready.
+- Phase 9 should focus on MVP Templates / Examples / README / Release Hardening, not private Phase 10–14 commercial work.
