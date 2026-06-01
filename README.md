@@ -29,15 +29,14 @@ BoundaryML solves the pre-execution problem. It turns a project idea into struct
 
 ## What it generates
 
-A BoundaryML execution kit can include:
-- `workflow_spec.yaml` or equivalent JSON/YAML project spec;
-- workflow map with phases, nodes, owners, risks, and dependencies;
-- agent task list with execution order and boundaries;
-- prompt pack for coding agents;
-- review checklists for human approval;
-- artifact contracts that define required outputs;
-- responsibility map across human owners and AI roles;
-- risk gates for security, production, data, and release-sensitive work.
+Agent-ready Execution Kit export v1 generates:
+- `workflow_spec.yaml` with workflow phases, nodes, execution modes, review gates, artifact contracts, and validation results;
+- `agent_task_list.md` with execution order, task boundaries, required context, output contracts, acceptance criteria, and handoff guidance;
+- `prompt_pack.md` for downstream coding agents;
+- `review_checklists.md` for human approval;
+- `artifact_templates.md` for expected outputs;
+- `responsibility_map.md` across human owners, phases, and execution modes;
+- `risk_report.md` for high-risk nodes and validation findings.
 
 ## How it works
 

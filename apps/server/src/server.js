@@ -529,7 +529,7 @@ const server = createServer(async (req, res) => {
     runJob(ctx, project, job, (progress) => {
       progress('generating_files', 'Generating execution kit');
       const kit = generateExecutionKit(project.workflow, project.assets, project.validation || []);
-      if (!kit?.files?.length) throw new Error('EXECUTION_KIT_GENERATION_FAILED');
+      if (!kit?.files || Object.keys(kit.files).length === 0) throw new Error('EXECUTION_KIT_GENERATION_FAILED');
       const rec = { id: `kit_${Date.now()}`, project_id: project.id, workspace_id: project.workspace_id, created_by: ctx.user_id, updated_by: ctx.user_id, workflow_snapshot_version: project.workflow.version, status: 'generated', files: kit.files, generated_at: new Date().toISOString(), input_snapshot: { workflow_version: project.workflow.version } };
       project.execution_kits = (project.execution_kits || []).concat(rec);
       return { type: 'execution_kit', kit_id: rec.id };

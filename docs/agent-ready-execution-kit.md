@@ -8,13 +8,15 @@ An Agent-Ready Execution Kit converts a vague project idea, PRD, issue, or imple
 
 ## Contents
 
-- `workflow_spec.yaml`
-- `agent_task_list.md`
-- `prompt_pack.md`
-- `review_checklists.md`
-- `artifact_templates.md`
-- `responsibility_map.md`
-- `risk_report.md`
+Export v1 generates the following Community Core files:
+
+- `workflow_spec.yaml` — workflow phases, nodes, execution modes, review gates, artifact contracts, and validation results.
+- `agent_task_list.md` — ordered agent-ready tasks with required context, output contracts, acceptance criteria, and handoff guidance.
+- `prompt_pack.md` — prompts prepared for downstream coding agents.
+- `review_checklists.md` — human review gates and checklist items.
+- `artifact_templates.md` — output templates and completion criteria.
+- `responsibility_map.md` — ownership by role, phase, and execution mode.
+- `risk_report.md` — high-risk nodes and validation findings.
 
 ## Why it matters
 

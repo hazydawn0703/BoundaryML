@@ -471,7 +471,7 @@ function handleAction(event) {
     if (st.serverAvailable && project?.id) {
       apiClient.executionKitsApi.preview(project.id).then(({ data }) => {
         updateActiveProject((draft) => {
-          draft.executionKit = data.execution_kit || data.kit || data;
+          draft.executionKit = data.preview || data.execution_kit || data.kit || data;
         }, 'Execution kit generated');
       }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Generation failed. View error details or retry from the job panel.' })));
     } else {
