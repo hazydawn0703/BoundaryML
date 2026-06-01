@@ -65,6 +65,11 @@ async function main() {
     const workflow = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`);
     assert(Array.isArray(workflow.body.data.nodes), 'workflow should include nodes array');
     await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/validate`, { method: 'POST' });
+    const kitPreview = await apiFetch(baseUrl, `/api/projects/${projectId}/execution-kits/preview`, { method: 'POST', body: JSON.stringify({}) });
+    assert(kitPreview.body.data.preview.files['workflow_spec.yaml'], 'execution kit preview should include workflow_spec.yaml');
+    assert(kitPreview.body.data.preview.files['agent_task_list.md'], 'execution kit preview should include agent_task_list.md');
+    const kitGenerated = await apiFetch(baseUrl, `/api/projects/${projectId}/execution-kits/generate`, { method: 'POST', body: JSON.stringify({}) });
+    assert(kitGenerated.body.data.status === 'succeeded', 'execution kit generate job should succeed');
     await apiFetch(baseUrl, `/api/projects/${projectId}/jobs`);
     server.kill('SIGTERM'); await sleep(400);
     server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
