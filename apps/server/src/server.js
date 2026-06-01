@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { createExampleProject } from '../../../packages/core/src/sampleProject.js';
 import { createWorkflowFromTemplate, applyWorkflowPatch, applyDiff, createWorkflowSnapshot, markAffectedAssetsOutdated, normalizeWorkflowSpec } from '../../../packages/core/src/engine.js';
+import { getTemplateById, listPublicTemplates, selectTemplateForProject } from '../../../packages/core/src/templates.js';
 import { generateWorkflowDraft } from '../../../packages/generators/src/workflowGenerator.js';
 import { generatePrompt } from '../../../packages/generators/src/promptGenerator.js';
 import { generateChecklist } from '../../../packages/generators/src/checklistGenerator.js';
@@ -218,11 +219,19 @@ const server = createServer(async (req, res) => {
 
   if (method === 'GET' && path === '/api/health') return ok(res, ctx, { status: 'ok', mode: runtimeMode, version: '0.1.0', storage: storageAdapter });
 
+  if (method === 'GET' && path === '/api/templates') return ok(res, ctx, { templates: listPublicTemplates() });
+  if (method === 'GET' && path.startsWith('/api/templates/')) {
+    const template = getTemplateById(decodeURIComponent(path.split('/').pop()));
+    if (!template) return fail(res, ctx, 404, 'TEMPLATE_NOT_FOUND', 'Template not found');
+    return ok(res, ctx, template);
+  }
+
   if (method === 'GET' && path === '/api/projects') return ok(res, ctx, listScopedProjects(ctx).map((p) => ({ id: p.id, name: p.name, workspace_id: p.workspace_id, updated_at: p.updated_at })));
   if (method === 'POST' && path === '/api/projects') {
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
     const base = createExampleProject();
-    const project = writeOwnership(ctx, { ...base, id: body.id || `project_${Date.now()}`, name: body.name || base.name, goal: body.goal || base.goal, context_pack: base.contextPack, deleted_at: null }, true);
+    const selectedTemplate = selectTemplateForProject(body);
+    const project = writeOwnership(ctx, { ...base, id: body.id || `project_${Date.now()}`, name: body.name || base.name, goal: body.goal || base.goal, type: body.project_type || body.type || base.type, project_type: body.project_type || body.type || base.type, created_from_template: selectedTemplate.id, template_version: selectedTemplate.version, context_pack: base.contextPack, deleted_at: null }, true);
     const v = validateProject(project); if (!v.ok) return fail(res, ctx, 400, 'SCHEMA_INVALID', 'Project invalid', v.errors);
     project.workflow = normalizeWorkflowSpec({ workflow: project.workflow }).workflow;
     project.workflow.version = 0;

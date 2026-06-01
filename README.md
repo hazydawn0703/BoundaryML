@@ -1,122 +1,39 @@
 # BoundaryML
 
-Project kickoff and governance layer for AI agents.
+BoundaryML 是一个面向 AI 转型项目的 **可视化人机协作边界编排系统**。它帮助团队在项目启动前明确：项目阶段、节点输入输出、人机执行模式、Review Gate、Execution Assets 与可导出的 Execution Kit。
 
-BoundaryML turns vague project ideas into agent-ready execution kits:
-- workflow map
-- agent task list
-- prompt pack
-- review checklists
-- artifact contracts
-- risk gates
+## 当前公开范围
 
-BoundaryML does not replace coding agents. BoundaryML prepares work before agents execute. It defines task boundaries, required context, output contracts, review gates, and acceptance criteria.
+本 GitHub 仓库只发布 **MVP / Open-source 主线（Phase 0–9）**。
+
+- Phase 0–4B：Schema/Core/Rules、Server、Storage、Studio Server 数据接入、Workflow Studio 编辑能力。
+- Phase 5：Execution Assets 完整化（Prompt / Checklist / Artifact Template）。
+- Phase 6：Execution Kit Export 完整化（Draft / Final Kit、Preview / Generate / Download）。
+- Phase 7：Model Access Layer 基础能力（OpenAI-compatible、structured output、mock fallback）。
+- Phase 8：AI Assisted Edit + server-backed Diff Review 基础链路。
+- Phase 9：MVP Templates / Examples / README / Release Hardening。
+
+Phase 10–14（Pro Template System、Enterprise Organization Templates、Enterprise Rules & Governance、Enterprise Privacy / Model Policy、SaaS Platform / Billing）属于商业化闭源路线，不在本公开仓库发布。
 
 BoundaryML is not Jira / Linear / Notion. BoundaryML is not Codex / Claude Code / Copilot. BoundaryML is the planning and governance layer before agents execute.
 
-Current status: **early open-core MVP**. The repository contains the community core, local-first demo/server modes, schema validation, basic rules, and basic execution-kit generation.
-
-## Why BoundaryML
-
-AI coding agents are becoming powerful execution engines, but teams still lose time because upstream work is vague:
-- prompts do not define the task boundary;
-- context is scattered across docs, tickets, and conversations;
-- expected artifacts are not specified;
-- reviews happen after risky autonomous work;
-- acceptance criteria are implied instead of explicit.
-
-BoundaryML solves the pre-execution problem. It turns a project idea into structured, reviewable instructions that humans can approve before handing work to Codex, Claude Code, GitHub Copilot, Cursor, or another AI coding agent.
-
-## What it generates
-
-Agent-ready Execution Kit export v1 generates:
-- `workflow_spec.yaml` with workflow phases, nodes, execution modes, review gates, artifact contracts, and validation results;
-- `agent_task_list.md` with execution order, task boundaries, required context, output contracts, acceptance criteria, and handoff guidance;
-- `prompt_pack.md` for downstream coding agents;
-- `review_checklists.md` for human approval;
-- `artifact_templates.md` for expected outputs;
-- `responsibility_map.md` across human owners, phases, and execution modes;
-- `risk_report.md` for high-risk nodes and validation findings.
-
-## How it works
-
-1. Capture project context, delivery scope, team roles, constraints, and sensitive areas.
-2. Build a workflow map that separates human-led, AI-assisted, and approval-gated steps.
-3. Validate the workflow against the BoundaryML Spec and basic governance rules.
-4. Generate an execution kit for downstream use in coding-agent workflows.
-5. Review the kit before agents execute code, produce artifacts, or touch production paths.
-
-BoundaryML is intentionally upstream of execution. It does not run coding agents, replace source-control review, or become the system of record for project management.
-
-## Open Core Model
-
-BoundaryML uses an open-core model:
-
-- **Community Core** is open source and designed for local adoption, schema experimentation, basic validation, and basic execution-kit export.
-- **Commercial offerings** fund advanced templates, rule packs, hosted collaboration, enterprise deployment, and done-for-you execution-kit services.
-
-See [COMMERCIAL.md](COMMERCIAL.md), [Open Core Strategy](docs/open-core-strategy.md), and [Community vs Pro](docs/community-vs-pro.md) for the full boundary.
-
-## Community vs Pro vs Enterprise
-
-| Area | Community Core | Pro Templates | Enterprise / Cloud |
-| --- | --- | --- | --- |
-| Spec and schema | BoundaryML Spec, workflow schema, validation | Template-specific extensions | Organization policies and governance overlays |
-| Local usage | Local Demo Mode and Local Server Mode | Local use of purchased templates | Self-hosted or hosted team environments |
-| Rules | Basic validation rules | Advanced agent governance rule packs | Compliance, security, approval, audit, and production release packs |
-| Exports | Basic Execution Kit export | Advanced template outputs | GitHub / Linear / Jira advanced exporters and audit workflows |
-| Examples | Limited community examples | Production-ready pro templates | Custom templates and workspace rollout support |
-| Services | Community support | Paid kit customization | Hosted BoundaryML Cloud, enterprise deployment, and consulting |
-
-## Commercial Services
-
-Commercial offerings may include:
-- Pro workflow templates;
-- Agent governance rule packs;
-- Advanced GitHub / Linear / Jira exporters;
-- GEO Launch Ops Kit;
-- AI Coding Governance Kit;
-- Enterprise review gate templates;
-- Hosted BoundaryML Cloud;
-- Enterprise self-hosted deployment;
-- done-for-you Agent-Ready Execution Kit service.
-
-The first paid service is the **Agent-Ready Execution Kit Service**: a project-specific workflow map, issue/task breakdown, Codex / Claude Code prompts, review checklists, risk gates, artifact contracts, and execution order.
-
-## Workspace structure
-
-- `apps/studio`: BoundaryML Studio frontend.
-- `apps/server`: BoundaryML Server API skeleton.
-- `packages/schema`: BoundaryML schema and validation methods.
-- `packages/core`: Project, workflow, and diff core objects.
-- `packages/rules`: Boundary Rules validation.
-- `packages/generators`: Workflow, prompt, checklist, and execution-kit generators.
-- `packages/storage`: MemoryStorage and FileStorage.
-- `examples`: limited community example data.
-- `templates/community`: intentionally limited community template placeholders.
-- `scripts`: validation and smoke-test scripts.
-
-## Running modes
-
 ### Local Demo Mode
 
-Studio starts in Local Demo Mode when it cannot reach the server. The UI header displays `Mode: Local Demo (Server unavailable)`.
+无需启动 Server，Studio 会使用内置 Example Workflow 和 Mock Model Service。该模式只用于 GitHub Demo / 快速体验，UI 会标记：
+
+```text
+Mode: Local Demo / Mock Model
+```
 
 ### Local Server Mode
 
-When the server is available, Studio uses Local Server Mode. The UI header displays `Mode: Local Server`.
+当前正式开源运行模式：Studio 通过 HTTP API 访问 BoundaryML Server，Server 负责 `.env`、持久化、LLM Access、Workflow/Asset/Execution Kit 生成。
 
-## Development
-
-Install dependencies:
+## Quick Start
 
 ```bash
 npm install
-```
-
-Start the server:
-
-```bash
+cp .env.example .env
 npm run dev:server
 ```
 
@@ -128,70 +45,84 @@ npm run dev:studio
 
 - Server: `http://localhost:8787`
 - Studio: `http://localhost:5173`
+- Studio API Base URL: `VITE_BOUNDARYML_API_BASE_URL` → `window.BOUNDARYML_API_BASE_URL` → `/api`
 
-Studio API Base URL priority:
-1. `import.meta.env.VITE_BOUNDARYML_API_BASE_URL`
-2. `window.BOUNDARYML_API_BASE_URL`
-3. default `/api`
+## OpenAI-compatible Model 配置
 
-### API status
-
-Implemented basics:
-- `GET /health`
-- `GET /api/model/status`
-- `GET /api/projects`
-- `POST /api/projects`
-- `GET /api/projects/:projectId`
-- `GET /api/projects/:projectId/jobs/:jobId`
-- `GET/PUT /api/projects/:projectId/context-pack`
-- `GET/PATCH /api/projects/:projectId/workflow`
-- `POST /api/projects/:projectId/workflow/validate`
-- `GET /api/projects/:projectId/assets`
-- `POST /api/projects/:projectId/execution-kits/preview`
-- `GET /api/projects/example`
-
-Structured stubs / mocks:
-- `POST /api/projects/:projectId/context-pack/summarize`
-- `POST /api/projects/:projectId/workflow/generate`
-- `POST /api/projects/:projectId/diffs/generate`
-- `POST /api/projects/:projectId/diffs/:diffId/apply`
-- `POST /api/projects/:projectId/execution-kits/generate`
-
-### Checks
+`.env.example` 已包含：
 
 ```bash
-npm run check
-npm run test
+BOUNDARYML_LLM_PROVIDER=openai-compatible
+BOUNDARYML_LLM_API_KEY=
+BOUNDARYML_LLM_BASE_URL=
+BOUNDARYML_LLM_DEFAULT_MODEL=
+BOUNDARYML_LLM_PLANNING_MODEL=
+BOUNDARYML_LLM_PROMPT_MODEL=
+BOUNDARYML_LLM_DIFF_MODEL=
+BOUNDARYML_LLM_ENABLE_STRUCTURED_OUTPUT=true
+BOUNDARYML_ALLOW_MOCK_MODEL=true
+```
+
+如果未配置 API Key，Server 会在允许 mock 的情况下使用 Mock Model fallback。模型 Key 只应保存在 Server，不进入浏览器。
+
+## MVP Built-in Templates
+
+Phase 9 公开仓库内置 3 个 MVP 模板：
+
+1. **AI SaaS Feature MVP** — AI SaaS 功能从 0 到 1。
+2. **Internal AI Tool** — 企业内部 AI 工具或自动化系统建设。
+3. **Legacy System AI Modernization** — 传统系统接入 AI 能力或使用 AI Coding 工具重构。
+
+模板清单示例：`examples/templates.json`。
+
+Server 公开只读模板 API：`GET /api/templates` 与 `GET /api/templates/:templateId`。
+
+## Examples
+
+- `examples/ai-saas-feature-mvp.json`
+- `examples/internal-ai-tool.json`
+- `examples/legacy-system-ai-modernization.json`
+- `examples/templates.json`
+
+这些示例均为 BoundaryML Spec，包含 workflow、assets、validation、diff 示例与模板引用。
+
+## Workspace 结构
+
+- `apps/studio`：BoundaryML Studio
+- `apps/server`：BoundaryML Server API
+- `packages/schema`：BoundaryML schema + validation
+- `packages/core`：Workflow / Diff / Template 核心对象
+- `packages/rules`：Boundary Rules
+- `packages/generators`：Workflow / Prompt / Checklist / ExecutionKit generators
+- `packages/exporter`：Execution Kit exporter
+- `packages/storage`：MemoryStorage / FileStorage
+- `packages/examples`：Example Spec loader
+- `examples`：生成后的示例数据
+- `scripts`：检查与示例生成脚本
+
+## 常用命令
+
+```bash
 npm run typecheck
+npm run test
+npm run smoke:server
+npm run check
+node scripts/generate-example.js
 ```
 
-Export the community example Agent-ready Execution Kit to a local `execution-kit/` directory:
+`npm run check` 会覆盖 schema/rules/core/storage/server smoke，并运行 Studio server-first 路径检查。
 
-```bash
-npm run export:example
-```
+## 数据与安全边界
 
-`npm run check` validates core rules, diff application, execution-kit constraints, the community example spec, FileStorage restart behavior, job query closure, example execution-kit export, and the workflow-generate / diff-apply snapshot path.
+- 正式数据源是 Server + Storage，不是浏览器 localStorage。
+- Local Demo Mode 仅保存演示 / UI 状态。
+- 所有 Project 相关数据必须处于 workspace scope。
+- LLM Context 只在用户触发生成 / Diff 时发送到配置的 provider。
+- AI Assisted Edit 必须生成 Diff，不能静默覆盖正式 Workflow。
 
-## Roadmap
+## 当前已知限制
 
-Near-term community roadmap:
-- stabilize the BoundaryML Spec and workflow schema;
-- improve basic Studio editing and validation flows;
-- expand basic Markdown / JSON / YAML execution-kit exports;
-- keep community examples intentionally small and non-proprietary;
-- document integration patterns for coding agents without becoming an agent runtime.
-
-Commercial roadmap:
-- Pro workflow templates;
-- advanced agent governance rule packs;
-- advanced GitHub / Linear / Jira exporters;
-- enterprise review gate templates;
-- hosted BoundaryML Cloud;
-- enterprise self-hosted deployment and audit workflows.
-
-## License
-
-BoundaryML Core is licensed under Apache-2.0.
-
-Pro templates, enterprise rule packs, hosted services, and paid consulting deliverables are commercial offerings and are not included in the open-source license unless explicitly stated.
+- Diff Review UI 仍是轻量列表，不是复杂 diff viewer。
+- Execution Kit 下载目前通过 API 返回内容，Studio 侧仍以复制内容为主。
+- Real LLM workflow / prompt generation 可继续深化。
+- Pro / Enterprise / SaaS 能力不在公开仓库范围内。

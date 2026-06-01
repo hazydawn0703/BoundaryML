@@ -12,9 +12,8 @@
     "dev:server": "npm run dev -w @boundaryml/server",
     "check": "node scripts/check.js && npm run smoke:server",
     "test": "node scripts/check.js",
-    "typecheck": "node --check packages/schema/src/schema.js && node --check packages/core/src/engine.js && node --check packages/rules/src/validationEngine.js",
-    "smoke:server": "node scripts/server-smoke.js",
-    "export:example": "node scripts/export-example.js"
+    "typecheck": "node --check packages/schema/src/schema.js && node --check packages/core/src/engine.js && node --check packages/core/src/templates.js && node --check packages/rules/src/validationEngine.js && node --check apps/server/src/server.js && node --check apps/studio/src/api-client/index.js && node --check scripts/generate-example.js",
+    "smoke:server": "node scripts/server-smoke.js"
   },
   "type": "module"
 }

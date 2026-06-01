@@ -57,6 +57,8 @@ async function main() {
   try {
     await waitForServer(baseUrl);
     const health = await apiFetch(baseUrl, '/api/health'); assert(health.status === 200, 'health should return 200');
+    const templates = await apiFetch(baseUrl, '/api/templates'); assert((templates.body.data.templates || []).length >= 3, 'templates should expose public MVP templates');
+    const template = await apiFetch(baseUrl, '/api/templates/template-ai-saas-feature-mvp'); assert(template.body.data.id === 'template-ai-saas-feature-mvp', 'template detail should be fetchable');
     const created = await apiFetch(baseUrl, '/api/projects', { method: 'POST', body: JSON.stringify({ name: 'smoke-project', goal: 'smoke goal' }) });
     const projectId = created.body.data.id; assert(projectId, 'project id should exist');
     await apiFetch(baseUrl, '/api/projects');

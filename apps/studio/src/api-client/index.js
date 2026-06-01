@@ -57,6 +57,10 @@ const put = (path, body = {}) => request(path, { method: 'PUT', body: JSON.strin
 const del = (path) => request(path, { method: 'DELETE' });
 
 export const healthApi = { check: () => get('/health') };
+export const templatesApi = {
+  list: () => get('/templates'),
+  get: (templateId) => get(`/templates/${templateId}`),
+};
 export const projectsApi = {
   list: () => get('/projects'),
   create: (payload) => post('/projects', payload),
@@ -126,6 +130,7 @@ export const apiClient = {
   resolveBaseUrl,
   ApiError,
   healthApi,
+  templatesApi,
   projectsApi,
   contextPackApi,
   workflowApi,

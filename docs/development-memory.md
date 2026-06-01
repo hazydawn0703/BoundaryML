@@ -625,3 +625,65 @@
 ### Phase 9 Readiness
 - Ready.
 - Phase 9 should focus on MVP Templates / Examples / README / Release Hardening, not private Phase 10–14 commercial work.
+
+## Phase 9 Summary — MVP Templates / Examples / README / Release Hardening
+
+### Pre-coding Audit
+- docs/development-memory.md review: Phase 7/8 已完成 Model Access 与 server-backed Diff Review 基础链路，Phase 9 应聚焦公开 GitHub MVP 的模板、示例、README 与 release hardening；Phase 10–14 仍为本地/闭源商业化范围，不进入公开仓库。
+- Existing Templates: core 层没有统一内置模板 registry，Server 也没有公开模板列表 API；Create Project 对模板来源没有显式 metadata。
+- Existing Examples: 仅有 `ai-saas-feature-mvp.json` 单一示例，无法覆盖 Internal AI Tool / Legacy Modernization 两个 MVP 模板。
+- Existing README: 已落后于 Phase 5–8 的真实能力，缺少 Open-source vs Commercial 边界、Quick Start、LLM 配置、模板和示例说明。
+- Gaps found: 缺 3 个公开 MVP 模板、缺 `examples/templates.json`、缺模板 server smoke、缺 schema-level template checks、缺 README release hardening。
+
+### Completed
+- 新增 public built-in template registry，公开 3 个 MVP 模板：AI SaaS Feature MVP、Internal AI Tool、Legacy System AI Modernization。
+- Server 新增 `GET /api/templates` 与 `GET /api/templates/:templateId`，Create Project 会记录 `created_from_template` 与 `template_version`。
+- API Client 新增 `templatesApi.list/get`，便于 Studio 或后续页面读取公开模板。
+- 示例生成脚本扩展为生成 3 个项目示例与 `examples/templates.json`。
+- `packages/examples` loader 扩展为可读取 3 个示例项目与模板示例。
+- README 更新为公开 MVP release 文档，明确 Phase 0–9 开源范围与 Phase 10–14 闭源商业化边界。
+- `scripts/check.js` 增加模板 schema 校验、模板匹配校验、Internal/Legacy 示例 spec 校验；`scripts/server-smoke.js` 增加模板 API smoke。
+
+### Files Changed
+- `packages/core/src/templates.js`
+- `apps/server/src/server.js`
+- `apps/studio/src/api-client/index.js`
+- `packages/examples/src/aiSaasFeatureMvp.js`
+- `scripts/generate-example.js`
+- `scripts/check.js`
+- `scripts/server-smoke.js`
+- `examples/ai-saas-feature-mvp.json`
+- `examples/internal-ai-tool.json`
+- `examples/legacy-system-ai-modernization.json`
+- `examples/templates.json`
+- `README.md`
+- `docs/development-memory.md`
+
+### Template Changes
+- Built-in templates remain public/open-source and carry schema-compatible `content` payloads.
+- Template selection uses project type/name/goal keywords and defaults to AI SaaS Feature MVP.
+- Public API exposes template list/detail only; Pro / Enterprise template lifecycle remains outside GitHub scope.
+
+### Example Changes
+- `node scripts/generate-example.js` now regenerates 3 MVP example specs plus public template metadata.
+- Each generated spec includes workflow/assets/validation/diff sample/template references.
+- Example loader package can load all public examples for tests or docs.
+
+### README / Release Hardening
+- README now documents Quick Start, server/demo modes, OpenAI-compatible env config, built-in templates, examples, workspace layout, commands, data/security boundaries and known limitations.
+- Release checks cover schema/rules/core/storage/studio edit checks, template checks, example spec validation and server template smoke.
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed
+
+### Known Limitations
+- Public templates are metadata + generator selection rules, not a full Pro template version/upgrade/diff system.
+- Studio Create Project can use project type to trigger template selection, but no dedicated rich template marketplace UI was added.
+- Enterprise organization templates, governance, privacy/model policy and SaaS billing remain private Phase 10–14 work.
+
+### Phase 10–14 Boundary
+- Ready to stop public GitHub roadmap at Phase 9.
+- Phase 10–14 are commercial closed-source/local development and should not be published in this repository.

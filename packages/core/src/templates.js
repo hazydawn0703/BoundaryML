@@ -1,0 +1,60 @@
+export const BUILT_IN_TEMPLATES = [
+  {
+    id: 'template-ai-saas-feature-mvp',
+    name: 'AI SaaS Feature MVP',
+    template_type: 'built_in',
+    version: 'v1',
+    project_type_keywords: ['ai feature', 'saas', 'ai saas'],
+    description: 'Plan and deliver an AI-assisted SaaS feature from idea to launch.',
+    default_phases: ['Discovery', 'Product Design', 'Technical Design', 'Development', 'Testing', 'Launch'],
+    recommended_execution_modes: ['human_lead_ai_assist', 'ai_draft_human_review', 'ai_execute_human_approval', 'human_only'],
+  },
+  {
+    id: 'template-internal-ai-tool',
+    name: 'Internal AI Tool',
+    template_type: 'built_in',
+    version: 'v1',
+    project_type_keywords: ['internal tool', 'automation', 'internal ai'],
+    description: 'Plan an internal AI tool with stakeholder intake, privacy review, rollout and operational controls.',
+    default_phases: ['Intake', 'Workflow Mapping', 'Data & Access Review', 'Tool Build', 'Pilot', 'Rollout'],
+    recommended_execution_modes: ['human_lead_ai_assist', 'ai_draft_human_review', 'ai_execute_human_approval', 'human_only'],
+  },
+  {
+    id: 'template-legacy-system-ai-modernization',
+    name: 'Legacy System AI Modernization',
+    template_type: 'built_in',
+    version: 'v1',
+    project_type_keywords: ['legacy', 'modernization', 'migration'],
+    description: 'Plan AI-assisted modernization for legacy systems with assessment, risk controls and phased rollout.',
+    default_phases: ['Assessment', 'Discovery', 'Technical Design', 'Modernization', 'Testing', 'Launch'],
+    recommended_execution_modes: ['human_lead_ai_assist', 'ai_draft_human_review', 'ai_execute_human_approval', 'human_only'],
+  },
+];
+
+function withTemplateContent(template) {
+  return {
+    ...template,
+    content: {
+      description: template.description,
+      default_phases: template.default_phases,
+      recommended_execution_modes: template.recommended_execution_modes,
+      project_type_keywords: template.project_type_keywords,
+    },
+    github_visibility: 'public',
+  };
+}
+
+export function listPublicTemplates() {
+  return BUILT_IN_TEMPLATES.map(withTemplateContent);
+}
+
+export function getTemplateById(templateId) {
+  const template = BUILT_IN_TEMPLATES.find((item) => item.id === templateId);
+  return template ? withTemplateContent(template) : null;
+}
+
+export function selectTemplateForProject(projectInput = {}) {
+  const text = [projectInput.project_type, projectInput.type, projectInput.name, projectInput.goal].filter(Boolean).join(' ').toLowerCase();
+  const template = BUILT_IN_TEMPLATES.find((item) => item.project_type_keywords.some((keyword) => text.includes(keyword))) || BUILT_IN_TEMPLATES[0];
+  return withTemplateContent(template);
+}
