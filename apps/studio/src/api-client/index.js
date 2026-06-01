@@ -85,6 +85,12 @@ export const nodesApi = {
   generatePrompt: (projectId, nodeId) => post(`/projects/${projectId}/nodes/${nodeId}/generate-prompt`, {}),
   generateChecklist: (projectId, nodeId) => post(`/projects/${projectId}/nodes/${nodeId}/generate-checklist`, {}),
 };
+export const diffsApi = {
+  generate: (projectId, payload) => post(`/projects/${projectId}/diffs/generate`, payload),
+  getById: (projectId, diffId) => get(`/projects/${projectId}/diffs/${diffId}`),
+  apply: (projectId, diffId, payload = {}) => post(`/projects/${projectId}/diffs/${diffId}/apply`, payload),
+  reject: (projectId, diffId) => post(`/projects/${projectId}/diffs/${diffId}/reject`, {}),
+};
 export const jobsApi = {
   list: (projectId) => get(`/projects/${projectId}/jobs`),
   get: (projectId, jobId) => get(`/projects/${projectId}/jobs/${jobId}`),
@@ -124,6 +130,7 @@ export const apiClient = {
   contextPackApi,
   workflowApi,
   nodesApi,
+  diffsApi,
   jobsApi,
   modelApi,
   diffsApi,
