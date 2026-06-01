@@ -76,6 +76,9 @@ export const workflowApi = {
   validate: (projectId) => post(`/projects/${projectId}/workflow/validate`, {}),
   history: (projectId) => get(`/projects/${projectId}/workflow/history`),
   version: (projectId, version) => get(`/projects/${projectId}/workflow/versions/${version}`),
+  patch: (projectId, payload) => patch(`/projects/${projectId}/workflow`, payload),
+  undo: (projectId) => post(`/projects/${projectId}/workflow/undo`, {}),
+  restore: (projectId, version) => post(`/projects/${projectId}/workflow/restore`, { version }),
 };
 export const nodesApi = {
   patch: (projectId, nodeId, payload) => patch(`/projects/${projectId}/nodes/${nodeId}`, payload),
@@ -93,14 +96,23 @@ export const modelApi = {
   test: () => post('/model/test', {}),
   calls: () => get('/model/calls'),
 };
+export const diffsApi = {
+  generate: (projectId, payload) => post(`/projects/${projectId}/diffs/generate`, payload),
+  get: (projectId, diffId) => get(`/projects/${projectId}/diffs/${diffId}`),
+  apply: (projectId, diffId, payload = {}) => post(`/projects/${projectId}/diffs/${diffId}/apply`, payload),
+  reject: (projectId, diffId) => post(`/projects/${projectId}/diffs/${diffId}/reject`, {}),
+};
 export const assetsApi = {
   list: (projectId) => get(`/projects/${projectId}/assets`),
+  get: (projectId, assetId) => get(`/projects/${projectId}/assets/${assetId}`),
   update: (projectId, assetId, payload) => patch(`/projects/${projectId}/assets/${assetId}`, payload),
+  regenerate: (projectId, assetId) => post(`/projects/${projectId}/assets/${assetId}/regenerate`, {}),
 };
 export const executionKitsApi = {
-  preview: (projectId) => post(`/projects/${projectId}/execution-kits/preview`, {}),
-  generate: (projectId) => post(`/projects/${projectId}/execution-kits/generate`, {}),
+  preview: (projectId, payload = {}) => post(`/projects/${projectId}/execution-kits/preview`, payload),
+  generate: (projectId, payload = {}) => post(`/projects/${projectId}/execution-kits/generate`, payload),
   get: (projectId, kitId) => get(`/projects/${projectId}/execution-kits/${kitId}`),
+  download: (projectId, kitId) => get(`/projects/${projectId}/execution-kits/${kitId}/download`),
 };
 
 export const apiClient = {
@@ -114,6 +126,7 @@ export const apiClient = {
   nodesApi,
   jobsApi,
   modelApi,
+  diffsApi,
   assetsApi,
   executionKitsApi,
 };
