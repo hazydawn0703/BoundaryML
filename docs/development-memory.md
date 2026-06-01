@@ -453,3 +453,37 @@
 ### Phase 5 Readiness
 - Blocked
 - Blockers if any: Phase 4B 范围已收口，本轮未进入 Phase 5 规划与实现。
+
+## Open-source Phase 5–9 Roadmap Alignment (Post Phase 4B)
+
+### PRD Review Source
+- Reviewed the latest three PRD files: `docs/BoundaryML PRD.md`, `docs/BoundaryML PRD 补充章节15–26.md`, and `docs/BoundaryML PRD 架构补充章节27–41.md`.
+- The public GitHub roadmap should continue with the MVP / open-source line only.
+- Commercial Pro / Enterprise / SaaS phases are intentionally excluded from the public GitHub roadmap and will be developed locally / privately.
+
+### Public Open-source Roadmap
+| Phase | Name | Scope | PRD Alignment | GitHub Visibility |
+|---|---|---|---|---|
+| Phase 5 | Execution Assets 完整化 | Prompt / Checklist / Artifact Template 的查看、编辑、复制、状态、outdated 链路 | MVP Execution Assets 验收 | Public GitHub |
+| Phase 6 | Execution Kit Export 完整化 | Draft / Final Kit、Preview / Generate / Download、Workflow Spec、Task List、Prompt Pack、Review Checklist、Artifact Templates、Risk Report | MVP Export / Execution Kit 验收 | Public GitHub |
+| Phase 7 | Model Access Layer / Real LLM / Structured Output | OpenAI-compatible 配置、Server-side LLM、structured output、schema/rules validation、model call summary | MVP Model Access 验收 | Public GitHub |
+| Phase 8 | AI Assisted Edit + Diff Review UI | 自然语言修改请求、生成 Diff、逐条 accept/reject、apply 后 validation、资产 outdated 标记 | MVP AI Assisted Edit 验收 | Public GitHub |
+| Phase 9 | MVP Templates / Examples / README / Release Hardening | Built-in Template、Example Template、3 个 MVP 内置模板、示例项目、README、Quick Start、release checks | MVP Template / Example / README 验收 | Public GitHub |
+
+### Private Commercial Roadmap Boundary
+- Phase 10–14 belong to the Pro / Enterprise / SaaS commercial roadmap.
+- These phases should not be published to GitHub in this open-source repository.
+- They may be designed and developed locally / privately as closed-source work.
+
+| Private Phase | Commercial Scope | GitHub Visibility |
+|---|---|---|
+| Phase 10 | Pro Template System（Project Template、template version、template upgrade / diff） | Private / Local only |
+| Phase 11 | Enterprise Organization Templates（organization template、workspace-bound template sharing、template governance） | Private / Local only |
+| Phase 12 | Enterprise Rules & Governance（organization boundary rules、risk override、AI autonomous policy） | Private / Local only |
+| Phase 13 | Enterprise Privacy / Model Policy（private model policy、redaction、disable raw context / detailed logs） | Private / Local only |
+| Phase 14 | SaaS Platform / Multi-tenant / Billing（auth、RBAC、multi-tenant isolation、billing、audit、cost） | Private / Local only |
+
+### Updated Phase 5 Readiness
+- Ready for public open-source Phase 5.
+- Phase 5 should start with Execution Assets 完整化, not Pro / Enterprise templates and not SaaS platform work.
+- Phase 10–14 should remain out of public GitHub scope unless explicitly reclassified later.
