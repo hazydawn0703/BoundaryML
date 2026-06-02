@@ -1,5 +1,5 @@
-import { createExampleProject } from '../../../packages/core/src/sampleProject.js';
-import { validateWorkflow } from '../../../packages/rules/src/validationEngine.js';
+import { createExampleProject } from '../../../../packages/core/src/sampleProject.js';
+import { validateWorkflow } from '../../../../packages/rules/src/validationEngine.js';
 
 const STORAGE_KEY = 'boundaryml_studio_ui_state_v1';
 
