@@ -1,0 +1,151 @@
+{
+  "templates": [
+    {
+      "id": "template-ai-saas-feature-mvp",
+      "name": "AI SaaS Feature MVP",
+      "template_type": "built_in",
+      "version": "v1",
+      "project_type_keywords": [
+        "ai feature",
+        "saas",
+        "ai saas"
+      ],
+      "description": "Plan and deliver an AI-assisted SaaS feature from idea to launch.",
+      "default_phases": [
+        "Discovery",
+        "Product Design",
+        "Technical Design",
+        "Development",
+        "Testing",
+        "Launch"
+      ],
+      "recommended_execution_modes": [
+        "human_lead_ai_assist",
+        "ai_draft_human_review",
+        "ai_execute_human_approval",
+        "human_only"
+      ],
+      "content": {
+        "description": "Plan and deliver an AI-assisted SaaS feature from idea to launch.",
+        "default_phases": [
+          "Discovery",
+          "Product Design",
+          "Technical Design",
+          "Development",
+          "Testing",
+          "Launch"
+        ],
+        "recommended_execution_modes": [
+          "human_lead_ai_assist",
+          "ai_draft_human_review",
+          "ai_execute_human_approval",
+          "human_only"
+        ],
+        "project_type_keywords": [
+          "ai feature",
+          "saas",
+          "ai saas"
+        ]
+      },
+      "github_visibility": "public"
+    },
+    {
+      "id": "template-internal-ai-tool",
+      "name": "Internal AI Tool",
+      "template_type": "built_in",
+      "version": "v1",
+      "project_type_keywords": [
+        "internal tool",
+        "automation",
+        "internal ai"
+      ],
+      "description": "Plan an internal AI tool with stakeholder intake, privacy review, rollout and operational controls.",
+      "default_phases": [
+        "Intake",
+        "Workflow Mapping",
+        "Data & Access Review",
+        "Tool Build",
+        "Pilot",
+        "Rollout"
+      ],
+      "recommended_execution_modes": [
+        "human_lead_ai_assist",
+        "ai_draft_human_review",
+        "ai_execute_human_approval",
+        "human_only"
+      ],
+      "content": {
+        "description": "Plan an internal AI tool with stakeholder intake, privacy review, rollout and operational controls.",
+        "default_phases": [
+          "Intake",
+          "Workflow Mapping",
+          "Data & Access Review",
+          "Tool Build",
+          "Pilot",
+          "Rollout"
+        ],
+        "recommended_execution_modes": [
+          "human_lead_ai_assist",
+          "ai_draft_human_review",
+          "ai_execute_human_approval",
+          "human_only"
+        ],
+        "project_type_keywords": [
+          "internal tool",
+          "automation",
+          "internal ai"
+        ]
+      },
+      "github_visibility": "public"
+    },
+    {
+      "id": "template-legacy-system-ai-modernization",
+      "name": "Legacy System AI Modernization",
+      "template_type": "built_in",
+      "version": "v1",
+      "project_type_keywords": [
+        "legacy",
+        "modernization",
+        "migration"
+      ],
+      "description": "Plan AI-assisted modernization for legacy systems with assessment, risk controls and phased rollout.",
+      "default_phases": [
+        "Assessment",
+        "Discovery",
+        "Technical Design",
+        "Modernization",
+        "Testing",
+        "Launch"
+      ],
+      "recommended_execution_modes": [
+        "human_lead_ai_assist",
+        "ai_draft_human_review",
+        "ai_execute_human_approval",
+        "human_only"
+      ],
+      "content": {
+        "description": "Plan AI-assisted modernization for legacy systems with assessment, risk controls and phased rollout.",
+        "default_phases": [
+          "Assessment",
+          "Discovery",
+          "Technical Design",
+          "Modernization",
+          "Testing",
+          "Launch"
+        ],
+        "recommended_execution_modes": [
+          "human_lead_ai_assist",
+          "ai_draft_human_review",
+          "ai_execute_human_approval",
+          "human_only"
+        ],
+        "project_type_keywords": [
+          "legacy",
+          "modernization",
+          "migration"
+        ]
+      },
+      "github_visibility": "public"
+    }
+  ]
+}
