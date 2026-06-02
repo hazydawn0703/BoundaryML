@@ -44,8 +44,9 @@ npm run dev:studio
 ```
 
 - Server: `http://localhost:8787`
-- Studio: `http://localhost:5173/apps/studio/index.html`
+- Studio: `http://localhost:5173/apps/studio/index.html`（如果 5173 被占用，终端会自动打印新的端口，例如 5174）
 - `npm run dev:studio` 会从仓库根目录 serve Studio，并将 `/api/*` proxy 到 `BOUNDARYML_API_BASE_URL`（默认 `http://localhost:8787`）。
+- 若页面只有背景没有内容，请确认浏览器打开的是 `npm run dev:studio` 终端打印的 URL，并停止旧的 `py -m http.server 5173` 进程或换用自动分配的新端口。
 - Studio API Base URL: `VITE_BOUNDARYML_API_BASE_URL` → `window.BOUNDARYML_API_BASE_URL` → `/api`
 
 ## OpenAI-compatible Model 配置

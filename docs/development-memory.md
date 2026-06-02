@@ -725,3 +725,19 @@
 - test: passed
 - smoke:server: passed
 - check: passed
+
+## Open-source Studio EADDRINUSE Preview Fix
+
+### Issue
+- Windows 本地仍可能有旧的 `py -m http.server 5173` 占用端口，导致 `npm run dev:studio` 抛 `EADDRINUSE`，浏览器继续显示旧 server 的空白背景页面。
+
+### Completed
+- `scripts/dev-studio.js` 增加端口 fallback：默认从 5173 启动，若端口占用则自动尝试 5174、5175 等，并在终端打印实际可访问 URL。
+- README Quick Start 增加说明：必须打开 dev server 终端打印的 URL；如果只有背景没有内容，应停止旧 Python server 或使用自动分配的新端口。
+- Studio script-level check 增加 `EADDRINUSE` / fallback 路径检查。
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed

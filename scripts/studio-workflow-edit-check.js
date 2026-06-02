@@ -19,6 +19,7 @@ assert(styles.includes('[data-theme="open-source"]') && styles.includes('--prima
 assert(styles.includes('.node-card::before') && styles.includes('.theme-swatch'), 'theme visual components exist');
 assert(!store.includes("from '../../../packages/") && !devStudio.includes('/apps/packages/'), 'studio nested imports resolve from served repo root');
 assert(studioPackage.includes('node ../../scripts/dev-studio.js') && devStudio.includes('API proxy: /api'), 'studio dev server serves repo root and proxies api');
+assert(devStudio.includes('listenWithFallback') && devStudio.includes('EADDRINUSE') && devStudio.includes('trying'), 'studio dev server handles occupied ports');
 assert(app.includes('Workflow has been updated by another operation. Please refresh and try again.'), 'version conflict message exists');
 assert(app.includes('add-edge-from-node') && app.includes('delete-edge'), 'edge add/delete actions exist');
 assert(app.includes('start-edge-edit') && app.includes('save-edge-edit'), 'edge independent edit path exists');

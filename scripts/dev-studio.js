@@ -3,7 +3,8 @@ import { createServer, request as httpRequest } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const port = Number(process.env.BOUNDARYML_STUDIO_PORT || process.env.PORT || 5173);
+const requestedPort = Number(process.env.BOUNDARYML_STUDIO_PORT || process.env.PORT || 5173);
+const maxPortAttempts = Number(process.env.BOUNDARYML_STUDIO_PORT_ATTEMPTS || 10);
 const apiBaseUrl = process.env.BOUNDARYML_API_BASE_URL || 'http://localhost:8787';
 const rootDir = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -47,10 +48,30 @@ function proxyApi(req, res) {
   req.pipe(proxyReq);
 }
 
-createServer((req, res) => {
-  if ((req.url || '').startsWith('/api/')) return proxyApi(req, res);
-  return serveFile(res, req.url || '/');
-}).listen(port, () => {
-  console.log(`BoundaryML Studio: http://localhost:${port}/apps/studio/index.html`);
-  console.log(`API proxy: /api -> ${apiBaseUrl}/api`);
-});
+function createStudioServer() {
+  return createServer((req, res) => {
+    if ((req.url || '').startsWith('/api/')) return proxyApi(req, res);
+    return serveFile(res, req.url || '/');
+  });
+}
+
+function listenWithFallback(port, attempt = 0) {
+  const server = createStudioServer();
+  server.once('error', (error) => {
+    if (error.code === 'EADDRINUSE' && attempt < maxPortAttempts) {
+      const nextPort = port + 1;
+      console.warn(`Port ${port} is already in use; trying ${nextPort}...`);
+      listenWithFallback(nextPort, attempt + 1);
+      return;
+    }
+    console.error(error.message || error);
+    process.exitCode = 1;
+  });
+  server.listen(port, () => {
+    console.log(`BoundaryML Studio: http://localhost:${port}/apps/studio/index.html`);
+    console.log(`API proxy: /api -> ${apiBaseUrl}/api`);
+    if (port !== requestedPort) console.log(`Requested port ${requestedPort} was busy; using ${port} instead.`);
+  });
+}
+
+listenWithFallback(requestedPort);
