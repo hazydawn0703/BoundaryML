@@ -12,6 +12,11 @@ const devStudio = readFileSync(new URL('./dev-studio.js', import.meta.url), 'utf
 const exportedApiNames = [...api.matchAll(/export const (\w+Api)\s*=/g)].map((match) => match[1]);
 const duplicateApiNames = exportedApiNames.filter((name, index) => exportedApiNames.indexOf(name) !== index);
 assert(duplicateApiNames.length === 0, `api client exports must be unique: ${duplicateApiNames.join(', ')}`);
+const diffsApiExportCount = (api.match(/export const diffsApi\s*=/g) || []).length;
+const apiClientObjectMatch = api.match(/export const apiClient = \{[\s\S]*?\n\};/);
+const diffsApiClientReferenceCount = (apiClientObjectMatch?.[0].match(/\bdiffsApi\b/g) || []).length;
+assert(diffsApiExportCount === 1, `diffsApi must be declared once, found ${diffsApiExportCount}`);
+assert(diffsApiClientReferenceCount === 1, `apiClient must reference diffsApi once, found ${diffsApiClientReferenceCount}`);
 
 assert(api.includes('workflowApi') && api.includes('patch: (projectId, payload)'), 'workflow patch api exists');
 assert(api.includes('undo: (projectId)'), 'workflow undo api exists');

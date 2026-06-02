@@ -756,3 +756,18 @@
 - test: passed
 - smoke:server: passed
 - check: passed
+
+## Open-source Studio diffsApi De-duplication Guard
+
+### Issue
+- 远程 main 曾出现两个 `export const diffsApi` block，导致浏览器模块解析失败，Studio 只显示主题背景。
+
+### Completed
+- 当前 `apps/studio/src/api-client/index.js` 保持单一 `diffsApi` 声明，并在 `apiClient` 中只引用一次。
+- `scripts/studio-workflow-edit-check.js` 增加专门检查：`diffsApi` export 必须恰好一次，`apiClient` 对象内的 `diffsApi` 引用也必须恰好一次。
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed
