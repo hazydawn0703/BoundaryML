@@ -687,3 +687,24 @@
 ### Phase 10–14 Boundary
 - Ready to stop public GitHub roadmap at Phase 9.
 - Phase 10–14 are commercial closed-source/local development and should not be published in this repository.
+
+## Open-source UI Theme Polish — Theme Color System
+
+### Scope
+- 本轮不进入 Phase 10–14，不新增 Pro / Enterprise / SaaS 功能，仅为开源 Phase 0–9 Studio 上线统一主题色系统。
+- 主题目标：让 Local Demo / Local Server / Workflow Studio / Execution Assets / Export 等公开 UI 使用一致的 open-source 主题色、视觉层级和组件状态。
+
+### Completed
+- `apps/studio/styles.css` 新增 open-source theme tokens：primary / accent / violet、semantic risk colors、shadow、radius、panel/background tokens。
+- Sidebar / Topbar / Cards / Buttons / Forms / Node Cards / Phase Lanes / Tabs / Alerts / Code Preview 统一为主题色视觉。
+- Studio 根容器增加 `data-theme="open-source"`，Sidebar 增加 Open Source Theme 色条与 swatches。
+- 保持纯 CSS / 轻量 DOM 调整，不改变 server-first 数据路径、不新增商业化能力。
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed
+
+### Known Limitations
+- 本轮为主题色系统和核心组件视觉 polish，未引入复杂设计系统或独立 UI 组件库。

@@ -66,7 +66,7 @@ function renderSidebar(state) {
     ['settings', 'Settings'],
   ];
 
-  return `<aside class="sidebar"><div class="logo">Boundary<span>ML</span></div>
+  return `<aside class="sidebar"><div class="logo">Boundary<span>ML</span></div><div class="theme-strip">Open Source Theme<div class="theme-swatch-row"><span class="theme-swatch primary"></span><span class="theme-swatch accent"></span><span class="theme-swatch violet"></span></div></div>
     <nav>${pages.map(([id, label]) => `<button class="nav-item ${state.currentPage === id ? 'active' : ''}" data-action="goto" data-page="${id}">${label}</button>`).join('')}</nav>
   </aside>`;
 }
@@ -457,7 +457,7 @@ function renderPage(state) {
 
 function render() {
   const state = getState();
-  app.innerHTML = `<div class="app-shell">${renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>`;
+  app.innerHTML = `<div class="app-shell" data-theme="open-source">${renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>`;
 }
 
 function updateActiveProject(mutator, reason = 'Workflow updated', affectedNodeIds = []) {
@@ -531,6 +531,36 @@ function handleAction(event) {
     if (!project?.id || !st.serverAvailable) return;
     apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
       .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
   }
   if (action === 'toggle-history') {
     const project = getActiveProject();

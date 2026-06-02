@@ -5,11 +5,16 @@ function assert(cond, msg) { if (!cond) { console.error(`❌ ${msg}`); process.e
 const app = readFileSync(new URL('../apps/studio/src/app.js', import.meta.url), 'utf-8');
 const api = readFileSync(new URL('../apps/studio/src/api-client/index.js', import.meta.url), 'utf-8');
 const store = readFileSync(new URL('../apps/studio/src/state/store.js', import.meta.url), 'utf-8');
+const styles = readFileSync(new URL('../apps/studio/styles.css', import.meta.url), 'utf-8');
 
 assert(api.includes('workflowApi') && api.includes('patch: (projectId, payload)'), 'workflow patch api exists');
 assert(api.includes('undo: (projectId)'), 'workflow undo api exists');
 assert(api.includes('restore: (projectId, version)'), 'workflow restore api exists');
 assert(app.includes('workflow_version: project.workflow.version'), 'workflow version passed in edit requests');
+assert(app.includes('data-theme="open-source"'), 'open-source theme root exists');
+assert(app.includes('Open Source Theme'), 'theme identity strip exists');
+assert(styles.includes('[data-theme="open-source"]') && styles.includes('--primary: #4257ff') && styles.includes('--accent: #05b6d4'), 'open-source theme color tokens exist');
+assert(styles.includes('.node-card::before') && styles.includes('.theme-swatch'), 'theme visual components exist');
 assert(app.includes('Workflow has been updated by another operation. Please refresh and try again.'), 'version conflict message exists');
 assert(app.includes('add-edge-from-node') && app.includes('delete-edge'), 'edge add/delete actions exist');
 assert(app.includes('start-edge-edit') && app.includes('save-edge-edit'), 'edge independent edit path exists');
