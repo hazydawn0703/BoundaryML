@@ -741,3 +741,18 @@
 - test: passed
 - smoke:server: passed
 - check: passed
+
+## Open-source Studio Blank UI / Duplicate API Export Guard
+
+### Issue
+- 用户本地浏览器控制台显示 `Identifier 'diffsApi' has already been declared`，导致 `src/app.js` 模块启动失败，页面只显示 CSS 背景。
+- 当前仓库版本中 `apps/studio/src/api-client/index.js` 只保留一个 `export const diffsApi`，但需要新增自动检查防止合并冲突再次产生重复 API export。
+
+### Completed
+- `scripts/studio-workflow-edit-check.js` 增加 API client export 唯一性检查，会扫描所有 `export const *Api =`，若 `diffsApi` 或其他 API 重复声明则直接失败。
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed

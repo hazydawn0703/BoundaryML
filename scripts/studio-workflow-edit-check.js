@@ -9,6 +9,10 @@ const styles = readFileSync(new URL('../apps/studio/styles.css', import.meta.url
 const studioPackage = readFileSync(new URL('../apps/studio/package.json', import.meta.url), 'utf-8');
 const devStudio = readFileSync(new URL('./dev-studio.js', import.meta.url), 'utf-8');
 
+const exportedApiNames = [...api.matchAll(/export const (\w+Api)\s*=/g)].map((match) => match[1]);
+const duplicateApiNames = exportedApiNames.filter((name, index) => exportedApiNames.indexOf(name) !== index);
+assert(duplicateApiNames.length === 0, `api client exports must be unique: ${duplicateApiNames.join(', ')}`);
+
 assert(api.includes('workflowApi') && api.includes('patch: (projectId, payload)'), 'workflow patch api exists');
 assert(api.includes('undo: (projectId)'), 'workflow undo api exists');
 assert(api.includes('restore: (projectId, version)'), 'workflow restore api exists');
