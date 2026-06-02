@@ -138,10 +138,19 @@ function renderContextPage(state) {
 function filteredNodes(state, project) {
   const modeFilter = state.studioFilter?.mode || 'all';
   const riskFilter = state.studioFilter?.risk || 'all';
-  return project.workflow.nodes.map((node) => ({
+  return (project.workflow?.nodes || []).map((node) => ({
     ...node,
     muted: (modeFilter !== 'all' && node.executionMode !== modeFilter) || (riskFilter !== 'all' && node.riskLevel !== riskFilter),
   }));
+}
+
+function hasProjectRuntime(project) {
+  return Boolean(project?.workflow?.nodes && project?.workflow?.phases && project?.workflow?.edges && project?.assets);
+}
+
+function renderProjectLoading(state, title = 'Loading project') {
+  const message = state.serverError || 'Loading workflow, assets, validation, and history from BoundaryML Server.';
+  return `<section class="page"><div class="card panel"><h2>${title}</h2><p class="muted">${message}</p><div class="actions"><button data-action="goto" data-page="projects">Back to Projects</button><button data-action="refresh-server-mode" class="primary">Reconnect Server</button></div></div></section>`;
 }
 
 function renderNodeCard(node, selected) {
@@ -214,8 +223,9 @@ function renderNodeDetail(state, project, node) {
 
 function renderStudio(state) {
   const project = getActiveProject(state);
+  if (!hasProjectRuntime(project)) return renderProjectLoading(state, 'Loading Studio');
   const nodes = filteredNodes(state, project);
-  const selectedNode = project.workflow.nodes.find((node) => node.id === state.selectedNodeId) || project.workflow.nodes[0];
+  const selectedNode = (project.workflow.nodes || []).find((node) => node.id === state.selectedNodeId) || project.workflow.nodes?.[0];
   const summary = {
     errors: state.validationResults.filter((x) => x.level === 'error').length,
     warnings: state.validationResults.filter((x) => x.level === 'warning').length,
@@ -242,7 +252,7 @@ function renderStudio(state) {
       const highRiskCount = effectiveNodes.filter((n) => n.riskLevel === 'high').length;
       const issueCount = state.validationResults.filter((v) => nodeIds.includes(v.targetId)).length;
       const phaseStatus = state.validationResults.some((v) => v.level === 'error' && nodeIds.includes(v.targetId)) ? 'error' : issueCount ? 'warning' : 'ok';
-      return `<div class="lane"><h4>${phase.name}</h4><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, node.id === selectedNode.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
+      return `<div class="lane"><h4>${phase.name}</h4><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, node.id === selectedNode?.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
     }).join('')}</div>
     ${renderNodeDetail(state, project, selectedNode)}
   </div>
@@ -295,13 +305,13 @@ async function refreshProjectRuntime(projectId) {
 
 
 function getAssetCollection(project, type) {
-  if (type === 'prompt') return project.assets.prompts || [];
-  if (type === 'checklist') return project.assets.checklists || [];
-  return project.assets.artifactTemplates || project.assets.artifact_templates || [];
+  if (type === 'prompt') return project.assets?.prompts || [];
+  if (type === 'checklist') return project.assets?.checklists || [];
+  return project.assets?.artifactTemplates || project.assets?.artifact_templates || [];
 }
 
 function getAssetNode(project, asset) {
-  return project.workflow.nodes.find((node) => node.id === (asset.nodeId || asset.node_id));
+  return (project.workflow?.nodes || []).find((node) => node.id === (asset.nodeId || asset.node_id));
 }
 
 function splitLines(value) {
@@ -374,6 +384,7 @@ function renderAssetDetail(project, state) {
 
 function renderAssets(state) {
   const project = getActiveProject(state);
+  if (!hasProjectRuntime(project)) return renderProjectLoading(state, 'Loading Execution Assets');
   const currentType = state.assetsFilter?.type || 'prompt';
   const filtered = getFilteredAssets(state, project);
   const totals = {
@@ -401,6 +412,7 @@ function normalizeKitPreview(data) {
 
 function renderExport(state) {
   const project = getActiveProject(state);
+  if (!hasProjectRuntime(project)) return renderProjectLoading(state, 'Loading Export');
   const preview = project.executionKit || project.execution_kit;
   const kitType = state.exportKitType || 'draft';
   const files = preview?.files || {};
@@ -507,9 +519,12 @@ async function bootstrapRuntimeMode() {
       apiClient.modelApi.status(),
     ]);
     const projects = projectsData?.projects || projectsData || [];
-    setState((prev) => ({ ...prev, projects: projects.length ? projects : prev.projects, modelStatus, serverError: '' }));
-    setRuntimeMode('local_server', true);
-    if (projects[0]?.id) await loadProjectRuntime(projects[0].id, { navigate: false });
+    if (projects[0]?.id) {
+      await loadProjectRuntime(projects[0].id, { navigate: false });
+      setState((prev) => ({ ...prev, modelStatus, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
+    } else {
+      setState((prev) => ({ ...prev, projects: prev.projects, modelStatus, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
+    }
   } catch (error) {
     setState((prev) => ({ ...prev, serverError: error.message || 'Server disconnected' }));
     setRuntimeMode('local_demo', false);
