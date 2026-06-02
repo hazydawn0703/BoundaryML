@@ -1,4 +1,4 @@
-# BoundaryML Architecture Mapping（对应 PRD 27–41）
+﻿# BoundaryML Architecture Mapping（对应 PRD 27–41）
 
 ## 27. System Architecture & Runtime Model
 
