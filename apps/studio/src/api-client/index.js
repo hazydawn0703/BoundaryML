@@ -106,7 +106,6 @@ export const modelApi = {
   test: () => post('/model/test', {}),
   calls: () => get('/model/calls'),
 };
-// Keep a single diffsApi export; duplicate declarations break browser module parsing.
 export const diffsApi = {
   generate: (projectId, payload) => post(`/projects/${projectId}/diffs/generate`, payload),
   get: (projectId, diffId) => get(`/projects/${projectId}/diffs/${diffId}`),
