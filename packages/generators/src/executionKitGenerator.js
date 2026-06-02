@@ -2,6 +2,35 @@ function lines(items = []) {
   return items.map((item) => `- ${item}`).join('\n');
 }
 
+function yamlScalar(value) {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(String(value));
+}
+
+function toYaml(value, indent = 0) {
+  const pad = ' '.repeat(indent);
+  if (Array.isArray(value)) {
+    if (!value.length) return '[]';
+    return value.map((item) => {
+      if (item && typeof item === 'object') {
+        const nested = toYaml(item, indent + 2);
+        return `${pad}- ${nested.startsWith(' ') ? `\n${nested}` : nested}`;
+      }
+      return `${pad}- ${yamlScalar(item)}`;
+    }).join('\n');
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value).map(([key, item]) => {
+      if (Array.isArray(item) || (item && typeof item === 'object')) {
+        return `${pad}${key}:\n${toYaml(item, indent + 2)}`;
+      }
+      return `${pad}${key}: ${yamlScalar(item)}`;
+    }).join('\n');
+  }
+  return `${pad}${yamlScalar(value)}`;
+}
+
 function getArtifactTemplates(assets) {
   return assets.artifactTemplates || assets.artifact_templates || [];
 }
@@ -71,13 +100,13 @@ export function generateExecutionKit(workflow, assets, validationResults, option
     blockingErrors: summary.blocking_final,
     validation_summary: summary,
     files: {
-      '01_workflow_spec.json': workflowSpec,
-      '02_task_list.md': taskList,
-      '03_prompt_pack.md': promptPack,
-      '04_review_checklists.md': reviewChecklist,
-      '05_artifact_templates.md': artifactTemplates,
-      '06_responsibility_map.md': responsibilityMap,
-      '07_risk_report.md': riskReport,
+      'workflow_spec.yaml': toYaml(workflowSpec),
+      'task_list.md': taskList,
+      'prompt_pack.md': promptPack,
+      'review_checklists.md': reviewChecklist,
+      'artifact_templates.md': artifactTemplates,
+      'responsibility_map.md': responsibilityMap,
+      'risk_report.md': riskReport,
     },
   };
 }
