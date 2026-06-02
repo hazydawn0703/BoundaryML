@@ -1,12 +1,14 @@
 import { readFileSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createExampleProject } from '../packages/core/src/sampleProject.js';
+import { listPublicTemplates, selectTemplateForProject } from '../packages/core/src/templates.js';
 import { validateWorkflow } from '../packages/rules/src/validationEngine.js';
 import { generateExecutionKit } from '../packages/generators/src/executionKitGenerator.js';
 import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/diff.js';
-import { validateBoundaryMLProjectSpec, validateNode } from '../packages/schema/src/schema.js';
+import { validateBoundaryMLProjectSpec, validateNode, validateTemplate } from '../packages/schema/src/schema.js';
 import { FileStorage } from '../packages/storage/src/fileStorage.js';
 import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus } from '../packages/core/src/engine.js';
+import './studio-workflow-edit-check.js';
 
 function assert(condition, message) {
   if (!condition) {
@@ -50,9 +52,22 @@ async function runServerSmoke() {
 
 async function main() {
   const exampleSpec = JSON.parse(readFileSync(new URL('../examples/ai-saas-feature-mvp.json', import.meta.url), 'utf-8'));
+  const internalToolSpec = JSON.parse(readFileSync(new URL('../examples/internal-ai-tool.json', import.meta.url), 'utf-8'));
+  const legacySpec = JSON.parse(readFileSync(new URL('../examples/legacy-system-ai-modernization.json', import.meta.url), 'utf-8'));
+  const templatesSpec = JSON.parse(readFileSync(new URL('../examples/templates.json', import.meta.url), 'utf-8'));
+  const templates = listPublicTemplates();
+  assert(templates.length >= 3, 'MVP should expose at least 3 public templates');
+  assert((templatesSpec.templates || []).length >= 3, 'public template examples should be generated');
+  templates.forEach((template) => assert(validateTemplate(template).ok, `template schema should be valid: ${template.id}`));
+  assert(selectTemplateForProject({ type: 'Internal Tool' }).id === 'template-internal-ai-tool', 'Internal Tool template matching should work');
+  assert(selectTemplateForProject({ type: 'Legacy Modernization' }).id === 'template-legacy-system-ai-modernization', 'Legacy Modernization template matching should work');
 
   const validSpec = validateBoundaryMLProjectSpec(exampleSpec);
   assert(validSpec.ok, `example spec should be valid: ${validSpec.errors.join(', ')}`);
+  assert(validateBoundaryMLProjectSpec(internalToolSpec).ok, 'internal tool example spec should be valid');
+  assert(validateBoundaryMLProjectSpec(legacySpec).ok, 'legacy modernization example spec should be valid');
+  assert((internalToolSpec.workflow.nodes || []).length >= 6, 'internal tool example should include generated workflow nodes');
+  assert((legacySpec.assets.prompts || []).length >= 1, 'legacy modernization example should include generated assets');
   assert(validSpec.warnings.length >= 1, 'example spec should contain at least one warning');
   assert(validSpec.suggestions.length >= 1, 'validateBoundaryMLProjectSpec should return suggestion');
 
@@ -102,6 +117,8 @@ async function main() {
 
   const kit = generateExecutionKit(project.workflow, project.assets, validation);
   assert(Boolean(kit), 'execution kit should be generated');
+  assert(Object.keys(kit.files || {}).includes('workflow_spec.yaml'), 'execution kit should expose v1 file names');
+  assert(typeof kit.files['workflow_spec.yaml'] === 'string' && kit.files['workflow_spec.yaml'].includes('workflow_version'), 'workflow_spec.yaml should be yaml text');
 
   const fsStorage = new FileStorage('.tmp-storage-check');
   fsStorage.saveProject('check_workspace', { ...project, workspace_id: 'check_workspace' });

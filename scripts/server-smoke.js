@@ -57,6 +57,8 @@ async function main() {
   try {
     await waitForServer(baseUrl);
     const health = await apiFetch(baseUrl, '/api/health'); assert(health.status === 200, 'health should return 200');
+    const templates = await apiFetch(baseUrl, '/api/templates'); assert((templates.body.data.templates || []).length >= 3, 'templates should expose public MVP templates');
+    const template = await apiFetch(baseUrl, '/api/templates/template-ai-saas-feature-mvp'); assert(template.body.data.id === 'template-ai-saas-feature-mvp', 'template detail should be fetchable');
     const created = await apiFetch(baseUrl, '/api/projects', { method: 'POST', body: JSON.stringify({ name: 'smoke-project', goal: 'smoke goal' }) });
     const projectId = created.body.data.id; assert(projectId, 'project id should exist');
     await apiFetch(baseUrl, '/api/projects');
@@ -65,6 +67,8 @@ async function main() {
     const workflow = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`);
     assert(Array.isArray(workflow.body.data.nodes), 'workflow should include nodes array');
     await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/validate`, { method: 'POST' });
+    const preview = await apiFetch(baseUrl, `/api/projects/${projectId}/execution-kits/preview`, { method: 'POST', body: JSON.stringify({ kit_type: 'draft' }) });
+    assert(preview.body.data.preview?.files?.['workflow_spec.yaml'], 'execution kit preview should include workflow_spec.yaml');
     await apiFetch(baseUrl, `/api/projects/${projectId}/jobs`);
     server.kill('SIGTERM'); await sleep(400);
     server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
