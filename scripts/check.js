@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createExampleProject } from '../packages/core/src/sampleProject.js';
 import { listPublicTemplates, selectTemplateForProject } from '../packages/core/src/templates.js';
@@ -7,6 +7,7 @@ import { generateExecutionKit } from '../packages/generators/src/executionKitGen
 import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/diff.js';
 import { validateBoundaryMLProjectSpec, validateNode, validateTemplate } from '../packages/schema/src/schema.js';
 import { FileStorage } from '../packages/storage/src/fileStorage.js';
+import { exportExampleExecutionKit } from './export-example.js';
 import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus } from '../packages/core/src/engine.js';
 import './studio-workflow-edit-check.js';
 
@@ -51,6 +52,7 @@ async function runServerSmoke() {
 }
 
 async function main() {
+  await import('./studio-api-client-check.js');
   const exampleSpec = JSON.parse(readFileSync(new URL('../examples/ai-saas-feature-mvp.json', import.meta.url), 'utf-8'));
   const internalToolSpec = JSON.parse(readFileSync(new URL('../examples/internal-ai-tool.json', import.meta.url), 'utf-8'));
   const legacySpec = JSON.parse(readFileSync(new URL('../examples/legacy-system-ai-modernization.json', import.meta.url), 'utf-8'));
@@ -117,6 +119,30 @@ async function main() {
 
   const kit = generateExecutionKit(project.workflow, project.assets, validation);
   assert(Boolean(kit), 'execution kit should be generated');
+  const expectedKitFiles = [
+    'workflow_spec.yaml',
+    'agent_task_list.md',
+    'prompt_pack.md',
+    'review_checklists.md',
+    'artifact_templates.md',
+    'responsibility_map.md',
+    'risk_report.md',
+  ];
+  assert(JSON.stringify(Object.keys(kit.files)) === JSON.stringify(expectedKitFiles), 'execution kit should expose v1 file names');
+  for (const fileName of expectedKitFiles) {
+    assert(typeof kit.files[fileName] === 'string' && kit.files[fileName].length > 0, `${fileName} should be non-empty text`);
+  }
+  assert(kit.files['workflow_spec.yaml'].includes('kit_type: agent_ready_execution_kit'), 'workflow spec should declare agent-ready kit type');
+  assert(kit.files['agent_task_list.md'].includes('Codex / Claude Code / GitHub Copilot / Cursor'), 'task list should describe agent handoff targets');
+  assert(kit.files['prompt_pack.md'].includes('BoundaryML does not execute these prompts itself'), 'prompt pack should preserve planning vs execution boundary');
+  assert(kit.files['review_checklists.md'].includes('- [ ]'), 'review checklists should render human checklist items');
+  assert(kit.files['risk_report.md'].includes('High-Risk Nodes'), 'risk report should include high-risk section');
+
+  const exported = exportExampleExecutionKit('.tmp-export-example-check');
+  assert(JSON.stringify(exported.fileNames) === JSON.stringify(expectedKitFiles), 'export:example should write v1 files');
+  const exportedFiles = readdirSync('.tmp-export-example-check').sort();
+  assert(JSON.stringify(exportedFiles) === JSON.stringify([...expectedKitFiles].sort()), 'exported example directory should contain only v1 files');
+  assert(readFileSync('.tmp-export-example-check/agent_task_list.md', 'utf-8').includes('BoundaryML prepares this task list before agents execute'), 'exported task list should preserve agent-ready boundary');
 
   const fsStorage = new FileStorage('.tmp-storage-check');
   fsStorage.saveProject('check_workspace', { ...project, workspace_id: 'check_workspace' });
@@ -125,6 +151,7 @@ async function main() {
 
   await runServerSmoke();
   rmSync('.tmp-storage-check', { recursive: true, force: true });
+  rmSync('.tmp-export-example-check', { recursive: true, force: true });
   rmSync('.tmp-server-storage', { recursive: true, force: true });
 
   console.log('✅ checks passed');
