@@ -550,7 +550,413 @@ function handleAction(event) {
     if (!project?.id) return;
     apiClient.workflowApi.validate(project.id)
       .then(({ data }) => setState((prev) => ({ ...prev, validationResults: data.validation || data.results || [] })))
-      .catch(() => setState((prev) => ({ ...prev, validationResults: recomputeValidation(project) })));
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'VALIDATION_ERROR'} (${error.requestId || 'n/a'}): ${error.message || 'Validation failed'}` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
   }
   if (action === 'toggle-history') {
     const project = getActiveProject();
@@ -587,6 +993,10 @@ function handleAction(event) {
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.dataset.suggestion } }));
 
   if (action === 'generate-diff') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'AI Assisted Edit is disabled in Phase 3 server mode.' }));
+      return;
+    }
     const st = getState();
     const project = getActiveProject(st);
     if (st.serverAvailable && project?.id) {
@@ -604,6 +1014,10 @@ function handleAction(event) {
   }
 
   if (action === 'apply-diff-all' || action === 'apply-diff-selected') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'Diff apply from local mock is disabled in server mode.' }));
+      return;
+    }
     const st = getState();
     const project = getActiveProject(st);
     if (st.serverAvailable && project?.id && st.aiEdit.diff?.id) {
@@ -701,6 +1115,10 @@ function handleAction(event) {
   }
 
   if (action === 'recommend-mode') {
+    if (getState().serverAvailable) {
+      setState((prev) => ({ ...prev, serverError: 'Mock mode recommendation is disabled in server mode.' }));
+      return;
+    }
     const nodeId = target.dataset.nodeId;
     updateActiveProject((draft) => {
       const node = draft.workflow.nodes.find((n) => n.id === nodeId);
