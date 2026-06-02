@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { createExampleProject } from '../../../packages/core/src/sampleProject.js';
 import { createWorkflowFromTemplate, applyWorkflowPatch, applyDiff, createWorkflowSnapshot, markAffectedAssetsOutdated, normalizeWorkflowSpec } from '../../../packages/core/src/engine.js';
+import { getTemplateById, listPublicTemplates, selectTemplateForProject } from '../../../packages/core/src/templates.js';
 import { generateWorkflowDraft } from '../../../packages/generators/src/workflowGenerator.js';
 import { generatePrompt } from '../../../packages/generators/src/promptGenerator.js';
 import { generateChecklist } from '../../../packages/generators/src/checklistGenerator.js';
@@ -218,11 +219,19 @@ const server = createServer(async (req, res) => {
 
   if (method === 'GET' && path === '/api/health') return ok(res, ctx, { status: 'ok', mode: runtimeMode, version: '0.1.0', storage: storageAdapter });
 
+  if (method === 'GET' && path === '/api/templates') return ok(res, ctx, { templates: listPublicTemplates() });
+  if (method === 'GET' && path.startsWith('/api/templates/')) {
+    const template = getTemplateById(decodeURIComponent(path.split('/').pop()));
+    if (!template) return fail(res, ctx, 404, 'TEMPLATE_NOT_FOUND', 'Template not found');
+    return ok(res, ctx, template);
+  }
+
   if (method === 'GET' && path === '/api/projects') return ok(res, ctx, listScopedProjects(ctx).map((p) => ({ id: p.id, name: p.name, workspace_id: p.workspace_id, updated_at: p.updated_at })));
   if (method === 'POST' && path === '/api/projects') {
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
     const base = createExampleProject();
-    const project = writeOwnership(ctx, { ...base, id: body.id || `project_${Date.now()}`, name: body.name || base.name, goal: body.goal || base.goal, context_pack: base.contextPack, deleted_at: null }, true);
+    const selectedTemplate = selectTemplateForProject(body);
+    const project = writeOwnership(ctx, { ...base, id: body.id || `project_${Date.now()}`, name: body.name || base.name, goal: body.goal || base.goal, type: body.project_type || body.type || base.type, project_type: body.project_type || body.type || base.type, created_from_template: selectedTemplate.id, template_version: selectedTemplate.version, context_pack: base.contextPack, deleted_at: null }, true);
     const v = validateProject(project); if (!v.ok) return fail(res, ctx, 400, 'SCHEMA_INVALID', 'Project invalid', v.errors);
     project.workflow = normalizeWorkflowSpec({ workflow: project.workflow }).workflow;
     project.workflow.version = 0;
@@ -418,6 +427,7 @@ const server = createServer(async (req, res) => {
       progress('calling_model', 'Generating checklist');
       const checklist = generateChecklist(node.reviewGate, node);
       project.assets.checklists = project.assets.checklists.filter((c) => c.nodeId !== node.id).concat(checklist);
+      project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
       storage.saveProject(ctx.workspace_id, project);
       return { type: 'checklist_asset', asset_id: checklist.id };
     });
@@ -428,9 +438,24 @@ const server = createServer(async (req, res) => {
   if (method === 'POST' && diffGenerate) {
     const project = getProject(ctx, diffGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
-    const job = createJob(ctx, project, 'generate_workflow_diff', { request: body.request || 'default', workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
-    runJob(ctx, project, job, (progress) => { progress('calling_model', 'Generating workflow diff'); project.last_diff = generateWorkflowDiff(body.request || 'default', project.workflow, project.assets); return { type: 'workflow_diff', diff_id: project.last_diff.id }; });
-    return ok(res, ctx, { job_id: job.id, diff: project.last_diff });
+    const requestText = body.request || 'default';
+    const job = createJob(ctx, project, 'generate_workflow_diff', { request: requestText, workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
+    let modelResult = null;
+    try {
+      modelResult = await runModel('workflow_diff', { request: requestText, workflow: project.workflow, assets: project.assets });
+      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_diff', status: modelResult.status, summary: modelResult.output?.summary || `diff request: ${requestText}` });
+    } catch (error) {
+      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().diff_model, purpose: 'workflow_diff', status: 'failed', summary: error.message });
+    }
+    runJob(ctx, project, job, (progress) => {
+      progress('calling_model', 'Generating workflow diff');
+      const candidate = modelResult?.output?.diff || modelResult?.output;
+      project.last_diff = candidate?.changes ? { ...candidate, id: candidate.id || `diff-${Date.now()}`, request: requestText, warnings: candidate.warnings || [], createdAt: candidate.createdAt || new Date().toISOString() } : generateWorkflowDiff(requestText, project.workflow, project.assets);
+      project.last_diff.status = 'draft';
+      return { type: 'workflow_diff', diff_id: project.last_diff.id };
+    });
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { job_id: job.id, diff: project.last_diff, model_status: getModelStatus() });
   }
 
   const diffGet = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)$/);
@@ -447,7 +472,7 @@ const server = createServer(async (req, res) => {
     if (body.workflow_version && Number(body.workflow_version) !== Number(project.workflow.version)) return fail(res, ctx, 409, 'VERSION_CONFLICT', 'Workflow has been updated by another operation. Please refresh and try again.');
     const diff = project.last_diff; if (!diff || diff.id !== diffApply[2]) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
     const previousVersion = project.workflow.version;
-    project.workflow = applyDiff(project.workflow, diff, diff.changes.filter((c) => c.selected).map((c) => c.id));
+    project.workflow = applyDiff(project.workflow, diff, body.selected_change_ids || diff.changes.filter((c) => c.selected).map((c) => c.id));
     project.assets = markAffectedAssetsOutdated(diff.changes, project.assets);
     project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
     recordWorkflowHistory(ctx, project, 'ai_diff_apply', 'Applied workflow diff.', diff.id);
@@ -496,12 +521,13 @@ const server = createServer(async (req, res) => {
     if (method === 'GET') return ok(res, ctx, asset);
     if (method === 'PATCH') {
       const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
-      for (const key of ['prompts', 'checklists', 'artifactTemplates']) {
+      for (const key of ['prompts', 'checklists', 'artifactTemplates', 'artifact_templates']) {
         const arr = project.assets[key] || [];
         const idx = arr.findIndex((a) => a.id === asset.id);
         if (idx >= 0) { arr[idx] = { ...arr[idx], ...body, manually_edited: true, updated_at: new Date().toISOString() }; project.assets[key] = arr; break; }
       }
-      storage.saveProject(ctx.workspace_id, project); return ok(res, ctx, { updated: true });
+      project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+      storage.saveProject(ctx.workspace_id, project); return ok(res, ctx, { updated: true, assets: project.assets, validation_results: project.validation });
     }
   }
 
@@ -516,25 +542,34 @@ const server = createServer(async (req, res) => {
   const kitPreview = path.match(/^\/api\/projects\/([^/]+)\/execution-kits\/preview$/);
   if (method === 'POST' && kitPreview) {
     const project = getProject(ctx, kitPreview[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const job = createJob(ctx, project, 'generate_execution_kit_preview', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets) }, readIdempotencyKey(req));
+    const body = await readJsonBody(req) || {};
+    const validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    project.validation = validation;
+    const job = createJob(ctx, project, 'generate_execution_kit_preview', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets), kit_type: body.kit_type || 'draft' }, readIdempotencyKey(req));
     runJob(ctx, project, job, (progress) => { progress('generating_files', 'Generating preview files'); return { type: 'execution_kit_preview', project_id: project.id }; });
-    const preview = exportExecutionKit(generateExecutionKit(project.workflow, project.assets, project.validation || []));
-    return ok(res, ctx, { job_id: job.id, preview });
+    const preview = exportExecutionKit(generateExecutionKit(project.workflow, project.assets, validation, { kit_type: body.kit_type || 'draft' }));
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { job_id: job.id, preview, execution_kit: preview, validation_results: validation });
   }
 
   const kitGenerate = path.match(/^\/api\/projects\/([^/]+)\/execution-kits\/generate$/);
   if (method === 'POST' && kitGenerate) {
     const project = getProject(ctx, kitGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const job = createJob(ctx, project, 'generate_execution_kit', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets) }, readIdempotencyKey(req));
+    const body = await readJsonBody(req) || {};
+    const validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    project.validation = validation;
+    const kit = generateExecutionKit(project.workflow, project.assets, validation, { kit_type: body.kit_type || 'draft' });
+    if ((body.kit_type || 'draft') === 'final' && !kit.canExportFinal) return fail(res, ctx, 400, 'FINAL_KIT_BLOCKED', 'Final Kit cannot be generated while blocking validation errors exist', kit.validation_summary);
+    const job = createJob(ctx, project, 'generate_execution_kit', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets), kit_type: kit.kit_type }, readIdempotencyKey(req));
     runJob(ctx, project, job, (progress) => {
       progress('generating_files', 'Generating execution kit');
-      const kit = generateExecutionKit(project.workflow, project.assets, project.validation || []);
-      if (!kit?.files?.length) throw new Error('EXECUTION_KIT_GENERATION_FAILED');
-      const rec = { id: `kit_${Date.now()}`, project_id: project.id, workspace_id: project.workspace_id, created_by: ctx.user_id, updated_by: ctx.user_id, workflow_snapshot_version: project.workflow.version, status: 'generated', files: kit.files, generated_at: new Date().toISOString(), input_snapshot: { workflow_version: project.workflow.version } };
+      if (!kit?.files || Object.keys(kit.files).length === 0) throw new Error('EXECUTION_KIT_GENERATION_FAILED');
+      const rec = { id: `kit_${Date.now()}`, project_id: project.id, workspace_id: project.workspace_id, created_by: ctx.user_id, updated_by: ctx.user_id, workflow_snapshot_version: project.workflow.version, status: kit.kit_type === 'final' ? 'generated_final' : 'generated', kit_type: kit.kit_type, files: kit.files, validation_summary: kit.validation_summary, generated_at: new Date().toISOString(), input_snapshot: { workflow_version: project.workflow.version } };
       project.execution_kits = (project.execution_kits || []).concat(rec);
       return { type: 'execution_kit', kit_id: rec.id };
     });
-    return ok(res, ctx, { job_id: job.id, status: job.status, output_ref: job.output_ref });
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { job_id: job.id, status: job.status, output_ref: job.output_ref, kit: (project.execution_kits || []).at(-1), validation_results: validation });
   }
 
   const kitGet = path.match(/^\/api\/projects\/([^/]+)\/execution-kits\/([^/]+)$/);
@@ -555,7 +590,7 @@ const server = createServer(async (req, res) => {
   if (method === 'GET' && path === '/api/model/status') return ok(res, ctx, getModelStatus());
   if (method === 'POST' && path === '/api/model/test') {
     const result = await runModel('test', { ping: true });
-    modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), summary: result.output.summary });
+    modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: result.model, purpose: 'test', status: result.status || 'succeeded', summary: result.output.summary });
     return ok(res, ctx, { mode: getModelStatus().using_mock ? 'mock' : 'real', result: result.output });
   }
   if (method === 'GET' && path === '/api/model/calls') return ok(res, ctx, modelCalls.slice(0, 50));
