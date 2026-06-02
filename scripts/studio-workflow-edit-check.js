@@ -13,7 +13,7 @@ const exportedApiNames = [...api.matchAll(/export const (\w+Api)\s*=/g)].map((ma
 const duplicateApiNames = exportedApiNames.filter((name, index) => exportedApiNames.indexOf(name) !== index);
 assert(duplicateApiNames.length === 0, `api client exports must be unique: ${duplicateApiNames.join(', ')}`);
 const diffsApiExportCount = (api.match(/export const diffsApi\s*=/g) || []).length;
-const apiClientObjectMatch = api.match(/export const apiClient = \{[\s\S]*?\n\};/);
+const apiClientObjectMatch = api.match(/export const apiClient = \{[\s\S]*?\};/);
 const diffsApiClientReferenceCount = (apiClientObjectMatch?.[0].match(/\bdiffsApi\b/g) || []).length;
 assert(diffsApiExportCount === 1, `diffsApi must be declared once, found ${diffsApiExportCount}`);
 assert(diffsApiClientReferenceCount === 1, `apiClient must reference diffsApi once, found ${diffsApiClientReferenceCount}`);
