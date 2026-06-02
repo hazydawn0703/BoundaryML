@@ -15,7 +15,7 @@ function initialState() {
     validationResults: validateWorkflow(exampleProject.workflow, exampleProject.assets),
     activeNodeDetailTab: 'overview',
     aiEdit: { open: false, request: '', diff: null },
-    exportPreviewType: 'workflowSpec',
+    exportPreviewType: 'workflow_spec.yaml',
     studioFilter: { mode: 'all', risk: 'all' },
     assetsFilter: { type: 'prompt', phase: 'all', status: 'all' },
     selectedAsset: null,
