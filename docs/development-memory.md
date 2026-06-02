@@ -708,3 +708,20 @@
 
 ### Known Limitations
 - 本轮为主题色系统和核心组件视觉 polish，未引入复杂设计系统或独立 UI 组件库。
+
+## Open-source Studio Local Preview Fix
+
+### Issue
+- 用户在 Windows 下从仓库根目录运行 `py -m http.server 5173` 后，`apps/studio/src/state/store.js` 与 `mockModelService.js` 的嵌套相对 import 会解析成 `/apps/packages/...`，导致浏览器 404，无法直接查看开源 UI 效果。
+
+### Completed
+- 修正 `apps/studio/src/state/store.js` 与 `apps/studio/src/services/mockModelService.js` 的 package import 深度，使其在 repo-root static server 下解析到 `/packages/...`。
+- 新增 `scripts/dev-studio.js`：从仓库根目录 serve Studio，并将 `/api/*` proxy 到 `BOUNDARYML_API_BASE_URL`（默认 `http://localhost:8787`）。
+- `apps/studio/package.json` 的 `dev` 改为调用上述 dev server，后续可直接使用 `npm run dev:studio` 查看 UI。
+- `scripts/studio-workflow-edit-check.js` 增加 dev server 与 nested import 检查，避免 `/apps/packages/...` 回归。
+
+### Validation
+- typecheck: passed
+- test: passed
+- smoke:server: passed
+- check: passed
