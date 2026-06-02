@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createExampleProject } from '../packages/core/src/sampleProject.js';
 import { listPublicTemplates, selectTemplateForProject } from '../packages/core/src/templates.js';
@@ -7,6 +7,7 @@ import { generateExecutionKit } from '../packages/generators/src/executionKitGen
 import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/diff.js';
 import { validateBoundaryMLProjectSpec, validateNode, validateTemplate } from '../packages/schema/src/schema.js';
 import { FileStorage } from '../packages/storage/src/fileStorage.js';
+import { exportExampleExecutionKit } from './export-example.js';
 import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus } from '../packages/core/src/engine.js';
 import './studio-workflow-edit-check.js';
 
@@ -51,6 +52,7 @@ async function runServerSmoke() {
 }
 
 async function main() {
+  await import('./studio-api-client-check.js');
   const exampleSpec = JSON.parse(readFileSync(new URL('../examples/ai-saas-feature-mvp.json', import.meta.url), 'utf-8'));
   const internalToolSpec = JSON.parse(readFileSync(new URL('../examples/internal-ai-tool.json', import.meta.url), 'utf-8'));
   const legacySpec = JSON.parse(readFileSync(new URL('../examples/legacy-system-ai-modernization.json', import.meta.url), 'utf-8'));
@@ -127,6 +129,7 @@ async function main() {
 
   await runServerSmoke();
   rmSync('.tmp-storage-check', { recursive: true, force: true });
+  rmSync('.tmp-export-example-check', { recursive: true, force: true });
   rmSync('.tmp-server-storage', { recursive: true, force: true });
 
   console.log('✅ checks passed');
