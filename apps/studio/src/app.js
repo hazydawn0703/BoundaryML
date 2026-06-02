@@ -15,7 +15,7 @@ import { applyWorkflowDiff } from '../../../packages/core/src/diff.js';
 const app = document.getElementById('app');
 
 function countProjectStats(project) {
-  const nodes = project.workflow.nodes;
+  const nodes = project.workflow?.nodes || [];
   return {
     nodes: nodes.length,
     aiNodes: nodes.filter((node) => EXECUTION_MODES[node.executionMode]?.ai).length,
@@ -76,7 +76,7 @@ function renderTopbar(state) {
   const stats = project ? countProjectStats(project) : { nodes: 0, aiNodes: 0, gates: 0 };
   const runtimeBadge = state.serverAvailable
     ? `<span class="badge">Mode: Local Server</span>`
-    : `<span class="badge risk-high">Mode: Local Demo / Mock Model</span>`;
+    : `<span class="badge risk-high">Mode: Local Demo / Mock Model</span><button data-action="refresh-server-mode">Reconnect Server</button>`;
   return `<header class="topbar"><div><h1>${project?.name || 'BoundaryML'}</h1><p>Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates</p></div>
   <div class="row">${runtimeBadge}<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></header>`;
 }
@@ -470,39 +470,75 @@ function updateActiveProject(mutator, reason = 'Workflow updated', affectedNodeI
   replaceActiveProject(updated);
 }
 
+async function loadProjectRuntime(projectId, { navigate = true } = {}) {
+  const [projectResult, workflowResult, jobsResult, assetsResult, historyResult] = await Promise.all([
+    apiClient.projectsApi.getById(projectId),
+    apiClient.workflowApi.get(projectId),
+    apiClient.jobsApi.list(projectId),
+    apiClient.assetsApi.list(projectId),
+    apiClient.workflowApi.history(projectId).catch(() => ({ data: [] })),
+  ]);
+  const rawProject = projectResult.data?.project || projectResult.data;
+  const workflowPayload = workflowResult.data || {};
+  const workflow = workflowPayload.workflow || rawProject.workflow || workflowPayload;
+  const assets = workflowPayload.assets || assetsResult.data?.assets || assetsResult.data || rawProject.assets || { prompts: [], checklists: [], artifactTemplates: [] };
+  const merged = { ...rawProject, workflow, assets };
+  setState((prev) => ({
+    ...prev,
+    projects: prev.projects.some((p) => p.id === projectId)
+      ? prev.projects.map((p) => (p.id === projectId ? { ...p, ...merged } : p))
+      : [merged, ...prev.projects],
+    activeProjectId: projectId,
+    currentPage: navigate ? 'studio' : prev.currentPage,
+    jobs: jobsResult.data?.jobs || jobsResult.data || [],
+    workflowHistory: historyResult.data || [],
+    validationResults: workflowPayload.validation || workflowPayload.validation_results || prev.validationResults,
+    selectedNodeId: merged.workflow?.nodes?.[0]?.id || prev.selectedNodeId,
+    serverError: '',
+  }));
+  return merged;
+}
+
+async function bootstrapRuntimeMode() {
+  try {
+    await apiClient.healthApi.check();
+    const [{ data: projectsData }, { data: modelStatus }] = await Promise.all([
+      apiClient.projectsApi.list(),
+      apiClient.modelApi.status(),
+    ]);
+    const projects = projectsData?.projects || projectsData || [];
+    setState((prev) => ({ ...prev, projects: projects.length ? projects : prev.projects, modelStatus, serverError: '' }));
+    setRuntimeMode('local_server', true);
+    if (projects[0]?.id) await loadProjectRuntime(projects[0].id, { navigate: false });
+  } catch (error) {
+    setState((prev) => ({ ...prev, serverError: error.message || 'Server disconnected' }));
+    setRuntimeMode('local_demo', false);
+  }
+}
+
 function handleAction(event) {
   const target = event.target.closest('[data-action]');
   if (!target) return;
+  if (target.tagName === 'BUTTON') event.preventDefault();
   const action = target.dataset.action;
 
   if (action === 'goto') setState((prev) => ({ ...prev, currentPage: target.dataset.page }));
+  if (action === 'refresh-server-mode') bootstrapRuntimeMode();
   if (action === 'open-project') {
     const projectId = target.dataset.projectId;
-    Promise.all([
-      apiClient.projectsApi.getById(projectId),
-      apiClient.workflowApi.get(projectId),
-      apiClient.jobsApi.list(projectId),
-      apiClient.assetsApi.list(projectId),
-    ]).then(([projectResult, workflowResult, jobsResult, assetsResult]) => {
-      const rawProject = projectResult.data?.project || projectResult.data;
-      const workflow = workflowResult.data?.workflow || workflowResult.data || {};
-      const jobs = jobsResult.data?.jobs || jobsResult.data || [];
-      const assets = assetsResult.data?.assets || assetsResult.data || {};
-      const merged = {
-        ...rawProject,
-        workflow: workflow.workflow || rawProject.workflow || workflow,
-        assets: workflow.assets || assets || rawProject.assets || { prompts: [], checklists: [], artifactTemplates: [] },
-      };
+    const st = getState();
+    const localProject = st.projects.find((p) => p.id === projectId);
+    if (!st.serverAvailable && localProject?.workflow) {
       setState((prev) => ({
         ...prev,
-        projects: prev.projects.map((p) => (p.id === projectId ? merged : p)),
         activeProjectId: projectId,
         currentPage: 'studio',
-        jobs,
-        validationResults: workflow.validation || prev.validationResults,
-        selectedNodeId: merged.workflow?.nodes?.[0]?.id || prev.selectedNodeId,
+        selectedNodeId: localProject.workflow?.nodes?.[0]?.id || prev.selectedNodeId,
+        serverError: 'Mode: Local Demo / Mock Model. Start the local server and click Reconnect Server for persisted editing.',
       }));
-    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load project workflow' })));
+      return;
+    }
+    loadProjectRuntime(projectId).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load project workflow' })));
   }
   if (action === 'select-node') setState((prev) => ({ ...prev, selectedNodeId: target.dataset.nodeId }));
   if (action === 'node-tab') setState((prev) => ({ ...prev, activeNodeDetailTab: target.dataset.tab }));
@@ -531,6 +567,36 @@ function handleAction(event) {
     if (!project?.id || !st.serverAvailable) return;
     apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
       .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'toggle-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.history(project.id).then(({ data }) => {
+      const latest = (data || []).slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+  }
+  if (action === 'undo-workflow') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+  }
+  if (action === 'restore-version') {
+    const st = getState(); const project = getActiveProject(st);
+    if (!project?.id || !st.serverAvailable) return;
+    apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+  }
+  if (action === 'view-version') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.version(project.id, Number(target.dataset.version)).then(({ data }) => {
+      const snap = data.snapshot || data;
+      setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
   }
   if (action === 'toggle-history') {
     const project = getActiveProject();
@@ -1478,22 +1544,6 @@ function handleSubmit(event) {
 
 subscribe(render);
 render();
-
-async function bootstrapRuntimeMode() {
-  try {
-    await apiClient.healthApi.check();
-    const [{ data: projectsData }, { data: modelStatus }] = await Promise.all([
-      apiClient.projectsApi.list(),
-      apiClient.modelApi.status(),
-    ]);
-    const projects = projectsData?.projects || projectsData || [];
-    setState((prev) => ({ ...prev, projects, activeProjectId: projects[0]?.id || null, modelStatus }));
-    setRuntimeMode('local_server', true);
-  } catch (error) {
-    setState((prev) => ({ ...prev, serverError: error.message || 'Server disconnected' }));
-    setRuntimeMode('local_demo', false);
-  }
-}
 
 bootstrapRuntimeMode();
 
