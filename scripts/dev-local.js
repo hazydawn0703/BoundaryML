@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const isWindows = process.platform === 'win32';
+const npmCommand = isWindows ? 'npm' : 'npm';
+const rootDir = fileURLToPath(new URL('..', import.meta.url));
 
 const processes = [
   { name: 'server', color: '\x1b[36m', args: ['run', 'dev:server'] },
@@ -22,15 +25,22 @@ function stopAll(signal = 'SIGTERM') {
   if (shuttingDown) return;
   shuttingDown = true;
   children.forEach((child) => {
-    if (!child.killed) child.kill(signal);
+    if (child.killed) return;
+    if (isWindows) {
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+      return;
+    }
+    child.kill(signal);
   });
 }
 
 for (const proc of processes) {
   const child = spawn(npmCommand, proc.args, {
-    cwd: new URL('..', import.meta.url),
+    cwd: rootDir,
     env: process.env,
+    shell: isWindows,
     stdio: ['inherit', 'pipe', 'pipe'],
+    windowsHide: true,
   });
 
   children.push(child);
