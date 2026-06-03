@@ -25,6 +25,10 @@ assert(api.includes('restore: (projectId, version)'), 'workflow restore api exis
 assert(!app.includes("['create', 'Create Project']"), 'sidebar should not duplicate Create Project navigation');
 assert(!app.includes('<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>'), 'studio toolbar should not duplicate topbar execution kit action');
 assert(app.includes('workflow-board') && app.includes('workflow-filters') && app.includes('workflow-detail'), 'workflow page integrates filters and node detail inside the workflow board');
+assert(app.includes("['Studio', '工作台']") && app.includes("['Overview', '概览']") && app.includes("['IO', '输入/输出']"), 'Simplified Chinese covers Studio and node detail tabs');
+assert(!app.includes('<button data-action="add-node">Add Node</button><button data-action="undo-workflow">'), 'studio toolbar does not duplicate phase-level add node');
+assert(app.includes('data-action="add-phase"') && app.includes("if (action === 'add-phase')"), 'workflow board supports adding phases');
+assert(app.includes("projects: ['Projects', 'Manage BoundaryML projects']"), 'projects page topbar uses page title instead of active project name');
 assert(app.includes('workflow_version: project.workflow.version'), 'workflow version passed in edit requests');
 assert(app.includes('data-theme="open-source"'), 'open-source theme root exists');
 assert(app.includes('Open Source Theme'), 'theme identity strip exists');
