@@ -75,6 +75,12 @@ const ZH_HANS_REPLACEMENTS = [
   ['Project Manager', '项目经理'],
   ['Assistant', '助手'],
   ['Recommend Execution Mode', '推荐执行模式'],
+  ['Delete Node', '删除节点'],
+  ['Add Edge', '添加连线'],
+  ['Edit Edge', '编辑连线'],
+  ['Save Edge', '保存连线'],
+  ['Dependency', '依赖关系'],
+  ['Required outputs', '必需输出'],
   ['Human-only node: no AI prompt.', '纯人工节点：无 AI 提示词。'],
   ['Regenerate Checklist', '重新生成检查清单'],
   ['Generate Checklist', '生成检查清单'],
@@ -100,7 +106,11 @@ const ZH_HANS_REPLACEMENTS = [
   ['Select a node', '选择一个节点'],
   ['Workflow', '工作流'],
   ['Validation', '校验'],
+  ['Manage BoundaryML projects', '管理 BoundaryML 项目'],
+  ['Create a new BoundaryML project', '创建新的 BoundaryML 项目'],
+  ['Manage model and runtime settings', '管理模型和运行时设置'],
   ['Add Node to this phase', '向此阶段添加节点'],
+  ['Add Phase', '添加阶段'],
   ['Add Node', '添加节点'],
   ['Undo', '撤销'],
   ['History', '历史'],
@@ -166,12 +176,18 @@ const ZH_HANS_REPLACEMENTS = [
   ['AI Execute + Human Approval', 'AI 执行 + 人工批准'],
   ['AI Autonomous', 'AI 自主执行'],
   ['Outdated prompt', '提示词已过期'],
+  ['Discovery', '探索'],
+  ['Product Design', '产品设计'],
+  ['Technical Design', '技术设计'],
+  ['Development', '开发'],
+  ['Testing', '测试'],
+  ['Launch', '发布'],
   ['Projects', '项目'],
   ['Create Project', '创建项目'],
-  ['Studio', 'Studio'],
+  ['Open Studio', '打开工作台'],
+  ['Studio', '工作台'],
   ['Export', '导出'],
   ['Settings', '设置'],
-  ['Open Studio', '打开 Studio'],
   ['New Project', '新建项目'],
   ['Language', '语言'],
   ['Project', '项目'],
@@ -198,11 +214,19 @@ const ZH_HANS_REPLACEMENTS = [
   ['Format', '格式'],
   ['Role', '角色'],
   ['Objective', '目标'],
+  ['Prompt', '提示词'],
+  ['Checklist', '检查清单'],
+  ['Overview', '概览'],
+  ['Boundary', '边界'],
+  ['IO', '输入/输出'],
+  ['Assets', '资产'],
   ['All', '全部'],
   ['Unassigned', '未分配'],
   ['errors', '错误'],
   ['warnings', '警告'],
   ['high-risk', '高风险'],
+  ['validation', '校验'],
+  ['status', '状态'],
   ['high', '高'],
   ['medium', '中'],
   ['low', '低'],
@@ -303,12 +327,21 @@ function renderSidebar(state) {
 function renderTopbar(state) {
   const project = getActiveProject(state);
   const stats = project ? countProjectStats(project) : { nodes: 0, aiNodes: 0, gates: 0 };
+  const pageCopy = {
+    projects: ['Projects', 'Manage BoundaryML projects'],
+    create: ['Create Project', 'Create a new BoundaryML project'],
+    settings: ['Settings', 'Manage model and runtime settings'],
+  };
+  const [title, subtitle] = pageCopy[state.currentPage] || [
+    project?.name || 'BoundaryML',
+    `Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates`,
+  ];
   const runtimeBadge = state.serverAvailable
     ? `<span class="badge">Mode: Local Server</span>`
     : `<span class="badge risk-high">Mode: Local Demo / Mock Model</span><button data-action="refresh-server-mode">Reconnect Server</button>`;
   const language = state.language || 'en';
   const languageSwitcher = `<label class="language-switcher"><span>Language</span><select data-action="set-language" aria-label="Language">${Object.entries(UI_LANGUAGES).map(([id, label]) => `<option value="${id}" ${language === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
-  return `<header class="topbar"><div><h1>${project?.name || 'BoundaryML'}</h1><p>Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates</p></div>
+  return `<header class="topbar"><div><h1>${title}</h1><p>${subtitle}</p></div>
   <div class="row">${runtimeBadge}${languageSwitcher}<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></header>`;
 }
 
@@ -426,7 +459,8 @@ function renderNodeDetail(state, project, node) {
   const downstream = project.workflow.edges.filter((edge) => edge.from === node.id).map((edge) => project.workflow.nodes.find((n) => n.id === edge.to)?.name).filter(Boolean);
   const rules = state.validationResults.filter((item) => item.targetId === node.id || item.targetId === `prompt-${node.id}`);
 
-  const tabNav = ['overview', 'boundary', 'io', 'gate', 'assets', 'history'].map((t) => `<button class="tab ${tab === t ? 'active' : ''}" data-action="node-tab" data-tab="${t}">${t}</button>`).join('');
+  const tabLabels = { overview: 'Overview', boundary: 'Boundary', io: 'IO', gate: 'Gate', assets: 'Assets', history: 'History' };
+  const tabNav = Object.entries(tabLabels).map(([key, label]) => `<button class="tab ${tab === key ? 'active' : ''}" data-action="node-tab" data-tab="${key}">${label}</button>`).join('');
   const prompt = project.assets.prompts.find((item) => item.nodeId === node.id);
   const checklist = project.assets.checklists.find((item) => item.nodeId === node.id);
 
@@ -480,12 +514,13 @@ function renderStudio(state) {
 
   const recentJobs = (state.jobs || []).slice(0, 3);
   return `<section class="page"><div class="toolbar card"><div><strong>${project.name}</strong><p class="muted">v${project.workflow.version} · ${project.workflow.status}</p></div>
-    <div class="row"><button data-action="add-node">Add Node</button><button data-action="undo-workflow">Undo</button><button data-action="toggle-history">History</button><button data-action="validate">Validate</button></div></div>
+    <div class="row"><button data-action="undo-workflow">Undo</button><button data-action="toggle-history">History</button><button data-action="validate">Validate</button></div></div>
   ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model</div>'}
   ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
   ${(state.workflowHistory || []).length ? `<article class="card panel"><h3>History</h3><ul>${state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('')}</ul></article>` : ''}
   <section class="workflow-board card">
     <div class="workflow-board-head"><div><h3>Workflow</h3><p class="muted">Validation: ${summary.errors} errors, ${summary.warnings} warnings</p></div>
+      <button data-action="add-phase">Add Phase</button>
       <div class="workflow-filters">
         <label>Execution Mode<select data-action="set-filter-mode"><option value="all">All</option>${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${(state.studioFilter?.mode || 'all') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
         <label>Risk<select data-action="set-filter-risk"><option value="all">All</option>${['low', 'medium', 'high'].map((x) => `<option value="${x}" ${(state.studioFilter?.risk || 'all') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
@@ -1471,12 +1506,31 @@ function handleAction(event) {
     }
   }
 
+  if (action === 'add-phase') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!project?.workflow?.phases) return;
+    const nextOrder = Math.max(0, ...project.workflow.phases.map((phase) => Number(phase.order || 0))) + 1;
+    const phase = { id: `phase-${Date.now()}`, name: `New Phase ${nextOrder}`, order: nextOrder };
+    const nextPhases = [...project.workflow.phases, phase];
+    if (st.serverAvailable && project?.id) {
+      apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, phases: nextPhases })
+        .then(() => refreshProjectRuntime(project.id))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : (error.message || 'Failed to add phase') })));
+      return;
+    }
+    updateActiveProject((draft) => {
+      draft.workflow.phases.push(phase);
+      draft.workflow.version += 1;
+    }, 'Phase added');
+  }
+
   if (action === 'add-node' || action === 'add-node-phase') {
     const phaseId = target.dataset.phaseId;
     const st = getState();
     const project = getActiveProject(st);
     if (st.serverAvailable && project?.id) {
-      const selectedPhase = phaseId || project.workflow.phases.at(-1)?.id;
+      const selectedPhase = project.workflow.phases.some((phase) => phase.id === phaseId) ? phaseId : project.workflow.phases.at(-1)?.id;
       const id = `node-${Date.now()}`;
       const nextNodes = [...project.workflow.nodes, {
         id, phaseId: selectedPhase, name: 'New Node', goal: 'Describe node goal', executionMode: 'human_lead_ai_assist', riskLevel: 'medium', status: 'draft', humanOwnerRole: 'Project Manager', aiRole: 'Assistant', inputs: ['input'], outputs: ['output'], artifactContract: { id: `artifact-${id}`, format: 'markdown', outputFormat: 'markdown', acceptanceCriteria: ['complete'] }, reviewGate: { id: `gate-${id}`, name: 'Review', reviewerRole: 'Project Manager', criteria: ['quality'], passCondition: 'approved', rejectCondition: 'rework', allowAiRevision: true, required: true }, promptStatus: 'draft', checklistStatus: 'draft', history: [{ at: new Date().toISOString(), action: 'Added manually' }],
@@ -1486,7 +1540,7 @@ function handleAction(event) {
       return;
     }
     updateActiveProject((draft) => {
-      const phase = draft.workflow.phases.at(-1);
+      const phase = draft.workflow.phases.find((item) => item.id === phaseId) || draft.workflow.phases.at(-1);
       const id = `node-${Date.now()}`;
       draft.workflow.nodes.push({
         id,
