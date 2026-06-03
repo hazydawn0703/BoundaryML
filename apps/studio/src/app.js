@@ -153,8 +153,24 @@ function renderProjectLoading(state, title = 'Loading project') {
   return `<section class="page"><div class="card panel"><h2>${title}</h2><p class="muted">${message}</p><div class="actions"><button data-action="goto" data-page="projects">Back to Projects</button><button data-action="refresh-server-mode" class="primary">Reconnect Server</button></div></div></section>`;
 }
 
+function camelKey(key) {
+  return key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function withCamelAliases(value) {
+  if (Array.isArray(value)) return value.map((item) => withCamelAliases(item));
+  if (!value || typeof value !== 'object') return value;
+  return Object.entries(value).reduce((acc, [key, item]) => {
+    const normalizedValue = withCamelAliases(item);
+    acc[key] = normalizedValue;
+    const alias = camelKey(key);
+    if (!(alias in acc)) acc[alias] = normalizedValue;
+    return acc;
+  }, {});
+}
+
 function renderNodeCard(node, selected) {
-  const mode = EXECUTION_MODES[node.executionMode];
+  const mode = EXECUTION_MODES[node.executionMode] || EXECUTION_MODES.human_lead_ai_assist;
   return `<button class="node-card ${selected ? 'selected' : ''} ${node.muted ? 'muted-node' : ''}" data-action="select-node" data-node-id="${node.id}">
     <div class="node-head"><strong>${node.name}</strong>${badge(node.riskLevel, `risk-${node.riskLevel}`)}</div>
     <div class="mode-pill" style="border-color:${mode.color};color:${mode.color}">${mode.label}</div>
@@ -295,12 +311,12 @@ async function refreshProjectRuntime(projectId) {
     apiClient.workflowApi.history(projectId),
   ]);
   const workflowEnvelope = workflowResult.data?.workflow || workflowResult.data || {};
-  const workflow = workflowEnvelope.workflow || workflowEnvelope;
+  const workflow = withCamelAliases(workflowEnvelope.workflow || workflowEnvelope);
   updateActiveProject((draft) => {
     draft.workflow = workflow;
-    draft.assets = workflowEnvelope.assets || assetsResult.data?.assets || assetsResult.data || draft.assets;
+    draft.assets = withCamelAliases(workflowEnvelope.assets || assetsResult.data?.assets || assetsResult.data || draft.assets);
   });
-  setState((prev) => ({ ...prev, jobs: jobsResult.data?.jobs || jobsResult.data || [], validationResults: workflowEnvelope.validation || prev.validationResults, workflowHistory: historyResult.data || [] }));
+  setState((prev) => ({ ...prev, jobs: withCamelAliases(jobsResult.data?.jobs || jobsResult.data || []), validationResults: withCamelAliases(workflowEnvelope.validation || prev.validationResults), workflowHistory: withCamelAliases(historyResult.data || []) }));
 }
 
 
@@ -490,23 +506,23 @@ async function loadProjectRuntime(projectId, { navigate = true, projectSummaries
     apiClient.assetsApi.list(projectId),
     apiClient.workflowApi.history(projectId).catch(() => ({ data: [] })),
   ]);
-  const rawProject = projectResult.data?.project || projectResult.data;
-  const workflowPayload = workflowResult.data || {};
-  const workflow = workflowPayload.workflow || rawProject.workflow || workflowPayload;
-  const assets = workflowPayload.assets || assetsResult.data?.assets || assetsResult.data || rawProject.assets || { prompts: [], checklists: [], artifactTemplates: [] };
+  const rawProject = withCamelAliases(projectResult.data?.project || projectResult.data);
+  const workflowPayload = withCamelAliases(workflowResult.data || {});
+  const workflow = withCamelAliases(workflowPayload.workflow || rawProject.workflow || workflowPayload);
+  const assets = withCamelAliases(workflowPayload.assets || assetsResult.data?.assets || assetsResult.data || rawProject.assets || { prompts: [], checklists: [], artifactTemplates: [] });
   const merged = { ...rawProject, workflow, assets };
   setState((prev) => ({
     ...prev,
     projects: projectSummaries
-      ? projectSummaries.map((p) => (p.id === projectId ? { ...p, ...merged } : p))
+      ? withCamelAliases(projectSummaries).map((p) => (p.id === projectId ? { ...p, ...merged } : p))
       : (prev.projects.some((p) => p.id === projectId)
         ? prev.projects.map((p) => (p.id === projectId ? { ...p, ...merged } : p))
         : [merged, ...prev.projects]),
     activeProjectId: projectId,
     currentPage: navigate ? 'studio' : prev.currentPage,
-    jobs: jobsResult.data?.jobs || jobsResult.data || [],
-    workflowHistory: historyResult.data || [],
-    validationResults: workflowPayload.validation || workflowPayload.validation_results || prev.validationResults,
+    jobs: withCamelAliases(jobsResult.data?.jobs || jobsResult.data || []),
+    workflowHistory: withCamelAliases(historyResult.data || []),
+    validationResults: withCamelAliases(workflowPayload.validation || workflowPayload.validation_results || prev.validationResults),
     selectedNodeId: merged.workflow?.nodes?.[0]?.id || prev.selectedNodeId,
     serverError: '',
   }));
