@@ -8,6 +8,7 @@ const store = readFileSync(new URL('../apps/studio/src/state/store.js', import.m
 const styles = readFileSync(new URL('../apps/studio/styles.css', import.meta.url), 'utf-8');
 const studioPackage = readFileSync(new URL('../apps/studio/package.json', import.meta.url), 'utf-8');
 const devStudio = readFileSync(new URL('./dev-studio.js', import.meta.url), 'utf-8');
+const devLocal = readFileSync(new URL('./dev-local.js', import.meta.url), 'utf-8');
 
 const exportedApiNames = [...api.matchAll(/export const (\w+Api)\s*=/g)].map((match) => match[1]);
 const duplicateApiNames = exportedApiNames.filter((name, index) => exportedApiNames.indexOf(name) !== index);
@@ -33,6 +34,7 @@ assert(!store.includes("from '../../../packages/") && !devStudio.includes('/apps
 assert(studioPackage.includes('node ../../scripts/dev-studio.js') && devStudio.includes('API proxy: /api'), 'studio dev server serves repo root and proxies api');
 assert(devStudio.includes("cleanPath === '/favicon.ico'") && devStudio.includes('204'), 'studio dev server handles favicon without noisy 404');
 assert(devStudio.includes('listenWithFallback') && devStudio.includes('EADDRINUSE') && devStudio.includes('trying'), 'studio dev server handles occupied ports');
+assert(devLocal.includes('/api/health') && devLocal.includes('Reusing existing BoundaryML Server'), 'local dev reuses an already running BoundaryML Server');
 assert(app.includes('Workflow has been updated by another operation. Please refresh and try again.'), 'version conflict message exists');
 assert(app.includes('add-edge-from-node') && app.includes('delete-edge'), 'edge add/delete actions exist');
 assert(app.includes('start-edge-edit') && app.includes('save-edge-edit'), 'edge independent edit path exists');

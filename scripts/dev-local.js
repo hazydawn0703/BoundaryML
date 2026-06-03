@@ -4,9 +4,10 @@ import { fileURLToPath } from 'node:url';
 const isWindows = process.platform === 'win32';
 const npmCommand = isWindows ? 'npm' : 'npm';
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
+const serverBaseUrl = process.env.BOUNDARYML_API_BASE_URL || `http://localhost:${process.env.BOUNDARYML_SERVER_PORT || 8787}`;
 
 const processes = [
-  { name: 'server', color: '\x1b[36m', args: ['run', 'dev:server'] },
+  { name: 'server', color: '\x1b[36m', args: ['run', 'dev:server'], healthUrl: `${serverBaseUrl}/api/health` },
   { name: 'studio', color: '\x1b[35m', args: ['run', 'dev:studio'] },
 ];
 
@@ -34,7 +35,24 @@ function stopAll(signal = 'SIGTERM') {
   });
 }
 
+async function isHealthy(url) {
+  if (!url) return false;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(800) });
+    if (!response.ok) return false;
+    const data = await response.json().catch(() => ({}));
+    return data.status === 'ok' || data.data?.status === 'ok';
+  } catch {
+    return false;
+  }
+}
+
 for (const proc of processes) {
+  if (await isHealthy(proc.healthUrl)) {
+    process.stdout.write(`${proc.color}[${proc.name}]\x1b[0m Reusing existing BoundaryML Server at ${serverBaseUrl}\n`);
+    continue;
+  }
+
   const child = spawn(npmCommand, proc.args, {
     cwd: rootDir,
     env: process.env,
