@@ -27,6 +27,7 @@ function send(res, statusCode, body, headers = {}) {
 
 function serveFile(res, requestPath) {
   const cleanPath = requestPath === '/' ? '/apps/studio/index.html' : decodeURIComponent(requestPath.split('?')[0]);
+  if (cleanPath === '/favicon.ico') return send(res, 204, '', { 'content-type': 'image/x-icon' });
   const filePath = normalize(join(rootDir, cleanPath));
   if (!filePath.startsWith(rootDir)) return send(res, 403, 'Forbidden');
   if (!existsSync(filePath) || !statSync(filePath).isFile()) return send(res, 404, 'File not found');

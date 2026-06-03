@@ -482,7 +482,7 @@ function updateActiveProject(mutator, reason = 'Workflow updated', affectedNodeI
   replaceActiveProject(updated);
 }
 
-async function loadProjectRuntime(projectId, { navigate = true } = {}) {
+async function loadProjectRuntime(projectId, { navigate = true, projectSummaries = null } = {}) {
   const [projectResult, workflowResult, jobsResult, assetsResult, historyResult] = await Promise.all([
     apiClient.projectsApi.getById(projectId),
     apiClient.workflowApi.get(projectId),
@@ -497,9 +497,11 @@ async function loadProjectRuntime(projectId, { navigate = true } = {}) {
   const merged = { ...rawProject, workflow, assets };
   setState((prev) => ({
     ...prev,
-    projects: prev.projects.some((p) => p.id === projectId)
-      ? prev.projects.map((p) => (p.id === projectId ? { ...p, ...merged } : p))
-      : [merged, ...prev.projects],
+    projects: projectSummaries
+      ? projectSummaries.map((p) => (p.id === projectId ? { ...p, ...merged } : p))
+      : (prev.projects.some((p) => p.id === projectId)
+        ? prev.projects.map((p) => (p.id === projectId ? { ...p, ...merged } : p))
+        : [merged, ...prev.projects]),
     activeProjectId: projectId,
     currentPage: navigate ? 'studio' : prev.currentPage,
     jobs: jobsResult.data?.jobs || jobsResult.data || [],
@@ -520,10 +522,10 @@ async function bootstrapRuntimeMode() {
     ]);
     const projects = projectsData?.projects || projectsData || [];
     if (projects[0]?.id) {
-      await loadProjectRuntime(projects[0].id, { navigate: false });
+      await loadProjectRuntime(projects[0].id, { navigate: false, projectSummaries: projects });
       setState((prev) => ({ ...prev, modelStatus, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
     } else {
-      setState((prev) => ({ ...prev, projects: prev.projects, modelStatus, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
+      setState((prev) => ({ ...prev, projects: [], modelStatus, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
     }
   } catch (error) {
     setState((prev) => ({ ...prev, serverError: error.message || 'Server disconnected' }));

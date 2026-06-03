@@ -28,6 +28,7 @@ assert(styles.includes('[data-theme="open-source"]') && styles.includes('--prima
 assert(styles.includes('.node-card::before') && styles.includes('.theme-swatch'), 'theme visual components exist');
 assert(!store.includes("from '../../../packages/") && !devStudio.includes('/apps/packages/'), 'studio nested imports resolve from served repo root');
 assert(studioPackage.includes('node ../../scripts/dev-studio.js') && devStudio.includes('API proxy: /api'), 'studio dev server serves repo root and proxies api');
+assert(devStudio.includes("cleanPath === '/favicon.ico'") && devStudio.includes('204'), 'studio dev server handles favicon without noisy 404');
 assert(devStudio.includes('listenWithFallback') && devStudio.includes('EADDRINUSE') && devStudio.includes('trying'), 'studio dev server handles occupied ports');
 assert(app.includes('Workflow has been updated by another operation. Please refresh and try again.'), 'version conflict message exists');
 assert(app.includes('add-edge-from-node') && app.includes('delete-edge'), 'edge add/delete actions exist');
@@ -37,6 +38,7 @@ assert(app.includes('dependency_type') && app.includes('required_outputs') && ap
 assert(app.includes('restore-version') && app.includes('view-version'), 'version detail/restore actions exist');
 assert(app.includes('workflowApi.validate'), 'validate uses server api');
 assert(app.includes('loadProjectRuntime') && app.includes('refresh-server-mode'), 'studio can reconnect to server and load full project runtime');
+assert(app.includes('projectSummaries = null') && app.includes('projectSummaries.map'), 'server bootstrap replaces demo projects with server project summaries');
 assert(app.includes("!st.serverAvailable && localProject?.workflow"), 'local demo open-project works without server api fallback');
 assert(app.includes("target.tagName === 'BUTTON'") && app.includes('event.preventDefault()'), 'button actions prevent default navigation/submission side effects');
 assert(api.includes('regenerate: (projectId, assetId)'), 'assets regenerate api exists');
