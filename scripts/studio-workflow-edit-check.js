@@ -38,7 +38,8 @@ assert(app.includes('dependency_type') && app.includes('required_outputs') && ap
 assert(app.includes('restore-version') && app.includes('view-version'), 'version detail/restore actions exist');
 assert(app.includes('workflowApi.validate'), 'validate uses server api');
 assert(app.includes('loadProjectRuntime') && app.includes('refresh-server-mode'), 'studio can reconnect to server and load full project runtime');
-assert(app.includes('projectSummaries = null') && app.includes('projectSummaries.map'), 'server bootstrap replaces demo projects with server project summaries');
+assert(app.includes('projectSummaries = null') && app.includes('withCamelAliases(projectSummaries).map'), 'server bootstrap replaces demo projects with server project summaries');
+assert(app.includes('withCamelAliases') && app.includes('camelKey'), 'server runtime data is normalized for Studio camelCase rendering');
 assert(app.includes("!st.serverAvailable && localProject?.workflow"), 'local demo open-project works without server api fallback');
 assert(app.includes("target.tagName === 'BUTTON'") && app.includes('event.preventDefault()'), 'button actions prevent default navigation/submission side effects');
 assert(api.includes('regenerate: (projectId, assetId)'), 'assets regenerate api exists');
