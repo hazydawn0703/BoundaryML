@@ -14,6 +14,236 @@ import { applyWorkflowDiff } from '../../../packages/core/src/diff.js';
 
 const app = document.getElementById('app');
 
+const UI_LANGUAGES = {
+  en: 'English',
+  'zh-Hans': '简体中文',
+};
+
+const ZH_HANS_REPLACEMENTS = [
+  ['Generate Workflow Draft', '生成工作流草稿'],
+  ['Organization-Aware Setup', '组织上下文设置'],
+  ['Historical Process Materials', '历史流程材料'],
+  ['Generate / Refresh Summary', '生成/刷新摘要'],
+  ['Generate Execution Kit', '生成执行包'],
+  ['Generate Final Kit', '生成最终包'],
+  ['Generate Draft Kit', '生成草稿包'],
+  ['Generate preview to inspect execution kit artifacts.', '生成预览以检查执行包产物。'],
+  ['Selected workflow context may be sent to the configured LLM provider.', '选中的工作流上下文可能会发送到已配置的 LLM 服务。'],
+  ['Server Mode generates a Workflow Diff for review; it never edits the formal workflow directly.', 'Server 模式会生成用于审核的工作流 Diff，不会直接修改正式工作流。'],
+  ['Mode: Local Demo / Mock Model. Server persistence is disabled.', '模式：Local Demo / Mock Model。服务端持久化已禁用。'],
+  ['Mode: Local Demo / Mock Model', '模式：Local Demo / Mock Model'],
+  ['Mode: Local Server', '模式：Local Server'],
+  ['Reconnect Server', '重新连接服务'],
+  ['Open Source Theme', '开源主题'],
+  ['Context Pack', '上下文包'],
+  ['Execution Assets', '执行资产'],
+  ['Create First Project', '创建第一个项目'],
+  ['Start with a project goal.', '从项目目标开始。'],
+  ['BoundaryML will generate a human-AI workflow boundary draft.', 'BoundaryML 会生成一份人机协作边界工作流草稿。'],
+  ['Data-driven projects powered by BoundaryML domain model.', '由 BoundaryML 领域模型驱动的数据化项目。'],
+  ['Current Stage', '当前阶段'],
+  ['Target Deliverables', '目标交付物'],
+  ['Expected AI Scope', '预期 AI 范围'],
+  ['Sensitive Areas', '敏感区域'],
+  ['Project Name', '项目名称'],
+  ['Project Goal', '项目目标'],
+  ['Project Type', '项目类型'],
+  ['Risk Level', '风险等级'],
+  ['Setup Mode', '设置模式'],
+  ['Quick Start', '快速开始'],
+  ['Internal Tool', '内部工具'],
+  ['Legacy Modernization', '遗留系统现代化'],
+  ['AI Feature', 'AI 功能'],
+  ['Team Roles', '团队角色'],
+  ['Approval Process', '审批流程'],
+  ['Tool Stack', '工具栈'],
+  ['Risk Constraints', '风险约束'],
+  ['Context Summary', '上下文摘要'],
+  ['Recognized Roles', '识别出的角色'],
+  ['Suggested Review Gates', '建议的审核门禁'],
+  ['Missing Context', '缺失上下文'],
+  ['Risk Warnings', '风险提醒'],
+  ['No summary yet.', '暂无摘要。'],
+  ['Loading project', '正在加载项目'],
+  ['Loading workflow, assets, validation, and history from BoundaryML Server.', '正在从 BoundaryML Server 加载工作流、资产、校验和历史。'],
+  ['Back to Projects', '返回项目'],
+  ['Loading Studio', '正在加载 Studio'],
+  ['Loading Execution Assets', '正在加载执行资产'],
+  ['Loading Export', '正在加载导出'],
+  ['Execution Mode', '执行模式'],
+  ['Human Owner', '人工负责人'],
+  ['Project Manager', '项目经理'],
+  ['Assistant', '助手'],
+  ['Recommend Execution Mode', '推荐执行模式'],
+  ['Human-only node: no AI prompt.', '纯人工节点：无 AI 提示词。'],
+  ['Regenerate Checklist', '重新生成检查清单'],
+  ['Generate Checklist', '生成检查清单'],
+  ['Regenerate Prompt', '重新生成提示词'],
+  ['Generate Prompt', '生成提示词'],
+  ['Prompt Status', '提示词状态'],
+  ['Checklist Status', '检查清单状态'],
+  ['Artifact Contract', '产物契约'],
+  ['Required Sections', '必填章节'],
+  ['Completion Criteria', '完成标准'],
+  ['Review Gate', '审核门禁'],
+  ['Review Gates', '审核门禁'],
+  ['Missing Review Gate', '缺少审核门禁'],
+  ['Remove Review Gate', '移除审核门禁'],
+  ['Pass Condition', '通过条件'],
+  ['Reject Condition', '驳回条件'],
+  ['Reviewer Role', '审核角色'],
+  ['Reviewer', '审核人'],
+  ['Criteria', '标准'],
+  ['Gate Name', '门禁名称'],
+  ['Required', '必需'],
+  ['Node Detail', '节点详情'],
+  ['Select a node', '选择一个节点'],
+  ['Workflow', '工作流'],
+  ['Validation', '校验'],
+  ['Add Node to this phase', '向此阶段添加节点'],
+  ['Add Node', '添加节点'],
+  ['Undo', '撤销'],
+  ['History', '历史'],
+  ['Validate', '校验'],
+  ['Recent Jobs', '最近任务'],
+  ['No jobs yet', '暂无任务'],
+  ['AI Assisted Edit', 'AI 辅助编辑'],
+  ['Describe edits...', '描述修改...'],
+  ['Generate Diff', '生成 Diff'],
+  ['Diff Review', 'Diff 审核'],
+  ['Apply Selected', '应用选中项'],
+  ['Apply All', '全部应用'],
+  ['Reject All', '全部拒绝'],
+  ['Close', '关闭'],
+  ['Asset List', '资产列表'],
+  ['Asset Detail', '资产详情'],
+  ['Select asset from list.', '从列表中选择资产。'],
+  ['Asset not found', '未找到资产'],
+  ['Prompts', '提示词'],
+  ['Prompt Content', '提示词内容'],
+  ['Copy Prompt', '复制提示词'],
+  ['Checklists', '检查清单'],
+  ['Checklist Items', '检查项'],
+  ['Copy Checklist', '复制检查清单'],
+  ['Artifact Templates', '产物模板'],
+  ['Copy Template', '复制模板'],
+  ['Regenerate Asset', '重新生成资产'],
+  ['Regenerate', '重新生成'],
+  ['Output Format', '输出格式'],
+  ['Acceptance Criteria', '验收标准'],
+  ['Context Required', '所需上下文'],
+  ['Artifact Name', '产物名称'],
+  ['Template Content', '模板内容'],
+  ['No node', '无节点'],
+  ['Export Execution Kit', '导出执行包'],
+  ['Draft Kit may include warnings/errors. Final Kit is blocked by blocking validation errors.', '草稿包可包含警告/错误；最终包会被阻塞性校验错误拦截。'],
+  ['Export Options', '导出选项'],
+  ['Kit Type', '执行包类型'],
+  ['Draft Kit', '草稿包'],
+  ['Final Kit', '最终包'],
+  ['Generate Preview', '生成预览'],
+  ['Copy Preview JSON', '复制预览 JSON'],
+  ['Copy Preview', '复制预览'],
+  ['Download Latest', '下载最新'],
+  ['Refresh Jobs', '刷新任务'],
+  ['Execution Kit Preview', '执行包预览'],
+  ['Preview status', '预览状态'],
+  ['Latest generated kit', '最近生成的执行包'],
+  ['Settings / Model Access', '设置 / 模型访问'],
+  ['Model Mode', '模型模式'],
+  ['Provider', '提供商'],
+  ['Default Model', '默认模型'],
+  ['Planning Model', '规划模型'],
+  ['Prompt Model', '提示词模型'],
+  ['Diff Model', 'Diff 模型'],
+  ['Structured Output', '结构化输出'],
+  ['Refresh Model Status', '刷新模型状态'],
+  ['Recent Model Calls', '最近模型调用'],
+  ['No calls yet', '暂无调用'],
+  ['Human Only', '纯人工'],
+  ['AI Draft + Human Review', 'AI 起草 + 人工审核'],
+  ['Human Lead + AI Assist', '人工主导 + AI 辅助'],
+  ['AI Execute + Human Approval', 'AI 执行 + 人工批准'],
+  ['AI Autonomous', 'AI 自主执行'],
+  ['Outdated prompt', '提示词已过期'],
+  ['Projects', '项目'],
+  ['Create Project', '创建项目'],
+  ['Studio', 'Studio'],
+  ['Export', '导出'],
+  ['Settings', '设置'],
+  ['Open Studio', '打开 Studio'],
+  ['New Project', '新建项目'],
+  ['Language', '语言'],
+  ['Project', '项目'],
+  ['Stage', '阶段'],
+  ['Execution Kit', '执行包'],
+  ['Nodes', '节点'],
+  ['nodes', '节点'],
+  ['Node', '节点'],
+  ['Gates', '门禁'],
+  ['Gate', '门禁'],
+  ['Risk', '风险'],
+  ['Status', '状态'],
+  ['Owner', '负责人'],
+  ['Upstream', '上游'],
+  ['Downstream', '下游'],
+  ['Inputs', '输入'],
+  ['Outputs', '输出'],
+  ['Input', '输入'],
+  ['Output', '输出'],
+  ['Name', '名称'],
+  ['Goal', '目标'],
+  ['Phase', '阶段'],
+  ['Type', '类型'],
+  ['Format', '格式'],
+  ['Role', '角色'],
+  ['Objective', '目标'],
+  ['All', '全部'],
+  ['Unassigned', '未分配'],
+  ['errors', '错误'],
+  ['warnings', '警告'],
+  ['high-risk', '高风险'],
+  ['high', '高'],
+  ['medium', '中'],
+  ['low', '低'],
+  ['draft', '草稿'],
+  ['reviewed', '已审核'],
+  ['final', '最终'],
+  ['outdated', '已过期'],
+  ['enabled', '已启用'],
+  ['disabled', '已禁用'],
+  ['none', '无'],
+  ['n/a', '不适用'],
+  ['missing', '缺失'],
+  ['complete', '完成'],
+];
+
+const TRANSLATION_SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'PRE', 'CODE']);
+
+function translateText(text, language) {
+  if (language !== 'zh-Hans') return text;
+  return [...ZH_HANS_REPLACEMENTS]
+    .sort(([left], [right]) => right.length - left.length)
+    .reduce((value, [source, translated]) => value.split(source).join(translated), text);
+}
+
+function localizeDom(language) {
+  document.documentElement.lang = language === 'zh-Hans' ? 'zh-Hans' : 'en';
+  const walker = document.createTreeWalker(app, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      return TRANSLATION_SKIP_TAGS.has(node.parentElement?.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach((node) => {
+    node.nodeValue = translateText(node.nodeValue, language);
+  });
+  app.querySelectorAll('[placeholder]').forEach((node) => {
+    node.setAttribute('placeholder', translateText(node.getAttribute('placeholder') || '', language));
+  });
+}
+
 function countProjectStats(project) {
   const nodes = project.workflow?.nodes || [];
   return {
@@ -58,7 +288,6 @@ function badge(text, cls = '') {
 function renderSidebar(state) {
   const pages = [
     ['projects', 'Projects'],
-    ['create', 'Create Project'],
     ['context', 'Context Pack'],
     ['studio', 'Studio'],
     ['assets', 'Execution Assets'],
@@ -77,8 +306,10 @@ function renderTopbar(state) {
   const runtimeBadge = state.serverAvailable
     ? `<span class="badge">Mode: Local Server</span>`
     : `<span class="badge risk-high">Mode: Local Demo / Mock Model</span><button data-action="refresh-server-mode">Reconnect Server</button>`;
+  const language = state.language || 'en';
+  const languageSwitcher = `<label class="language-switcher"><span>Language</span><select data-action="set-language" aria-label="Language">${Object.entries(UI_LANGUAGES).map(([id, label]) => `<option value="${id}" ${language === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
   return `<header class="topbar"><div><h1>${project?.name || 'BoundaryML'}</h1><p>Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates</p></div>
-  <div class="row">${runtimeBadge}<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></header>`;
+  <div class="row">${runtimeBadge}${languageSwitcher}<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></header>`;
 }
 
 function renderProjects(state) {
@@ -249,19 +480,19 @@ function renderStudio(state) {
 
   const recentJobs = (state.jobs || []).slice(0, 3);
   return `<section class="page"><div class="toolbar card"><div><strong>${project.name}</strong><p class="muted">v${project.workflow.version} · ${project.workflow.status}</p></div>
-    <div class="row"><button data-action="add-node">Add Node</button><button data-action="undo-workflow">Undo</button><button data-action="toggle-history">History</button><button data-action="validate">Validate</button><button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>
+    <div class="row"><button data-action="add-node">Add Node</button><button data-action="undo-workflow">Undo</button><button data-action="toggle-history">History</button><button data-action="validate">Validate</button></div></div>
   ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model</div>'}
   ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
   ${(state.workflowHistory || []).length ? `<article class="card panel"><h3>History</h3><ul>${state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('')}</ul></article>` : ''}
-  <div class="studio-grid">
-    <aside class="card panel"><h3>Filters & Legend</h3>
-      <label>Execution Mode<select data-action="set-filter-mode"><option value="all">All</option>${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${(state.studioFilter?.mode || 'all') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
-      <label>Risk<select data-action="set-filter-risk"><option value="all">All</option>${['low', 'medium', 'high'].map((x) => `<option value="${x}" ${(state.studioFilter?.risk || 'all') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
-      <p>Validation: ${summary.errors} errors, ${summary.warnings} warnings</p>
-      <ul>${state.validationResults.slice(0, 4).map((x) => `<li class="inline-${x.level}">${x.title}</li>`).join('')}</ul>
-      <h4>Phases</h4><ul>${project.workflow.phases.map((p) => `<li>${p.name}</li>`).join('')}</ul>
-    </aside>
-    <div class="card canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => {
+  <section class="workflow-board card">
+    <div class="workflow-board-head"><div><h3>Workflow</h3><p class="muted">Validation: ${summary.errors} errors, ${summary.warnings} warnings</p></div>
+      <div class="workflow-filters">
+        <label>Execution Mode<select data-action="set-filter-mode"><option value="all">All</option>${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${(state.studioFilter?.mode || 'all') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
+        <label>Risk<select data-action="set-filter-risk"><option value="all">All</option>${['low', 'medium', 'high'].map((x) => `<option value="${x}" ${(state.studioFilter?.risk || 'all') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+      </div>
+    </div>
+    ${state.validationResults.length ? `<div class="workflow-alerts">${state.validationResults.slice(0, 4).map((x) => `<span class="inline-${x.level}">${x.title}</span>`).join('')}</div>` : ''}
+    <div class="canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => {
       const phaseNodes = nodes.filter((node) => node.phaseId === phase.id);
       const effectiveNodes = phase.id === '__unassigned__' ? nodes.filter((n) => !project.workflow.phases.find((p) => p.id === n.phaseId)) : phaseNodes;
       const nodeIds = effectiveNodes.map((n) => n.id);
@@ -270,8 +501,8 @@ function renderStudio(state) {
       const phaseStatus = state.validationResults.some((v) => v.level === 'error' && nodeIds.includes(v.targetId)) ? 'error' : issueCount ? 'warning' : 'ok';
       return `<div class="lane"><h4>${phase.name}</h4><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, node.id === selectedNode?.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
     }).join('')}</div>
-    ${renderNodeDetail(state, project, selectedNode)}
-  </div>
+    <div class="workflow-detail">${renderNodeDetail(state, project, selectedNode)}</div>
+  </section>
   <article class="card panel"><h3>Recent Jobs</h3>
   <ul>${recentJobs.length ? recentJobs.map((job) => `<li>${job.id || job.job_id} · ${job.type} · ${job.status} · ${(job.progress?.stage || 'n/a')}
     <div class="row">
@@ -486,6 +717,7 @@ function renderPage(state) {
 function render() {
   const state = getState();
   app.innerHTML = `<div class="app-shell" data-theme="open-source">${renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>`;
+  localizeDom(state.language || 'en');
 }
 
 function updateActiveProject(mutator, reason = 'Workflow updated', affectedNodeIds = []) {
@@ -552,10 +784,12 @@ async function bootstrapRuntimeMode() {
 function handleAction(event) {
   const target = event.target.closest('[data-action]');
   if (!target) return;
+  if (event.type === 'click' && target.tagName !== 'BUTTON') return;
   if (target.tagName === 'BUTTON') event.preventDefault();
   const action = target.dataset.action;
 
   if (action === 'goto') setState((prev) => ({ ...prev, currentPage: target.dataset.page }));
+  if (action === 'set-language') setState((prev) => ({ ...prev, language: UI_LANGUAGES[target.value] ? target.value : 'en' }));
   if (action === 'refresh-server-mode') bootstrapRuntimeMode();
   if (action === 'open-project') {
     const projectId = target.dataset.projectId;

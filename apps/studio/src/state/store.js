@@ -8,6 +8,7 @@ function initialState() {
   return {
     runtimeMode: 'local_demo',
     serverAvailable: false,
+    language: 'en',
     currentPage: 'projects',
     projects: [exampleProject],
     activeProjectId: exampleProject.id,
@@ -45,6 +46,7 @@ function persistUiState() {
     activeNodeDetailTab: state.activeNodeDetailTab,
     runtimeMode: state.runtimeMode,
     serverAvailable: state.serverAvailable,
+    language: state.language || 'en',
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 }
