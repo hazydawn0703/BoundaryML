@@ -21,6 +21,9 @@ assert(diffsApiClientReferenceCount === 1, `apiClient must reference diffsApi on
 assert(api.includes('workflowApi') && api.includes('patch: (projectId, payload)'), 'workflow patch api exists');
 assert(api.includes('undo: (projectId)'), 'workflow undo api exists');
 assert(api.includes('restore: (projectId, version)'), 'workflow restore api exists');
+assert(!app.includes("['create', 'Create Project']"), 'sidebar should not duplicate Create Project navigation');
+assert(!app.includes('<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>'), 'studio toolbar should not duplicate topbar execution kit action');
+assert(app.includes('workflow-board') && app.includes('workflow-filters') && app.includes('workflow-detail'), 'workflow page integrates filters and node detail inside the workflow board');
 assert(app.includes('workflow_version: project.workflow.version'), 'workflow version passed in edit requests');
 assert(app.includes('data-theme="open-source"'), 'open-source theme root exists');
 assert(app.includes('Open Source Theme'), 'theme identity strip exists');
@@ -42,6 +45,8 @@ assert(app.includes('projectSummaries = null') && app.includes('withCamelAliases
 assert(app.includes('withCamelAliases') && app.includes('camelKey'), 'server runtime data is normalized for Studio camelCase rendering');
 assert(app.includes("!st.serverAvailable && localProject?.workflow"), 'local demo open-project works without server api fallback');
 assert(app.includes("target.tagName === 'BUTTON'") && app.includes('event.preventDefault()'), 'button actions prevent default navigation/submission side effects');
+assert(app.includes("event.type === 'click' && target.tagName !== 'BUTTON'") && app.includes("document.addEventListener('change', handleAction)"), 'form controls do not rerender on click and still update on change');
+assert(app.includes('UI_LANGUAGES') && app.includes('zh-Hans') && app.includes('localizeDom') && app.includes('data-action="set-language"'), 'global language switcher supports English and Simplified Chinese');
 assert(api.includes('regenerate: (projectId, assetId)'), 'assets regenerate api exists');
 assert(app.includes('edit-asset-field'), 'execution asset edit path exists');
 assert(app.includes('Role') && app.includes('Objective') && app.includes('Context Required') && app.includes('Output Format') && app.includes('Acceptance Criteria'), 'prompt structured fields exist');
@@ -61,6 +66,7 @@ assert(app.includes('apiClient.workflowApi.patch(project.id, { workflow_version:
 assert(app.includes('apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, artifactContract })'), 'artifact contract edit uses node patch + workflow version');
 const persistedMatch = store.match(/const persisted = \{[\s\S]*?\n  \};/);
 assert(Boolean(persistedMatch), 'persisted ui state block exists');
+assert(store.includes("language: 'en'") && persistedMatch[0].includes('language'), 'language preference persists as UI state');
 assert(!persistedMatch[0].includes('projects') && !persistedMatch[0].includes('workflow') && !persistedMatch[0].includes('validationResults'), 'localStorage does not persist formal workflow/projects');
 assert(!app.includes('applyWorkflowDiff(project, st.aiEdit.diff') || app.includes('toggle-ai-edit'), 'no new server-mode fallback to mock edit path added');
 
