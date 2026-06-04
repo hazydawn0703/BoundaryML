@@ -29,6 +29,12 @@ assert(app.includes("['Studio', '工作台']") && app.includes("['Overview', '�
 assert(!app.includes('<button data-action="add-node">Add Node</button><button data-action="undo-workflow">'), 'studio toolbar does not duplicate phase-level add node');
 assert(app.includes('data-action="add-phase"') && app.includes("if (action === 'add-phase')"), 'workflow board supports adding phases');
 assert(app.includes("projects: ['Projects', 'Manage BoundaryML projects']"), 'projects page topbar uses page title instead of active project name');
+assert(app.includes('WORKFLOW_MIN_SCALE = 0.25') && app.includes('WORKFLOW_MAX_SCALE = 4'), 'workflow canvas zoom range is constrained');
+assert(app.includes('workflow-canvas') && app.includes('handleWorkflowWheel') && app.includes('handleWorkflowPointerDown'), 'workflow canvas supports wheel zoom and right-button pan');
+assert(app.includes('refreshWorkflowDetail()') && app.includes("if (action === 'node-tab')") && !app.includes("if (action === 'node-tab') setState"), 'node detail tab switches update the detail region without full page state render');
+assert(app.includes('updateUiStateSilently') && app.includes('selectWorkflowNode') && app.includes("if (action === 'select-node')"), 'workflow node selection avoids a full page rerender');
+assert(app.includes("if (action === 'toggle-phase-menu')") && app.includes("if (action === 'rename-phase')") && app.includes("if (action === 'delete-phase')"), 'phase action menu supports rename and delete');
+assert(styles.includes('grid-template-columns: repeat(7, 214px)') && styles.includes('.phase-menu') && styles.includes('.icon-button'), 'phase lanes are narrower and expose menu styling');
 assert(app.includes('workflow_version: project.workflow.version'), 'workflow version passed in edit requests');
 assert(app.includes('data-theme="open-source"'), 'open-source theme root exists');
 assert(app.includes('Open Source Theme'), 'theme identity strip exists');
@@ -73,7 +79,10 @@ assert(app.includes('apiClient.nodesApi.patch(project.id, nodeId, { workflow_ver
 const persistedMatch = store.match(/const persisted = \{[\s\S]*?\n  \};/);
 assert(Boolean(persistedMatch), 'persisted ui state block exists');
 assert(store.includes("language: 'en'") && persistedMatch[0].includes('language'), 'language preference persists as UI state');
-assert(!persistedMatch[0].includes('projects') && !persistedMatch[0].includes('workflow') && !persistedMatch[0].includes('validationResults'), 'localStorage does not persist formal workflow/projects');
+assert(store.includes('workflowViewport') && persistedMatch[0].includes('workflowViewport'), 'workflow canvas viewport persists as UI state');
+assert(store.includes('updateUiStateSilently'), 'store supports silent UI state updates without notifying render subscribers');
+const persistedWithoutViewport = persistedMatch[0].replace(/workflowViewport/g, '');
+assert(!persistedWithoutViewport.includes('projects') && !persistedWithoutViewport.includes('workflow') && !persistedWithoutViewport.includes('validationResults'), 'localStorage does not persist formal workflow/projects');
 assert(!app.includes('applyWorkflowDiff(project, st.aiEdit.diff') || app.includes('toggle-ai-edit'), 'no new server-mode fallback to mock edit path added');
 
 console.log('✅ studio workflow edit checks passed');

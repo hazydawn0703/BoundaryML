@@ -18,6 +18,7 @@ function initialState() {
     aiEdit: { open: false, request: '', diff: null },
     exportPreviewType: 'workflow_spec.yaml',
     studioFilter: { mode: 'all', risk: 'all' },
+    workflowViewport: { x: 0, y: 0, scale: 1 },
     assetsFilter: { type: 'prompt', phase: 'all', status: 'all' },
     selectedAsset: null,
     jobs: [],
@@ -42,6 +43,7 @@ function persistUiState() {
   const persisted = {
     currentPage: state.currentPage,
     studioFilter: state.studioFilter,
+    workflowViewport: state.workflowViewport,
     assetsFilter: state.assetsFilter,
     activeNodeDetailTab: state.activeNodeDetailTab,
     runtimeMode: state.runtimeMode,
@@ -56,6 +58,10 @@ export function setState(updater) {
   state = typeof updater === 'function' ? updater(state) : updater;
   persistUiState();
   listeners.forEach((listener) => listener(state));
+}
+export function updateUiStateSilently(mutator) {
+  mutator(state);
+  persistUiState();
 }
 export function subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }
 export function getActiveProject(st = state) { return st.projects.find((project) => project.id === st.activeProjectId); }
