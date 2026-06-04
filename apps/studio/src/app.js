@@ -121,6 +121,8 @@ const ZH_HANS_REPLACEMENTS = [
   ['Undo', '撤销'],
   ['History', '历史'],
   ['Validate', '校验'],
+  ['Jobs', '任务'],
+  ['Monitor recent generation tasks', '监控最近生成任务'],
   ['Recent Jobs', '最近任务'],
   ['No jobs yet', '暂无任务'],
   ['AI Assisted Edit', 'AI 辅助编辑'],
@@ -377,6 +379,7 @@ function renderSidebar(state) {
     ['projects', 'Projects'],
     ['context', 'Context Pack'],
     ['studio', 'Studio'],
+    ['jobs', 'Jobs'],
     ['assets', 'Execution Assets'],
     ['export', 'Export'],
     ['settings', 'Settings'],
@@ -393,6 +396,7 @@ function renderTopbar(state) {
   const pageCopy = {
     projects: ['Projects', 'Manage BoundaryML projects'],
     create: ['Create Project', 'Create a new BoundaryML project'],
+    jobs: ['Jobs', 'Monitor recent generation tasks'],
     settings: ['Settings', 'Manage model and runtime settings'],
   };
   const [title, subtitle] = pageCopy[state.currentPage] || [
@@ -622,7 +626,6 @@ function renderStudio(state) {
     warnings: state.validationResults.filter((x) => x.level === 'warning').length,
   };
 
-  const recentJobs = (state.jobs || []).slice(0, 3);
   const historyOpen = state.workflowHistoryOpen || (state.workflowHistory || []).length > 0;
   return `<section class="page">
   ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model</div>'}
@@ -638,13 +641,6 @@ function renderStudio(state) {
       <div class="workflow-detail">${renderNodeDetail(state, project, selectedNode)}</div>
     </div>
   </section>
-  <article class="card panel"><h3>Recent Jobs</h3>
-  <ul>${recentJobs.length ? recentJobs.map((job) => `<li>${job.id || job.job_id} · ${job.type} · ${job.status} · ${(job.progress?.stage || 'n/a')}
-    <div class="row">
-      <button data-action="job-retry" data-job-id="${job.id || job.job_id}">Retry</button>
-      <button data-action="job-cancel" data-job-id="${job.id || job.job_id}" ${job.status === 'succeeded' ? 'disabled' : ''}>Cancel</button>
-    </div></li>`).join('') : '<li>No jobs yet</li>'}</ul>
-  </article>
   ${renderAiEdit(state)}
   ${renderDiffDrawer(state)}
   </section>`;
@@ -820,6 +816,31 @@ function renderExport(state) {
   </article></div></section>`;
 }
 
+function renderJobList(jobs) {
+  if (!jobs.length) return '<li>No jobs yet</li>';
+  return jobs.map((job) => {
+    const jobId = job.id || job.job_id;
+    const status = job.status || 'unknown';
+    const stage = job.progress?.stage || 'n/a';
+    const message = job.progress?.message || '';
+    return `<li><div><strong>${job.type || 'generation_job'}</strong> ${badge(status, status === 'failed' ? 'risk-high' : '')}<p class="muted">${jobId} · ${stage}${message ? ` · ${message}` : ''}</p></div>
+      <div class="row">
+        <button data-action="job-retry" data-job-id="${jobId}">Retry</button>
+        <button data-action="job-cancel" data-job-id="${jobId}" ${status === 'succeeded' || status === 'cancelled' ? 'disabled' : ''}>Cancel</button>
+      </div></li>`;
+  }).join('');
+}
+
+function renderJobs(state) {
+  const project = getActiveProject(state);
+  const jobs = state.jobs || [];
+  return `<section class="page"><div class="page-head"><div><h2>Jobs</h2><p class="muted">${project?.name || 'No project selected'} · generation task monitor</p></div><button data-action="refresh-jobs">Refresh Jobs</button></div>
+    ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model. Server jobs are unavailable.</div>'}
+    ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
+    <article class="card panel"><h3>Recent Jobs</h3><ul class="job-list">${renderJobList(jobs)}</ul></article>
+  </section>`;
+}
+
 function renderSettings(state) {
   const logs = state.modelCalls || [];
   const modelStatus = state.modelStatus || {};
@@ -842,6 +863,7 @@ function renderPage(state) {
     case 'create': return renderCreatePage();
     case 'context': return renderContextPage(state);
     case 'studio': return renderStudio(state);
+    case 'jobs': return renderJobs(state);
     case 'assets': return renderAssets(state);
     case 'export': return renderExport(state);
     case 'settings': return renderSettings(state);
@@ -919,6 +941,14 @@ function syncWorkflowFilters() {
   }
 }
 
+function closeWorkflowFilters() {
+  if (!getState().workflowFiltersOpen) return;
+  updateUiStateSilently((state) => {
+    state.workflowFiltersOpen = false;
+  });
+  syncWorkflowFilters();
+}
+
 function selectWorkflowNode(nodeId) {
   const state = getState();
   const project = getActiveProject(state);
@@ -973,6 +1003,7 @@ function handleWorkflowPointerUp(event) {
 }
 
 function handleWorkflowWheel(event) {
+  if (closestElement(event.target, '.workflow-detail')) return;
   const canvas = closestElement(event.target, '.workflow-canvas');
   if (!canvas) return;
   event.preventDefault();
@@ -1130,11 +1161,21 @@ function handleAction(event) {
     return;
   }
   if (action === 'set-filter-mode') {
-    setState((prev) => ({ ...prev, workflowFiltersOpen: true, studioFilter: { ...prev.studioFilter, mode: target.value } }));
+    updateUiStateSilently((state) => {
+      state.workflowFiltersOpen = true;
+      state.studioFilter = { ...state.studioFilter, mode: target.value };
+    });
+    refreshWorkflowRegions();
+    syncWorkflowFilters();
     return;
   }
   if (action === 'set-filter-risk') {
-    setState((prev) => ({ ...prev, workflowFiltersOpen: true, studioFilter: { ...prev.studioFilter, risk: target.value } }));
+    updateUiStateSilently((state) => {
+      state.workflowFiltersOpen = true;
+      state.studioFilter = { ...state.studioFilter, risk: target.value };
+    });
+    refreshWorkflowRegions();
+    syncWorkflowFilters();
     return;
   }
 
@@ -2247,12 +2288,18 @@ function handleSubmit(event) {
   }
 }
 
+function handleDocumentOverlayClick(event) {
+  if (closestElement(event.target, '.workflow-filter-control')) return;
+  closeWorkflowFilters();
+}
+
 subscribe(render);
 render();
 
 bootstrapRuntimeMode();
 
 document.addEventListener('click', handleAction);
+document.addEventListener('click', handleDocumentOverlayClick);
 document.addEventListener('input', handleInput);
 document.addEventListener('change', handleAction);
 document.addEventListener('submit', handleSubmit);

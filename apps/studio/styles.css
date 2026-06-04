@@ -347,6 +347,22 @@ textarea { min-height: 82px; resize: vertical; }
   font-size: 12px;
   font-weight: 700;
 }
+.job-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+.job-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(248, 251, 255, 0.82);
+}
 .workflow-canvas.panning { cursor: grabbing; }
 .workflow-canvas-content {
   width: max-content;
