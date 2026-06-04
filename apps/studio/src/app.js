@@ -1,5 +1,5 @@
 import { EXECUTION_MODES, AI_EDIT_SUGGESTIONS } from '../../../packages/schema/src/constants.js';
-import { getState, setState, subscribe, getActiveProject, replaceActiveProject, recomputeValidation, setRuntimeMode, updateUiStateSilently } from './state/store.js';
+import { getState, setState, subscribe, getActiveProject, replaceActiveProject, replaceActiveProjectSilently, recomputeValidation, setRuntimeMode, updateUiStateSilently } from './state/store.js';
 import { apiClient } from './api-client/index.js';
 import {
   modelGenerateWorkflowDraft,
@@ -116,6 +116,7 @@ const ZH_HANS_REPLACEMENTS = [
   ['Rename Phase', '重命名阶段'],
   ['Delete Phase', '删除阶段'],
   ['Save Phase', '保存阶段'],
+  ['Phase actions', '阶段操作'],
   ['Add Node', '添加节点'],
   ['Undo', '撤销'],
   ['History', '历史'],
@@ -253,6 +254,15 @@ const WORKFLOW_MAX_SCALE = 4;
 let workflowPan = null;
 let workflowViewportCommitTimer = null;
 
+const ICONS = {
+  addPhase: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/><path d="M4 4h6v6H4zM14 14h6v6h-6z"/></svg>',
+  undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 1 1 0 12h-3"/></svg>',
+  history: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>',
+  validate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg>',
+  filter: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/></svg>',
+  more: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12h.01M19 12h.01M5 12h.01"/></svg>',
+};
+
 function translateText(text, language) {
   if (language !== 'zh-Hans') return text;
   return [...ZH_HANS_REPLACEMENTS]
@@ -274,6 +284,12 @@ function localizeDom(language) {
   });
   app.querySelectorAll('[placeholder]').forEach((node) => {
     node.setAttribute('placeholder', translateText(node.getAttribute('placeholder') || '', language));
+  });
+  app.querySelectorAll('[title]').forEach((node) => {
+    node.setAttribute('title', translateText(node.getAttribute('title') || '', language));
+  });
+  app.querySelectorAll('[aria-label]').forEach((node) => {
+    node.setAttribute('aria-label', translateText(node.getAttribute('aria-label') || '', language));
   });
 }
 
@@ -549,6 +565,52 @@ function renderNodeDetail(state, project, node) {
   return `<article class="card panel"><h3>Node Detail</h3><div class="tabs">${tabNav}</div><div class="tab-body">${body[tab]}</div></article>`;
 }
 
+function renderCanvasTool(action, label, icon) {
+  return `<button class="canvas-tool-button" data-action="${action}" aria-label="${label}" title="${label}"><span class="canvas-tool-icon">${icon}</span><span class="canvas-tool-tip">${label}</span></button>`;
+}
+
+function renderWorkflowCanvasTools(viewport) {
+  return `<div class="workflow-canvas-tools" aria-label="Workflow tools">
+    <span class="badge">Zoom <span data-workflow-zoom>${Math.round(viewport.scale * 100)}%</span></span>
+    ${renderCanvasTool('add-phase', 'Add Phase', ICONS.addPhase)}
+    ${renderCanvasTool('undo-workflow', 'Undo', ICONS.undo)}
+    ${renderCanvasTool('toggle-history', 'History', ICONS.history)}
+    ${renderCanvasTool('validate', 'Validate', ICONS.validate)}
+  </div>`;
+}
+
+function renderWorkflowCanvasFilters(state) {
+  const open = state.workflowFiltersOpen ? '' : ' hidden';
+  return `<div class="workflow-filter-control">
+    <button class="canvas-tool-button" data-action="toggle-workflow-filters" aria-label="Filters" title="Filters" aria-expanded="${state.workflowFiltersOpen ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.filter}</span><span class="canvas-tool-tip">Filters</span></button>
+    <div class="workflow-filter-popover"${open}>
+      <label>Execution Mode<select data-action="set-filter-mode"><option value="all">All</option>${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${(state.studioFilter?.mode || 'all') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
+      <label>Risk<select data-action="set-filter-risk"><option value="all">All</option>${['low', 'medium', 'high'].map((x) => `<option value="${x}" ${(state.studioFilter?.risk || 'all') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+    </div>
+  </div>`;
+}
+
+function renderPhaseMenu(phase) {
+  return `<div class="phase-menu" data-phase-menu="${phase.id}" hidden><label>Rename Phase<input data-action="phase-name-field" data-phase-id="${phase.id}" value="${phase.name}"/></label><div class="row"><button data-action="rename-phase" data-phase-id="${phase.id}">Save Phase</button><button data-action="delete-phase" data-phase-id="${phase.id}">Delete Phase</button></div></div>`;
+}
+
+function renderPhaseLane(state, project, nodes, selectedNode, phase) {
+  const phaseNodes = nodes.filter((node) => node.phaseId === phase.id);
+  const effectiveNodes = phase.id === '__unassigned__' ? nodes.filter((n) => !project.workflow.phases.find((p) => p.id === n.phaseId)) : phaseNodes;
+  const nodeIds = effectiveNodes.map((n) => n.id);
+  const highRiskCount = effectiveNodes.filter((n) => n.riskLevel === 'high').length;
+  const issueCount = state.validationResults.filter((v) => nodeIds.includes(v.targetId)).length;
+  const phaseStatus = state.validationResults.some((v) => v.level === 'error' && nodeIds.includes(v.targetId)) ? 'error' : issueCount ? 'warning' : 'ok';
+  const phaseMenu = phase.id === '__unassigned__' ? '' : `<button class="icon-button phase-menu-trigger" data-action="toggle-phase-menu" data-phase-id="${phase.id}" aria-label="Phase actions" title="Phase actions">${ICONS.more}</button>${renderPhaseMenu(phase)}`;
+  return `<div class="lane" data-phase-id="${phase.id}"><div class="lane-head"><h4>${phase.name}</h4>${phaseMenu}</div><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, node.id === selectedNode?.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
+}
+
+function renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport = getWorkflowViewport(state)) {
+  return `<div class="workflow-canvas-content" style="transform:${workflowTransform(viewport)}">
+    <div class="canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => renderPhaseLane(state, project, nodes, selectedNode, phase)).join('')}</div>
+  </div>`;
+}
+
 function renderStudio(state) {
   const project = getActiveProject(state);
   if (!hasProjectRuntime(project)) return renderProjectLoading(state, 'Loading Studio');
@@ -561,36 +623,20 @@ function renderStudio(state) {
   };
 
   const recentJobs = (state.jobs || []).slice(0, 3);
-  return `<section class="page"><div class="toolbar card"><div><strong>${project.name}</strong><p class="muted">v${project.workflow.version} · ${project.workflow.status}</p></div>
-    <div class="row"><button data-action="undo-workflow">Undo</button><button data-action="toggle-history">History</button><button data-action="validate">Validate</button></div></div>
+  const historyOpen = state.workflowHistoryOpen || (state.workflowHistory || []).length > 0;
+  return `<section class="page">
   ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model</div>'}
   ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
-  ${(state.workflowHistory || []).length ? `<article class="card panel"><h3>History</h3><ul>${state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('')}</ul></article>` : ''}
+  ${historyOpen ? `<article class="card panel"><div class="toolbar"><h3>History</h3><button data-action="save-workflow-history">Save Current Version</button></div><ul>${(state.workflowHistory || []).length ? state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('') : '<li>No saved versions yet</li>'}</ul></article>` : ''}
   <section class="workflow-board card">
-    <div class="workflow-board-head"><div><h3>Workflow</h3><p class="muted">Validation: ${summary.errors} errors, ${summary.warnings} warnings</p></div>
-      <div class="row"><span class="badge">Zoom <span data-workflow-zoom>${Math.round(viewport.scale * 100)}%</span></span><button data-action="reset-workflow-view">Reset View</button><button data-action="add-phase">Add Phase</button></div>
-      <div class="workflow-filters">
-        <label>Execution Mode<select data-action="set-filter-mode"><option value="all">All</option>${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${(state.studioFilter?.mode || 'all') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
-        <label>Risk<select data-action="set-filter-risk"><option value="all">All</option>${['low', 'medium', 'high'].map((x) => `<option value="${x}" ${(state.studioFilter?.risk || 'all') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
-      </div>
-    </div>
+    <div class="workflow-board-head"><div><h3>Workflow</h3><p class="muted" data-workflow-validation-summary>Validation: ${summary.errors} errors, ${summary.warnings} warnings</p></div></div>
     ${state.validationResults.length ? `<div class="workflow-alerts">${state.validationResults.slice(0, 4).map((x) => `<span class="inline-${x.level}">${x.title}</span>`).join('')}</div>` : ''}
     <div class="workflow-canvas">
-      <div class="workflow-canvas-content" style="transform:${workflowTransform(viewport)}">
-        <div class="canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => {
-      const phaseNodes = nodes.filter((node) => node.phaseId === phase.id);
-      const effectiveNodes = phase.id === '__unassigned__' ? nodes.filter((n) => !project.workflow.phases.find((p) => p.id === n.phaseId)) : phaseNodes;
-      const nodeIds = effectiveNodes.map((n) => n.id);
-      const highRiskCount = effectiveNodes.filter((n) => n.riskLevel === 'high').length;
-      const issueCount = state.validationResults.filter((v) => nodeIds.includes(v.targetId)).length;
-      const phaseStatus = state.validationResults.some((v) => v.level === 'error' && nodeIds.includes(v.targetId)) ? 'error' : issueCount ? 'warning' : 'ok';
-      const phaseMenu = phase.id === '__unassigned__' ? '' : `<button class="icon-button phase-menu-trigger" data-action="toggle-phase-menu" data-phase-id="${phase.id}" aria-label="Phase actions">...</button>`;
-      const phaseEditor = state.activePhaseMenuId === phase.id ? `<div class="phase-menu"><label>Rename Phase<input data-action="phase-name-field" data-phase-id="${phase.id}" value="${phase.name}"/></label><div class="row"><button data-action="rename-phase" data-phase-id="${phase.id}">Save Phase</button><button data-action="delete-phase" data-phase-id="${phase.id}">Delete Phase</button></div></div>` : '';
-      return `<div class="lane" data-phase-id="${phase.id}"><div class="lane-head"><h4>${phase.name}</h4>${phaseMenu}</div>${phaseEditor}<p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, node.id === selectedNode?.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
-        }).join('')}</div>
-      </div>
+      ${renderWorkflowCanvasFilters(state)}
+      ${renderWorkflowCanvasTools(viewport)}
+      ${renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport)}
+      <div class="workflow-detail">${renderNodeDetail(state, project, selectedNode)}</div>
     </div>
-    <div class="workflow-detail">${renderNodeDetail(state, project, selectedNode)}</div>
   </section>
   <article class="card panel"><h3>Recent Jobs</h3>
   <ul>${recentJobs.length ? recentJobs.map((job) => `<li>${job.id || job.job_id} · ${job.type} · ${job.status} · ${(job.progress?.stage || 'n/a')}
@@ -819,6 +865,60 @@ function refreshWorkflowDetail() {
   localizeDom(state.language || 'en');
 }
 
+function refreshWorkflowCanvas() {
+  const state = getState();
+  const project = getActiveProject(state);
+  const canvas = app.querySelector('.workflow-canvas');
+  if (!canvas || !hasProjectRuntime(project)) return;
+  const nodes = filteredNodes(state, project);
+  const selectedNode = project.workflow.nodes.find((node) => node.id === state.selectedNodeId) || project.workflow.nodes[0];
+  const oldContent = canvas.querySelector('.workflow-canvas-content');
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = renderWorkflowCanvasContent(state, project, nodes, selectedNode);
+  oldContent?.replaceWith(wrapper.firstElementChild);
+  applyWorkflowViewport(getWorkflowViewport(state));
+  localizeDom(state.language || 'en');
+}
+
+function refreshWorkflowSummary() {
+  const state = getState();
+  const summary = app.querySelector('[data-workflow-validation-summary]');
+  if (!summary) return;
+  const errors = state.validationResults.filter((x) => x.level === 'error').length;
+  const warnings = state.validationResults.filter((x) => x.level === 'warning').length;
+  summary.textContent = `Validation: ${errors} errors, ${warnings} warnings`;
+  localizeDom(state.language || 'en');
+}
+
+function refreshWorkflowRegions() {
+  refreshWorkflowSummary();
+  refreshWorkflowCanvas();
+  refreshWorkflowDetail();
+}
+
+function syncPhaseMenu() {
+  const state = getState();
+  app.querySelectorAll('[data-phase-menu]').forEach((menu) => {
+    menu.hidden = menu.dataset.phaseMenu !== state.activePhaseMenuId;
+  });
+  app.querySelectorAll('.phase-menu-trigger').forEach((button) => {
+    const active = button.dataset.phaseId === state.activePhaseMenuId;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-expanded', active ? 'true' : 'false');
+  });
+}
+
+function syncWorkflowFilters() {
+  const state = getState();
+  const popover = app.querySelector('.workflow-filter-popover');
+  const button = app.querySelector('[data-action="toggle-workflow-filters"]');
+  if (popover) popover.hidden = !state.workflowFiltersOpen;
+  if (button) {
+    button.classList.toggle('active', Boolean(state.workflowFiltersOpen));
+    button.setAttribute('aria-expanded', state.workflowFiltersOpen ? 'true' : 'false');
+  }
+}
+
 function selectWorkflowNode(nodeId) {
   const state = getState();
   const project = getActiveProject(state);
@@ -891,6 +991,33 @@ function handleWorkflowWheel(event) {
   };
   applyWorkflowViewport(nextViewport);
   commitWorkflowViewport(nextViewport, 180);
+}
+
+function resolveTargetPhaseId(project, phaseId) {
+  if (phaseId === '__unassigned__') return null;
+  if (project?.workflow?.phases?.some((phase) => phase.id === phaseId)) return phaseId;
+  return project?.workflow?.phases?.at(-1)?.id || null;
+}
+
+function createWorkflowNode(id, phaseId) {
+  return {
+    id,
+    phaseId,
+    name: 'New Node',
+    goal: 'Describe node goal',
+    executionMode: 'human_lead_ai_assist',
+    riskLevel: 'medium',
+    status: 'draft',
+    humanOwnerRole: 'Project Manager',
+    aiRole: 'Assistant',
+    inputs: ['input'],
+    outputs: ['output'],
+    artifactContract: { id: `artifact-${id}`, format: 'markdown', outputFormat: 'markdown', acceptanceCriteria: ['complete'] },
+    reviewGate: { id: `gate-${id}`, name: 'Review', reviewerRole: 'Project Manager', criteria: ['quality'], passCondition: 'approved', rejectCondition: 'rework', allowAiRevision: true, required: true },
+    promptStatus: 'draft',
+    checklistStatus: 'draft',
+    history: [{ at: new Date().toISOString(), action: 'Added manually' }],
+  };
 }
 
 function updateActiveProject(mutator, reason = 'Workflow updated', affectedNodeIds = []) {
@@ -991,9 +1118,25 @@ function handleAction(event) {
     refreshWorkflowDetail();
     return;
   }
-  if (action === 'reset-workflow-view') setState((prev) => ({ ...prev, workflowViewport: { x: 0, y: 0, scale: 1 } }));
-  if (action === 'set-filter-mode') setState((prev) => ({ ...prev, studioFilter: { ...prev.studioFilter, mode: target.value } }));
-  if (action === 'set-filter-risk') setState((prev) => ({ ...prev, studioFilter: { ...prev.studioFilter, risk: target.value } }));
+  if (action === 'reset-workflow-view') {
+    setState((prev) => ({ ...prev, workflowViewport: { x: 0, y: 0, scale: 1 } }));
+    return;
+  }
+  if (action === 'toggle-workflow-filters') {
+    updateUiStateSilently((state) => {
+      state.workflowFiltersOpen = !state.workflowFiltersOpen;
+    });
+    syncWorkflowFilters();
+    return;
+  }
+  if (action === 'set-filter-mode') {
+    setState((prev) => ({ ...prev, workflowFiltersOpen: true, studioFilter: { ...prev.studioFilter, mode: target.value } }));
+    return;
+  }
+  if (action === 'set-filter-risk') {
+    setState((prev) => ({ ...prev, workflowFiltersOpen: true, studioFilter: { ...prev.studioFilter, risk: target.value } }));
+    return;
+  }
 
   if (action === 'validate') {
     const project = getActiveProject();
@@ -1001,6 +1144,7 @@ function handleAction(event) {
     apiClient.workflowApi.validate(project.id)
       .then(({ data }) => setState((prev) => ({ ...prev, validationResults: data.validation || data.results || [] })))
       .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'VALIDATION_ERROR'} (${error.requestId || 'n/a'}): ${error.message || 'Validation failed'}` })));
+    return;
   }
   if (action === 'toggle-history') {
     const project = getActiveProject();
@@ -1008,8 +1152,17 @@ function handleAction(event) {
     apiClient.workflowApi.history(project.id).then(({ data }) => {
       const latest = (data || []).slice(-1)[0];
       const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
-      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [] }));
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [], workflowHistoryOpen: true }));
     }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
+    return;
+  }
+  if (action === 'save-workflow-history') {
+    const project = getActiveProject();
+    if (!project?.id) return;
+    apiClient.workflowApi.saveHistory(project.id, { workflow_version: project.workflow.version, summary: `Saved workflow version ${project.workflow.version}.` }).then(({ data }) => {
+      setState((prev) => ({ ...prev, serverError: `Saved workflow version ${project.workflow.version}.`, workflowHistory: data.history || [], workflowHistoryOpen: true }));
+    }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to save workflow history' })));
+    return;
   }
   if (action === 'undo-workflow') {
     const st = getState();
@@ -1017,6 +1170,7 @@ function handleAction(event) {
     if (!project?.id || !st.serverAvailable) return;
     apiClient.workflowApi.undo(project.id).then(() => refreshProjectRuntime(project.id))
       .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to undo workflow' })));
+    return;
   }
   if (action === 'toggle-history') {
     const project = getActiveProject();
@@ -1039,6 +1193,7 @@ function handleAction(event) {
     if (!project?.id || !st.serverAvailable) return;
     apiClient.workflowApi.restore(project.id, Number(target.dataset.version)).then(() => refreshProjectRuntime(project.id))
       .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+    return;
   }
   if (action === 'view-version') {
     const project = getActiveProject();
@@ -1047,6 +1202,7 @@ function handleAction(event) {
       const snap = data.snapshot || data;
       setState((prev) => ({ ...prev, serverError: `Version ${snap.workflow_version}: phases ${snap.phases?.length || 0}, nodes ${snap.nodes?.length || 0}, edges ${snap.edges?.length || 0}` }));
     }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+    return;
   }
   if (action === 'toggle-history') {
     const project = getActiveProject();
@@ -1675,7 +1831,11 @@ function handleAction(event) {
 
   if (action === 'toggle-phase-menu') {
     const phaseId = target.dataset.phaseId;
-    setState((prev) => ({ ...prev, activePhaseMenuId: prev.activePhaseMenuId === phaseId ? null : phaseId }));
+    updateUiStateSilently((state) => {
+      state.activePhaseMenuId = state.activePhaseMenuId === phaseId ? null : phaseId;
+    });
+    syncPhaseMenu();
+    return;
   }
 
   if (action === 'rename-phase') {
@@ -1727,39 +1887,35 @@ function handleAction(event) {
     const phaseId = target.dataset.phaseId;
     const st = getState();
     const project = getActiveProject(st);
+    const selectedPhase = resolveTargetPhaseId(project, phaseId);
+    const id = `node-${Date.now()}`;
+    const node = createWorkflowNode(id, selectedPhase);
     if (st.serverAvailable && project?.id) {
-      const selectedPhase = project.workflow.phases.some((phase) => phase.id === phaseId) ? phaseId : project.workflow.phases.at(-1)?.id;
-      const id = `node-${Date.now()}`;
-      const nextNodes = [...project.workflow.nodes, {
-        id, phaseId: selectedPhase, name: 'New Node', goal: 'Describe node goal', executionMode: 'human_lead_ai_assist', riskLevel: 'medium', status: 'draft', humanOwnerRole: 'Project Manager', aiRole: 'Assistant', inputs: ['input'], outputs: ['output'], artifactContract: { id: `artifact-${id}`, format: 'markdown', outputFormat: 'markdown', acceptanceCriteria: ['complete'] }, reviewGate: { id: `gate-${id}`, name: 'Review', reviewerRole: 'Project Manager', criteria: ['quality'], passCondition: 'approved', rejectCondition: 'rework', allowAiRevision: true, required: true }, promptStatus: 'draft', checklistStatus: 'draft', history: [{ at: new Date().toISOString(), action: 'Added manually' }],
-      }];
-      apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, nodes: nextNodes }).then(() => refreshProjectRuntime(project.id))
+      const nextNodes = [...project.workflow.nodes, node];
+      apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, nodes: nextNodes }).then(({ data }) => {
+        const updated = structuredClone(project);
+        updated.workflow = withCamelAliases(data.workflow || { ...project.workflow, nodes: nextNodes, version: project.workflow.version + 1 });
+        replaceActiveProjectSilently(updated);
+        updateUiStateSilently((state) => {
+          state.selectedNodeId = id;
+          state.activePhaseMenuId = null;
+          state.validationResults = withCamelAliases(data.validation_results || data.validationResults || state.validationResults);
+        });
+        refreshWorkflowRegions();
+      })
         .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : (error.message || 'Failed to add node') })));
       return;
     }
-    updateActiveProject((draft) => {
-      const phase = draft.workflow.phases.find((item) => item.id === phaseId) || draft.workflow.phases.at(-1);
-      const id = `node-${Date.now()}`;
-      draft.workflow.nodes.push({
-        id,
-        phaseId: phase.id,
-        name: 'New Node',
-        goal: 'Describe node goal',
-        executionMode: 'human_lead_ai_assist',
-        riskLevel: 'medium',
-        status: 'draft',
-        humanOwnerRole: 'Project Manager',
-        aiRole: 'Assistant',
-        inputs: ['input'],
-        outputs: ['output'],
-        artifactContract: { id: `artifact-${id}`, format: 'markdown', outputFormat: 'markdown', acceptanceCriteria: ['complete'] },
-        reviewGate: { id: `gate-${id}`, name: 'Review', reviewerRole: 'Project Manager', criteria: ['quality'], passCondition: 'approved', rejectCondition: 'rework', allowAiRevision: true, required: true },
-        promptStatus: 'draft',
-        checklistStatus: 'draft',
-        history: [{ at: new Date().toISOString(), action: 'Added manually' }],
-      });
-      draft.workflow.version += 1;
-    }, 'Node added');
+    const updated = structuredClone(project);
+    updated.workflow.nodes.push(node);
+    markProjectWorkflowChanged(updated, 'Node added', [id]);
+    replaceActiveProjectSilently(updated);
+    updateUiStateSilently((state) => {
+      state.selectedNodeId = id;
+      state.activePhaseMenuId = null;
+    });
+    refreshWorkflowRegions();
+    return;
   }
 
   if (action === 'delete-node') {

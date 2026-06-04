@@ -69,4 +69,9 @@ export function recomputeValidation(project) { return validateWorkflow(project.w
 export function replaceActiveProject(updatedProject) {
   setState((prev) => ({ ...prev, projects: prev.projects.map((p) => (p.id === updatedProject.id ? updatedProject : p)), validationResults: recomputeValidation(updatedProject) }));
 }
+export function replaceActiveProjectSilently(updatedProject) {
+  state.projects = state.projects.map((p) => (p.id === updatedProject.id ? updatedProject : p));
+  state.validationResults = recomputeValidation(updatedProject);
+  persistUiState();
+}
 export function setRuntimeMode(runtimeMode, serverAvailable) { setState((prev) => ({ ...prev, runtimeMode, serverAvailable })); }

@@ -66,6 +66,27 @@ async function main() {
     await apiFetch(baseUrl, `/api/projects/${projectId}/context-pack`, { method: 'PUT', body: JSON.stringify({ team_roles:['PM'], approval_process:['Review'], tool_stack:['GitHub'], risk_constraints:['None'], historical_process_materials:'N/A' }) });
     const workflow = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`);
     assert(Array.isArray(workflow.body.data.nodes), 'workflow should include nodes array');
+    const initialNodeName = workflow.body.data.nodes[0].name;
+    const firstEditNodes = structuredClone(workflow.body.data.nodes);
+    firstEditNodes[0] = { ...firstEditNodes[0], name: 'smoke edit one' };
+    const firstEdit = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`, { method: 'PATCH', body: JSON.stringify({ workflow_version: workflow.body.data.version, nodes: firstEditNodes }) });
+    const secondEditNodes = structuredClone(firstEdit.body.data.workflow.nodes);
+    secondEditNodes[0] = { ...secondEditNodes[0], name: 'smoke edit two' };
+    const secondEdit = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`, { method: 'PATCH', body: JSON.stringify({ workflow_version: firstEdit.body.data.workflow.version, nodes: secondEditNodes }) });
+    const autoHistory = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/history`);
+    assert(autoHistory.body.data.length === 0, 'workflow edits should not automatically create saved history');
+    const firstUndo = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/undo`, { method: 'POST' });
+    assert(firstUndo.body.data.workflow.nodes[0].name === 'smoke edit one', 'first undo should restore the previous edit');
+    const secondUndo = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/undo`, { method: 'POST' });
+    assert(secondUndo.body.data.workflow.nodes[0].name === initialNodeName, 'second undo should restore the original workflow, not the prior undo');
+    let saveVersion = secondUndo.body.data.workflow.version;
+    for (let i = 0; i < 11; i += 1) {
+      const saved = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/history`, { method: 'POST', body: JSON.stringify({ workflow_version: saveVersion, summary: `manual save ${i}` }) });
+      assert(saved.body.data.history.length <= 10, 'manual saved history should retain at most 10 versions');
+    }
+    const savedHistory = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/history`);
+    assert(savedHistory.body.data.length === 10, 'manual saved history should keep exactly the latest 10 saves after 11 saves');
+    assert(savedHistory.body.data[0].summary === 'manual save 1', 'oldest saved history should be trimmed when the 11th save is added');
     await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/validate`, { method: 'POST' });
     const preview = await apiFetch(baseUrl, `/api/projects/${projectId}/execution-kits/preview`, { method: 'POST', body: JSON.stringify({ kit_type: 'draft' }) });
     assert(preview.body.data.preview?.files?.['workflow_spec.yaml'], 'execution kit preview should include workflow_spec.yaml');
