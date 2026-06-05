@@ -36,6 +36,7 @@ const ZH_HANS_REPLACEMENTS = [
   ['Reconnect Server', '重新连接服务'],
   ['Open Source Theme', '开源主题'],
   ['Context Pack', '上下文包'],
+  ['Context Management', '上下文管理'],
   ['Execution Assets', '执行资产'],
   ['Create First Project', '创建第一个项目'],
   ['Start with a project goal.', '从项目目标开始。'],
@@ -168,7 +169,18 @@ const ZH_HANS_REPLACEMENTS = [
   ['Preview status', '预览状态'],
   ['Latest generated kit', '最近生成的执行包'],
   ['Settings / Model Access', '设置 / 模型访问'],
+  ['Model Configuration', '模型配置'],
   ['Model Mode', '模型模式'],
+  ['Base URL', '基础 URL'],
+  ['API Key', 'API Key'],
+  ['Timeout MS', '超时时间（毫秒）'],
+  ['Allow Mock Fallback', '允许 Mock 兜底'],
+  ['Log Level', '日志级别'],
+  ['Clear saved API key', '清除已保存的 API key'],
+  ['Saved to local server config', '保存到本地服务配置'],
+  ['Test Model', '测试模型'],
+  ['Save Configuration', '保存配置'],
+  ['Runtime Status', '运行时状态'],
   ['Provider', '提供商'],
   ['Default Model', '默认模型'],
   ['Planning Model', '规划模型'],
@@ -374,14 +386,38 @@ function badge(text, cls = '') {
   return `<span class="badge ${cls}">${text}</span>`;
 }
 
+function escapeAttr(value = '') {
+  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function showToast(message, type = 'info') {
+  const id = `toast-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  setState((prev) => ({ ...prev, toasts: [...(prev.toasts || []), { id, message, type }].slice(-4) }));
+  window.setTimeout(() => {
+    setState((prev) => ({ ...prev, toasts: (prev.toasts || []).filter((toast) => toast.id !== id) }));
+  }, 3600);
+}
+
+function renderToasts(state) {
+  const toasts = state.toasts || [];
+  if (!toasts.length) return '';
+  return `<div class="toast-stack" role="status" aria-live="polite">${toasts.map((toast) => `<div class="toast ${toast.type || 'info'}">${toast.message}</div>`).join('')}</div>`;
+}
+
+function renderModelCallList(logs) {
+  if (!logs.length) return '<li>No calls yet</li>';
+  return logs.map((log) => {
+    const failed = log.status === 'failed';
+    const summary = failed && log.summary ? `<p class="inline-error">${log.summary}</p>` : '';
+    return `<li>${log.created_at || log.at} 路 ${log.purpose || log.name} 路 ${log.status}${summary}</li>`;
+  }).join('');
+}
+
 function renderSidebar(state) {
   const pages = [
     ['projects', 'Projects'],
-    ['context', 'Context Pack'],
-    ['studio', 'Studio'],
     ['jobs', 'Jobs'],
     ['assets', 'Execution Assets'],
-    ['export', 'Export'],
     ['settings', 'Settings'],
   ];
 
@@ -424,7 +460,7 @@ function renderProjects(state) {
       <div class="kv-row"><span>Nodes ${stats.nodes}</span><span>AI ${stats.aiNodes}</span><span>Gates ${stats.gates}</span></div>
       <div class="kv-row"><span>Stage</span><strong>${project.current_stage || project.currentStage || 'n/a'}</strong></div>
       <div class="kv-row"><span>Execution Kit</span><strong>${project.execution_kit?.status || project.executionKit?.status || 'not generated'}</strong></div>
-      <button data-action="open-project" data-project-id="${project.id}">Open Studio</button></article>`;
+      <div class="actions"><button data-action="open-project" data-project-id="${project.id}">Open Studio</button><button data-action="open-project-context" data-project-id="${project.id}">Context Management</button></div></article>`;
   }).join('')}</div></section>`;
 }
 
@@ -844,17 +880,44 @@ function renderJobs(state) {
 function renderSettings(state) {
   const logs = state.modelCalls || [];
   const modelStatus = state.modelStatus || {};
+  const config = state.modelConfig || modelStatus.config || {};
   const mode = modelStatus?.mode || modelStatus?.model_mode || (state.serverAvailable ? 'unknown' : 'mock');
-  return `<section class="page"><h2>Settings / Model Access</h2><div class="card panel">
-  <p>Model Mode: ${mode}</p>
-  <p>Provider: ${modelStatus.provider || 'n/a'}</p>
-  <p>Default Model: ${modelStatus.default_model || modelStatus.defaultModel || 'n/a'}</p>
-  <p>Planning Model: ${modelStatus.planning_model || 'n/a'}</p>
-  <p>Prompt Model: ${modelStatus.prompt_model || 'n/a'}</p>
-  <p>Diff Model: ${modelStatus.diff_model || 'n/a'}</p>
-  <p>Structured Output: ${(modelStatus.structured_output_enabled ?? modelStatus.structuredOutputEnabled) ? 'enabled' : 'disabled'}</p>
-  <div class="actions"><button data-action="refresh-model-status">Refresh Model Status</button></div>
-  <h3>Recent Model Calls</h3><ul>${logs.map((log) => `<li>${log.created_at || log.at} · ${log.purpose || log.name} · ${log.status}</li>`).join('') || '<li>No calls yet</li>'}</ul></div></section>`;
+  const structuredOutputEnabled = config.structured_output_enabled ?? modelStatus.structured_output_enabled ?? true;
+  const allowMock = config.allow_mock ?? modelStatus.allow_mock ?? true;
+  const logLevel = config.log_level || modelStatus.log_level || 'summary';
+  return `<section class="page"><h2>Settings / Model Access</h2>
+  <div class="split-2">
+    <form class="card form" data-form="model-config">
+      <h3>Model Configuration</h3>
+      <div class="grid-2">
+        <label>Provider<input name="provider" value="${escapeAttr(config.provider || 'openai-compatible')}" placeholder="openai-compatible"/></label>
+        <label>Base URL<input name="api_base_url" value="${escapeAttr(config.api_base_url || 'https://api.openai.com/v1')}" placeholder="https://api.openai.com/v1"/></label>
+        <label>API Key<input name="api_key" type="password" value="" placeholder="${config.api_key_configured ? `Configured: ${escapeAttr(config.api_key_masked)}` : 'Paste API key'}"/></label>
+        <label>Default Model<input name="default_model" value="${escapeAttr(config.default_model || modelStatus.default_model || '')}" placeholder="gpt-4.1-mini"/></label>
+        <label>Planning Model<input name="planning_model" value="${escapeAttr(config.planning_model || modelStatus.planning_model || '')}" placeholder="gpt-4.1"/></label>
+        <label>Prompt Model<input name="prompt_model" value="${escapeAttr(config.prompt_model || modelStatus.prompt_model || '')}" placeholder="gpt-4.1-mini"/></label>
+        <label>Diff Model<input name="diff_model" value="${escapeAttr(config.diff_model || modelStatus.diff_model || '')}" placeholder="gpt-4.1"/></label>
+        <label>Timeout MS<input name="timeout_ms" type="number" min="1000" step="1000" value="${escapeAttr(config.timeout_ms || modelStatus.timeout_ms || 60000)}"/></label>
+        <label>Structured Output<select name="structured_output_enabled"><option value="true" ${structuredOutputEnabled ? 'selected' : ''}>enabled</option><option value="false" ${structuredOutputEnabled ? '' : 'selected'}>disabled</option></select></label>
+        <label>Allow Mock Fallback<select name="allow_mock"><option value="true" ${allowMock ? 'selected' : ''}>enabled</option><option value="false" ${allowMock ? '' : 'selected'}>disabled</option></select></label>
+        <label>Log Level<select name="log_level"><option value="summary" ${logLevel === 'summary' ? 'selected' : ''}>summary</option><option value="debug" ${logLevel === 'debug' ? 'selected' : ''}>debug</option><option value="silent" ${logLevel === 'silent' ? 'selected' : ''}>silent</option></select></label>
+        <label class="check"><input name="clear_api_key" type="checkbox"/> Clear saved API key</label>
+      </div>
+      <p class="muted">Saved to local server config: ${escapeAttr(config.config_path || 'n/a')}</p>
+      <div class="actions"><button type="button" data-action="test-model-config">Test Model</button><button type="button" data-action="refresh-model-status">Refresh</button><button type="submit" class="primary">Save Configuration</button></div>
+    </form>
+    <div class="card panel">
+      <h3>Runtime Status</h3>
+      <p>Model Mode: ${mode}</p>
+      <p>Provider: ${modelStatus.provider || 'n/a'}</p>
+      <p>Default Model: ${modelStatus.default_model || modelStatus.defaultModel || 'n/a'}</p>
+      <p>Planning Model: ${modelStatus.planning_model || 'n/a'}</p>
+      <p>Prompt Model: ${modelStatus.prompt_model || 'n/a'}</p>
+      <p>Diff Model: ${modelStatus.diff_model || 'n/a'}</p>
+      <p>Structured Output: ${(modelStatus.structured_output_enabled ?? modelStatus.structuredOutputEnabled) ? 'enabled' : 'disabled'}</p>
+      <h3>Recent Model Calls</h3><ul>${renderModelCallList(logs)}</ul>
+    </div>
+  </div></section>`;
 }
 
 function renderPage(state) {
@@ -873,7 +936,7 @@ function renderPage(state) {
 
 function render() {
   const state = getState();
-  app.innerHTML = `<div class="app-shell" data-theme="open-source">${renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>`;
+  app.innerHTML = `<div class="app-shell" data-theme="open-source">${renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
   localizeDom(state.language || 'en');
 }
 
@@ -1095,16 +1158,17 @@ async function loadProjectRuntime(projectId, { navigate = true, projectSummaries
 async function bootstrapRuntimeMode() {
   try {
     await apiClient.healthApi.check();
-    const [{ data: projectsData }, { data: modelStatus }] = await Promise.all([
+    const [{ data: projectsData }, { data: modelStatus }, { data: modelConfig }] = await Promise.all([
       apiClient.projectsApi.list(),
       apiClient.modelApi.status(),
+      apiClient.modelApi.config(),
     ]);
     const projects = projectsData?.projects || projectsData || [];
     if (projects[0]?.id) {
       await loadProjectRuntime(projects[0].id, { navigate: false, projectSummaries: projects });
-      setState((prev) => ({ ...prev, modelStatus, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
+      setState((prev) => ({ ...prev, modelStatus, modelConfig, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
     } else {
-      setState((prev) => ({ ...prev, projects: [], modelStatus, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
+      setState((prev) => ({ ...prev, projects: [], modelStatus, modelConfig, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
     }
   } catch (error) {
     setState((prev) => ({ ...prev, serverError: error.message || 'Server disconnected' }));
@@ -1137,6 +1201,23 @@ function handleAction(event) {
       return;
     }
     loadProjectRuntime(projectId).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load project workflow' })));
+  }
+  if (action === 'open-project-context') {
+    const projectId = target.dataset.projectId;
+    const st = getState();
+    const localProject = st.projects.find((p) => p.id === projectId);
+    if (!st.serverAvailable && localProject) {
+      setState((prev) => ({
+        ...prev,
+        activeProjectId: projectId,
+        currentPage: 'context',
+        serverError: 'Mode: Local Demo / Mock Model. Start the local server and click Reconnect Server for persisted editing.',
+      }));
+      return;
+    }
+    loadProjectRuntime(projectId, { navigate: false })
+      .then(() => setState((prev) => ({ ...prev, currentPage: 'context' })))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load project context' })));
   }
   if (action === 'select-node') {
     selectWorkflowNode(target.dataset.nodeId);
@@ -1757,11 +1838,24 @@ function handleAction(event) {
   }
 
   if (action === 'refresh-model-status') {
-    Promise.all([apiClient.modelApi.status(), apiClient.modelApi.calls()])
-      .then(([statusResult, callsResult]) => {
-        setState((prev) => ({ ...prev, modelStatus: statusResult.data || {}, modelCalls: callsResult.data?.calls || callsResult.data || [] }));
+    Promise.all([apiClient.modelApi.status(), apiClient.modelApi.config(), apiClient.modelApi.calls()])
+      .then(([statusResult, configResult, callsResult]) => {
+        setState((prev) => ({ ...prev, modelStatus: statusResult.data || {}, modelConfig: configResult.data || {}, modelCalls: callsResult.data?.calls || callsResult.data || [] }));
+        showToast('Model status refreshed.', 'success');
       })
-      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to refresh model status' })));
+      .catch((error) => showToast(error.message || 'Failed to refresh model status', 'error'));
+  }
+
+  if (action === 'test-model-config') {
+    apiClient.modelApi.test()
+      .then((testResult) => Promise.all([apiClient.modelApi.status(), apiClient.modelApi.config(), apiClient.modelApi.calls()])
+        .then(([statusResult, configResult, callsResult]) => ({ testResult, statusResult, configResult, callsResult })))
+      .then(({ testResult, statusResult, configResult, callsResult }) => {
+        setState((prev) => ({ ...prev, modelStatus: statusResult.data || {}, modelConfig: configResult.data || {}, modelCalls: callsResult.data?.calls || callsResult.data || [] }));
+        if (testResult.data?.status === 'failed') showToast(testResult.data.error || 'Model test failed.', 'error');
+        else showToast('Model test completed.', 'success');
+      })
+      .catch((error) => showToast(error.message || 'Failed to test model configuration', 'error'));
   }
 
   if (action === 'job-retry') {
@@ -2285,6 +2379,32 @@ function handleSubmit(event) {
     }).catch((error) => {
       setState((prev) => ({ ...prev, serverError: error.message || 'Failed to save context pack' }));
     });
+  }
+
+  if (event.target.dataset.form === 'model-config') {
+    event.preventDefault();
+    const raw = Object.fromEntries(new FormData(event.target));
+    const payload = {
+      provider: raw.provider,
+      api_base_url: raw.api_base_url,
+      api_key: raw.api_key,
+      default_model: raw.default_model,
+      planning_model: raw.planning_model,
+      prompt_model: raw.prompt_model,
+      diff_model: raw.diff_model,
+      timeout_ms: raw.timeout_ms,
+      structured_output_enabled: raw.structured_output_enabled,
+      allow_mock: raw.allow_mock,
+      log_level: raw.log_level,
+      clear_api_key: raw.clear_api_key === 'on',
+    };
+    apiClient.modelApi.saveConfig(payload)
+      .then(() => Promise.all([apiClient.modelApi.status(), apiClient.modelApi.config(), apiClient.modelApi.calls()]))
+      .then(([statusResult, configResult, callsResult]) => {
+        setState((prev) => ({ ...prev, modelStatus: statusResult.data || {}, modelConfig: configResult.data || {}, modelCalls: callsResult.data?.calls || callsResult.data || [] }));
+        showToast('Model configuration saved.', 'success');
+      })
+      .catch((error) => showToast(error.message || 'Failed to save model configuration', 'error'));
   }
 }
 

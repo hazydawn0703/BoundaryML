@@ -1,4 +1,7 @@
-const config = {
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+const defaultConfig = {
   provider: process.env.BOUNDARYML_LLM_PROVIDER || process.env.LLM_PROVIDER || 'mock',
   api_base_url: process.env.BOUNDARYML_LLM_BASE_URL || process.env.LLM_API_BASE_URL || 'https://api.openai.com/v1',
   api_key: process.env.BOUNDARYML_LLM_API_KEY || process.env.LLM_API_KEY || '',
@@ -12,6 +15,83 @@ const config = {
   log_level: process.env.BOUNDARYML_LLM_LOG_LEVEL || 'summary',
 };
 
+const configPath = resolve(process.env.BOUNDARYML_MODEL_CONFIG_PATH || process.env.BOUNDARYML_LLM_CONFIG_PATH || `${process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || './data'}/model-config.json`);
+const editableFields = new Set(['provider', 'api_base_url', 'api_key', 'default_model', 'planning_model', 'prompt_model', 'diff_model', 'timeout_ms', 'structured_output_enabled', 'allow_mock', 'log_level']);
+const config = { ...defaultConfig, ...loadPersistedConfig() };
+
+function loadPersistedConfig() {
+  if (!existsSync(configPath)) return {};
+  try {
+    return normalizeConfig(JSON.parse(readFileSync(configPath, 'utf-8')), { keepExistingApiKey: false });
+  } catch {
+    return {};
+  }
+}
+
+function persistConfig() {
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+function normalizeConfig(input = {}, { keepExistingApiKey = true } = {}) {
+  const source = {
+    ...input,
+    api_base_url: input.api_base_url ?? input.apiBaseUrl ?? input.base_url ?? input.baseUrl,
+    api_key: input.api_key ?? input.apiKey,
+    default_model: input.default_model ?? input.defaultModel,
+    planning_model: input.planning_model ?? input.planningModel,
+    prompt_model: input.prompt_model ?? input.promptModel,
+    diff_model: input.diff_model ?? input.diffModel,
+    timeout_ms: input.timeout_ms ?? input.timeoutMs,
+    structured_output_enabled: input.structured_output_enabled ?? input.structuredOutputEnabled,
+    allow_mock: input.allow_mock ?? input.allowMock,
+    log_level: input.log_level ?? input.logLevel,
+  };
+  const next = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!editableFields.has(key)) continue;
+    if (value === undefined) continue;
+    if (key === 'api_key' && value === '' && keepExistingApiKey) continue;
+    if (key === 'timeout_ms') next[key] = Math.max(1000, Number(value || 60000));
+    else if (key === 'structured_output_enabled' || key === 'allow_mock') next[key] = value === true || value === 'true' || value === 'on';
+    else next[key] = String(value ?? '').trim();
+  }
+  if (next.api_key === '__CLEAR__') next.api_key = '';
+  return next;
+}
+
+function publicConfig() {
+  return {
+    ...config,
+    api_key: '',
+    api_key_configured: Boolean(config.api_key),
+    api_key_masked: config.api_key ? `${config.api_key.slice(0, 4)}...${config.api_key.slice(-4)}` : '',
+    config_path: configPath,
+  };
+}
+
+export function getModelConfig() {
+  return publicConfig();
+}
+
+export function updateModelConfig(input = {}) {
+  Object.assign(config, normalizeConfig(input, { keepExistingApiKey: !input.clear_api_key }));
+  if (input.clear_api_key) config.api_key = '';
+  persistConfig();
+  return getModelStatus();
+}
+
+function hasApiKey() {
+  return Boolean(String(config.api_key || '').trim());
+}
+
+function validateModelConfigForRequest() {
+  const apiKey = String(config.api_key || '').trim();
+  if (!apiKey) return;
+  if (/[^\x20-\x7E]/.test(apiKey)) throw new Error('MODEL_API_KEY_INVALID_CHARACTERS: API key must use ASCII characters only. Check for pasted labels, spaces, or non-English punctuation.');
+  if (!/^https?:\/\//i.test(String(config.api_base_url || ''))) throw new Error('MODEL_BASE_URL_INVALID: Base URL must start with http:// or https://');
+}
+
 function modelForTask(task) {
   if (task.includes('diff')) return config.diff_model;
   if (task.includes('prompt')) return config.prompt_model;
@@ -19,11 +99,11 @@ function modelForTask(task) {
 }
 
 export function getModelStatus() {
-  const usingMock = !config.api_key;
+  const usingMock = !hasApiKey();
   return {
     mode: usingMock ? 'mock' : 'real',
     provider: usingMock ? 'mock' : config.provider,
-    configured: Boolean(config.api_key),
+    configured: hasApiKey(),
     using_mock: usingMock,
     default_model: config.default_model,
     planning_model: config.planning_model,
@@ -31,6 +111,9 @@ export function getModelStatus() {
     diff_model: config.diff_model,
     structured_output_enabled: config.structured_output_enabled,
     log_level: config.log_level,
+    timeout_ms: config.timeout_ms,
+    allow_mock: config.allow_mock,
+    config: publicConfig(),
   };
 }
 
@@ -45,7 +128,7 @@ function parseStructuredContent(content) {
 }
 
 export async function runModel(task, payload) {
-  if (!config.api_key) {
+  if (!hasApiKey()) {
     if (!config.allow_mock) throw new Error('MODEL_NOT_CONFIGURED');
     return {
       task,
@@ -56,6 +139,7 @@ export async function runModel(task, payload) {
     };
   }
 
+  validateModelConfigForRequest();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeout_ms);
   try {
@@ -73,8 +157,11 @@ export async function runModel(task, payload) {
         ...(config.structured_output_enabled ? { response_format: { type: 'json_object' } } : {}),
       }),
     });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body?.error?.message || `MODEL_HTTP_${response.status}`);
+    const rawBody = await response.text();
+    let body = null;
+    try { body = rawBody ? JSON.parse(rawBody) : null; } catch {}
+    if (!response.ok) throw new Error(body?.error?.message || rawBody.slice(0, 240) || `MODEL_HTTP_${response.status}`);
+    if (!body) throw new Error('MODEL_INVALID_JSON_RESPONSE');
     const content = body?.choices?.[0]?.message?.content || '';
     return {
       task,

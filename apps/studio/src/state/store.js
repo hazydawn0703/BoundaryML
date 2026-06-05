@@ -23,6 +23,8 @@ function initialState() {
     selectedAsset: null,
     jobs: [],
     modelStatus: null,
+    modelConfig: null,
+    toasts: [],
     serverError: '',
   };
 }

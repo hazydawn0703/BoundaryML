@@ -463,6 +463,27 @@ textarea { min-height: 82px; resize: vertical; }
 .inline-suggestion { color: var(--ok); }
 .inline-error.card, .inline-error.panel { color: #991b1b; background: var(--danger-50); border-color: #fecaca; }
 .inline-warning.card, .inline-warning.panel { color: #92400e; background: var(--warn-50); border-color: #fde68a; }
+.toast-stack {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 10px;
+  z-index: 80;
+  width: min(360px, calc(100vw - 36px));
+}
+.toast {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow);
+  padding: 11px 13px;
+  color: var(--text);
+  font-weight: 700;
+}
+.toast.success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+.toast.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
 .drawer { margin-top: 16px; }
 .check { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 7px; }
 .check input { width: auto; }

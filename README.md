@@ -49,9 +49,15 @@ npm run dev:studio
 
 ## OpenAI-compatible Model 配置
 
+开源版支持两种配置方式：
+
+- 在 `.env` 中设置默认模型配置。
+- 在 Studio 的 `Settings / Model Access` 页面保存配置，保存后会立即更新 Server 运行时，并写入 `BOUNDARYML_MODEL_CONFIG_PATH`（默认 `./data/model-config.json`）。
+
 `.env.example` 已包含：
 
 ```bash
+BOUNDARYML_MODEL_CONFIG_PATH=./data/model-config.json
 BOUNDARYML_LLM_PROVIDER=openai-compatible
 BOUNDARYML_LLM_API_KEY=
 BOUNDARYML_LLM_BASE_URL=
@@ -63,7 +69,7 @@ BOUNDARYML_LLM_ENABLE_STRUCTURED_OUTPUT=true
 BOUNDARYML_ALLOW_MOCK_MODEL=true
 ```
 
-如果未配置 API Key，Server 会在允许 mock 的情况下使用 Mock Model fallback。模型 Key 只应保存在 Server，不进入浏览器。
+如果未配置 API Key，Server 会在允许 mock 的情况下使用 Mock Model fallback。Studio 不会回显原始 API Key，只显示是否已配置和 masked 值；模型 Key 只保存在 Server 本地配置文件中，不进入浏览器 localStorage，也不进入 git（`data/` 已被忽略）。
 
 ## MVP Built-in Templates
 
