@@ -64,6 +64,7 @@ async function main() {
     assert(modelConfig.body.data.default_model === 'smoke-default', 'model config should be readable');
     assert(modelConfig.body.data.api_key === '', 'model config response should not expose raw api key');
     assert(modelConfig.body.data.api_key_configured === true, 'model config should report configured api key');
+    assert(modelConfig.body.data.api_key_masked === 'sk-s****cret', 'model config should expose a safe first4/last4 api key mask');
     const modelTest = await apiFetch(baseUrl, '/api/model/test', { method: 'POST' });
     assert(modelTest.status === 200, 'model test should return an app-level result instead of proxying provider errors as HTTP failure');
     assert(['failed', 'succeeded', 'mock'].includes(modelTest.body.data.status), 'model test should report an explicit status');
@@ -71,7 +72,14 @@ async function main() {
     const invalidKeyTest = await apiFetch(baseUrl, '/api/model/test', { method: 'POST' });
     assert(invalidKeyTest.body.data.status === 'failed', 'invalid api key characters should be reported as a model test failure');
     assert(invalidKeyTest.body.data.error.includes('MODEL_API_KEY_INVALID_CHARACTERS'), 'invalid api key error should be explicit');
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ api_key: 'Bearer sk－full width key' }) });
+    const normalizedKeyConfig = await apiFetch(baseUrl, '/api/model/config');
+    assert(normalizedKeyConfig.body.data.api_key_masked.startsWith('sk-f'), 'api key normalization should support sk- keys pasted with Bearer or full-width punctuation');
     await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ api_key: 'sk-smoke-secret' }) });
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ clear_api_key: true, allow_mock: false }) });
+    const missingKeyTest = await apiFetch(baseUrl, '/api/model/test', { method: 'POST' });
+    assert(missingKeyTest.body.data.error.includes('MODEL_API_KEY_NOT_CONFIGURED'), 'missing real model api key should produce a clear Settings guidance error');
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ api_key: 'sk-smoke-secret', allow_mock: true }) });
     const templates = await apiFetch(baseUrl, '/api/templates'); assert((templates.body.data.templates || []).length >= 3, 'templates should expose public MVP templates');
     const template = await apiFetch(baseUrl, '/api/templates/template-ai-saas-feature-mvp'); assert(template.body.data.id === 'template-ai-saas-feature-mvp', 'template detail should be fetchable');
     const created = await apiFetch(baseUrl, '/api/projects', { method: 'POST', body: JSON.stringify({ name: 'smoke-project', goal: 'smoke goal' }) });
@@ -121,4 +129,32 @@ async function main() {
   }
 }
 
-main().catch((err) => { console.error('❌ server smoke failed:', err.message); process.exit(1); });
+async function checkDefaultFileStorage() {
+  const port = String(9980 + Math.floor(Math.random() * 80));
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const tmpDataDir = `.tmp-server-default-storage-${Date.now()}`;
+  const env = { ...process.env, BOUNDARYML_SERVER_PORT: port, BOUNDARYML_DATA_DIR: tmpDataDir };
+  delete env.BOUNDARYML_STORAGE_ADAPTER;
+  delete env.STORAGE_MODE;
+  let server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
+  try {
+    await waitForServer(baseUrl);
+    const health = await apiFetch(baseUrl, '/api/health');
+    assert(health.body.data.storage === 'file', 'server should default to file storage');
+    const created = await apiFetch(baseUrl, '/api/projects', { method: 'POST', body: JSON.stringify({ name: 'default-file-project', goal: 'persist by default' }) });
+    const projectId = created.body.data.id;
+    server.kill('SIGTERM'); await sleep(400);
+    server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
+    await waitForServer(baseUrl);
+    const restored = await apiFetch(baseUrl, `/api/projects/${projectId}`);
+    assert(restored.body.data.id === projectId, 'default file storage should persist projects across restart');
+  } finally {
+    try { server.kill('SIGTERM'); } catch {}
+    await sleep(100);
+    rmSync(tmpDataDir, { recursive: true, force: true });
+  }
+}
+
+main()
+  .then(checkDefaultFileStorage)
+  .catch((err) => { console.error('❌ server smoke failed:', err.message); process.exit(1); });

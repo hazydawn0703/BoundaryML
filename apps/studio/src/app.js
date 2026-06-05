@@ -20,6 +20,23 @@ const UI_LANGUAGES = {
 };
 
 const ZH_HANS_REPLACEMENTS = [
+  ['Search projects', '搜索项目'],
+  ['Search by project name', '按项目名搜索'],
+  ['No projects match your search.', '没有匹配搜索的项目。'],
+  ['Model Access', '模型访问'],
+  ['Manage model provider, keys, and runtime test calls', '管理模型服务商、密钥和运行时测试调用'],
+  ['Model Configuration', '模型配置'],
+  ['Runtime Status', '运行时状态'],
+  ['Base URL', '基础 URL'],
+  ['Timeout MS', '超时时间（毫秒）'],
+  ['Allow Mock Fallback', '允许 Mock 兜底'],
+  ['Log Level', '日志级别'],
+  ['Clear saved API key', '清除已保存的 API key'],
+  ['Saved to local server config', '保存到本地服务配置'],
+  ['Test Model', '测试模型'],
+  ['Save Configuration', '保存配置'],
+  ['Recent Model Calls', '最近模型调用'],
+  ['No calls yet', '暂无调用'],
   ['Generate Workflow Draft', '生成工作流草稿'],
   ['Organization-Aware Setup', '组织上下文设置'],
   ['Historical Process Materials', '历史流程材料'],
@@ -409,7 +426,7 @@ function renderModelCallList(logs) {
   return logs.map((log) => {
     const failed = log.status === 'failed';
     const summary = failed && log.summary ? `<p class="inline-error">${log.summary}</p>` : '';
-    return `<li>${log.created_at || log.at} 路 ${log.purpose || log.name} 路 ${log.status}${summary}</li>`;
+    return `<li>${log.created_at || log.at} - ${log.purpose || log.name} - ${log.status}${summary}</li>`;
   }).join('');
 }
 
@@ -417,12 +434,15 @@ function renderSidebar(state) {
   const pages = [
     ['projects', 'Projects'],
     ['jobs', 'Jobs'],
-    ['assets', 'Execution Assets'],
-    ['settings', 'Settings'],
   ];
+  const settingsSelected = state.currentPage === 'settings-model' || state.currentPage === 'settings';
+  const settingsOpen = state.settingsNavOpen || settingsSelected;
 
   return `<aside class="sidebar"><div class="logo">Boundary<span>ML</span></div><div class="theme-strip">Open Source Theme<div class="theme-swatch-row"><span class="theme-swatch primary"></span><span class="theme-swatch accent"></span><span class="theme-swatch violet"></span></div></div>
-    <nav>${pages.map(([id, label]) => `<button class="nav-item ${state.currentPage === id ? 'active' : ''}" data-action="goto" data-page="${id}">${label}</button>`).join('')}</nav>
+    <nav>${pages.map(([id, label]) => `<button class="nav-item ${state.currentPage === id ? 'active' : ''}" data-action="goto" data-page="${id}">${label}</button>`).join('')}
+      <button class="nav-item ${settingsSelected ? 'active' : ''}" data-action="toggle-settings-nav" aria-expanded="${settingsOpen}">Settings</button>
+      <div class="subnav ${settingsOpen ? 'open' : ''}"><button class="subnav-item ${settingsSelected ? 'active' : ''}" data-action="goto" data-page="settings-model">Model Access</button></div>
+    </nav>
   </aside>`;
 }
 
@@ -434,6 +454,7 @@ function renderTopbar(state) {
     create: ['Create Project', 'Create a new BoundaryML project'],
     jobs: ['Jobs', 'Monitor recent generation tasks'],
     settings: ['Settings', 'Manage model and runtime settings'],
+    'settings-model': ['Model Access', '模型访问'],
   };
   const [title, subtitle] = pageCopy[state.currentPage] || [
     project?.name || 'BoundaryML',
@@ -444,41 +465,49 @@ function renderTopbar(state) {
     : `<span class="badge risk-high">Mode: Local Demo / Mock Model</span><button data-action="refresh-server-mode">Reconnect Server</button>`;
   const language = state.language || 'en';
   const languageSwitcher = `<label class="language-switcher"><span>Language</span><select data-action="set-language" aria-label="Language">${Object.entries(UI_LANGUAGES).map(([id, label]) => `<option value="${id}" ${language === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
+  const canGenerateExecutionKit = Boolean(project?.id) && ['context', 'studio', 'assets', 'export'].includes(state.currentPage);
+  const executionKitAction = canGenerateExecutionKit ? '<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button>' : '';
   return `<header class="topbar"><div><h1>${title}</h1><p>${subtitle}</p></div>
-  <div class="row">${runtimeBadge}${languageSwitcher}<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></header>`;
+  <div class="row">${runtimeBadge}${languageSwitcher}${executionKitAction}</div></header>`;
 }
 
 function renderProjects(state) {
   if (!state.projects.length) {
-    return `<section class="page"><div class="card panel"><h2>Projects</h2><p>Start with a project goal.<br/>BoundaryML will generate a human-AI workflow boundary draft.</p><button class="primary" data-action="goto" data-page="create">Create First Project</button></div></section>`;
+    return `<section class="page"><div class="card panel"><p>Start with a project goal.<br/>BoundaryML will generate a human-AI workflow boundary draft.</p><button class="primary" data-action="goto" data-page="create">Create First Project</button></div></section>`;
   }
-  return `<section class="page"><div class="page-head"><h2>Projects</h2><button class="primary" data-action="goto" data-page="create">+ New Project</button></div>
-  <p class="muted">Data-driven projects powered by BoundaryML domain model.</p>
-  <div class="project-grid">${state.projects.map((project) => {
+  return `<section class="page"><div class="page-head"><label class="project-search"><span>Search projects</span><input data-action="search-projects" value="${escapeAttr(state.projectSearch || '')}" placeholder="Search by project name"/></label><button class="primary" data-action="goto" data-page="create">+ New Project</button></div>
+  <div data-project-results>${renderProjectGrid(state)}</div></section>`;
+}
+
+function renderProjectGrid(state) {
+  const query = (state.projectSearch || '').trim().toLowerCase();
+  const projects = query ? state.projects.filter((project) => String(project.name || '').toLowerCase().includes(query)) : state.projects;
+  if (!projects.length) return '<div class="card panel"><p>No projects match your search.</p></div>';
+  return `<div class="project-grid">${projects.map((project) => {
     const stats = countProjectStats(project);
-    return `<article class="card project"><h3>${project.name}</h3><p>${project.project_type || project.type} · ${(project.risk_level || project.riskLevel)} risk · ${(project.workflow?.status || 'draft')}</p>
+    return `<article class="card project"><h3>${project.name}</h3><p>${project.project_type || project.type} - ${(project.risk_level || project.riskLevel)} risk - ${(project.workflow?.status || 'draft')}</p>
       <div class="kv-row"><span>Nodes ${stats.nodes}</span><span>AI ${stats.aiNodes}</span><span>Gates ${stats.gates}</span></div>
       <div class="kv-row"><span>Stage</span><strong>${project.current_stage || project.currentStage || 'n/a'}</strong></div>
       <div class="kv-row"><span>Execution Kit</span><strong>${project.execution_kit?.status || project.executionKit?.status || 'not generated'}</strong></div>
-      <div class="actions"><button data-action="open-project" data-project-id="${project.id}">Open Studio</button><button data-action="open-project-context" data-project-id="${project.id}">Context Management</button></div></article>`;
-  }).join('')}</div></section>`;
+      <div class="actions"><button data-action="open-project" data-project-id="${project.id}">Open Studio</button><button data-action="open-project-page" data-page="context" data-project-id="${project.id}">Context Management</button><button data-action="open-project-page" data-page="assets" data-project-id="${project.id}">Execution Assets</button></div></article>`;
+  }).join('')}</div>`;
 }
 
 function renderCreatePage() {
   return `<section class="page"><h2>Create Project</h2>
   <form class="card form" data-form="create-project">
     <div class="grid-2">
-      <label>Project Name<input name="name" value="AI SaaS Feature MVP v2" required/></label>
-      <label>Project Goal<input name="goal" value="Deliver AI feature with explicit review gates" required/></label>
+      <label>Project Name<input name="name" required/></label>
+      <label>Project Goal<input name="goal" required/></label>
       <label>Project Type<select name="type"><option>AI Feature</option><option>Internal Tool</option><option>Legacy Modernization</option></select></label>
-      <label>Current Stage<input name="currentStage" value="Planning" required/></label>
-      <label>Target Deliverables<input name="deliveryScope" value="PRD,Prototype,Technical Design,API Contract,Source Code,Test Cases,Launch Plan"/></label>
-      <label>Expected AI Scope<input name="expectedAiScope" value="PRD,Code,Test,Docs,Review"/></label>
-      <label>Sensitive Areas<input name="sensitiveAreas" value="Customer Data,Production Release,Security"/></label>
-      <label>Risk Level<select name="riskLevel"><option>low</option><option selected>medium</option><option>high</option></select></label>
+      <label>Current Stage<input name="currentStage" required/></label>
+      <label>Target Deliverables<input name="deliveryScope"/></label>
+      <label>Expected AI Scope<input name="expectedAiScope"/></label>
+      <label>Sensitive Areas<input name="sensitiveAreas"/></label>
+      <label>Risk Level<select name="riskLevel"><option>low</option><option>medium</option><option>high</option></select></label>
       <label>Setup Mode<select name="setupMode"><option value="quick_start">Quick Start</option><option value="org_aware">Organization-Aware Setup</option></select></label>
     </div>
-    <div class="actions"><button type="submit" class="primary">Generate Workflow Draft</button></div>
+    <div class="actions"><button type="button" data-action="goto" data-page="projects">Cancel</button><button type="submit" class="primary">Generate Workflow Draft</button></div>
   </form></section>`;
 }
 
@@ -870,7 +899,7 @@ function renderJobList(jobs) {
 function renderJobs(state) {
   const project = getActiveProject(state);
   const jobs = state.jobs || [];
-  return `<section class="page"><div class="page-head"><div><h2>Jobs</h2><p class="muted">${project?.name || 'No project selected'} · generation task monitor</p></div><button data-action="refresh-jobs">Refresh Jobs</button></div>
+  return `<section class="page"><div class="page-head"><p class="muted">${project?.name || 'No project selected'} - generation task monitor</p><button data-action="refresh-jobs">Refresh Jobs</button></div>
     ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model. Server jobs are unavailable.</div>'}
     ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
     <article class="card panel"><h3>Recent Jobs</h3><ul class="job-list">${renderJobList(jobs)}</ul></article>
@@ -885,14 +914,13 @@ function renderSettings(state) {
   const structuredOutputEnabled = config.structured_output_enabled ?? modelStatus.structured_output_enabled ?? true;
   const allowMock = config.allow_mock ?? modelStatus.allow_mock ?? true;
   const logLevel = config.log_level || modelStatus.log_level || 'summary';
-  return `<section class="page"><h2>Settings / Model Access</h2>
-  <div class="split-2">
+  return `<section class="page"><div class="split-2">
     <form class="card form" data-form="model-config">
       <h3>Model Configuration</h3>
       <div class="grid-2">
         <label>Provider<input name="provider" value="${escapeAttr(config.provider || 'openai-compatible')}" placeholder="openai-compatible"/></label>
         <label>Base URL<input name="api_base_url" value="${escapeAttr(config.api_base_url || 'https://api.openai.com/v1')}" placeholder="https://api.openai.com/v1"/></label>
-        <label>API Key<input name="api_key" type="password" value="" placeholder="${config.api_key_configured ? `Configured: ${escapeAttr(config.api_key_masked)}` : 'Paste API key'}"/></label>
+        <label>API Key<input name="api_key" type="text" value="${config.api_key_configured ? escapeAttr(config.api_key_masked) : ''}" placeholder="Paste API key"/></label>
         <label>Default Model<input name="default_model" value="${escapeAttr(config.default_model || modelStatus.default_model || '')}" placeholder="gpt-4.1-mini"/></label>
         <label>Planning Model<input name="planning_model" value="${escapeAttr(config.planning_model || modelStatus.planning_model || '')}" placeholder="gpt-4.1"/></label>
         <label>Prompt Model<input name="prompt_model" value="${escapeAttr(config.prompt_model || modelStatus.prompt_model || '')}" placeholder="gpt-4.1-mini"/></label>
@@ -929,6 +957,7 @@ function renderPage(state) {
     case 'jobs': return renderJobs(state);
     case 'assets': return renderAssets(state);
     case 'export': return renderExport(state);
+    case 'settings-model': return renderSettings(state);
     case 'settings': return renderSettings(state);
     default: return renderProjects(state);
   }
@@ -937,6 +966,14 @@ function renderPage(state) {
 function render() {
   const state = getState();
   app.innerHTML = `<div class="app-shell" data-theme="open-source">${renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
+  localizeDom(state.language || 'en');
+}
+
+function refreshSidebar() {
+  const state = getState();
+  const sidebar = app.querySelector('.sidebar');
+  if (!sidebar) return;
+  sidebar.outerHTML = renderSidebar(state);
   localizeDom(state.language || 'en');
 }
 
@@ -979,6 +1016,14 @@ function refreshWorkflowRegions() {
   refreshWorkflowSummary();
   refreshWorkflowCanvas();
   refreshWorkflowDetail();
+}
+
+function refreshProjectGrid() {
+  const state = getState();
+  const target = app.querySelector('[data-project-results]');
+  if (!target) return;
+  target.outerHTML = `<div data-project-results>${renderProjectGrid(state)}</div>`;
+  localizeDom(state.language || 'en');
 }
 
 function syncPhaseMenu() {
@@ -1183,7 +1228,14 @@ function handleAction(event) {
   if (target.tagName === 'BUTTON') event.preventDefault();
   const action = target.dataset.action;
 
-  if (action === 'goto') setState((prev) => ({ ...prev, currentPage: target.dataset.page }));
+  if (action === 'toggle-settings-nav') {
+    updateUiStateSilently((state) => {
+      state.settingsNavOpen = !state.settingsNavOpen;
+    });
+    refreshSidebar();
+    return;
+  }
+  if (action === 'goto') setState((prev) => ({ ...prev, currentPage: target.dataset.page, settingsNavOpen: target.dataset.page?.startsWith('settings') ? true : prev.settingsNavOpen }));
   if (action === 'set-language') setState((prev) => ({ ...prev, language: UI_LANGUAGES[target.value] ? target.value : 'en' }));
   if (action === 'refresh-server-mode') bootstrapRuntimeMode();
   if (action === 'open-project') {
@@ -1202,22 +1254,23 @@ function handleAction(event) {
     }
     loadProjectRuntime(projectId).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load project workflow' })));
   }
-  if (action === 'open-project-context') {
+  if (action === 'open-project-page') {
     const projectId = target.dataset.projectId;
+    const page = target.dataset.page || 'studio';
     const st = getState();
     const localProject = st.projects.find((p) => p.id === projectId);
     if (!st.serverAvailable && localProject) {
       setState((prev) => ({
         ...prev,
         activeProjectId: projectId,
-        currentPage: 'context',
+        currentPage: page,
         serverError: 'Mode: Local Demo / Mock Model. Start the local server and click Reconnect Server for persisted editing.',
       }));
       return;
     }
     loadProjectRuntime(projectId, { navigate: false })
-      .then(() => setState((prev) => ({ ...prev, currentPage: 'context' })))
-      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load project context' })));
+      .then(() => setState((prev) => ({ ...prev, currentPage: page })))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || `Failed to load project ${page}` })));
   }
   if (action === 'select-node') {
     selectWorkflowNode(target.dataset.nodeId);
@@ -2162,6 +2215,13 @@ function handleAction(event) {
 
 function handleInput(event) {
   const target = event.target;
+  if (target.dataset.action === 'search-projects') {
+    updateUiStateSilently((state) => {
+      state.projectSearch = target.value;
+    });
+    refreshProjectGrid();
+    return;
+  }
   if (target.dataset.action === 'set-ai-request') {
     setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.value } }));
     return;
@@ -2384,10 +2444,12 @@ function handleSubmit(event) {
   if (event.target.dataset.form === 'model-config') {
     event.preventDefault();
     const raw = Object.fromEntries(new FormData(event.target));
+    const currentConfig = getState().modelConfig || {};
+    const apiKeyInput = raw.api_key === currentConfig.api_key_masked ? '' : raw.api_key;
     const payload = {
       provider: raw.provider,
       api_base_url: raw.api_base_url,
-      api_key: raw.api_key,
+      api_key: apiKeyInput,
       default_model: raw.default_model,
       planning_model: raw.planning_model,
       prompt_model: raw.prompt_model,

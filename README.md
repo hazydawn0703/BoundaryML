@@ -25,7 +25,7 @@ Mode: Local Demo / Mock Model
 
 ### Local Server Mode
 
-当前正式开源运行模式：Studio 通过 HTTP API 访问 BoundaryML Server，Server 负责 `.env`、持久化、LLM Access、Workflow/Asset/Execution Kit 生成。
+当前正式开源运行模式：Studio 通过 HTTP API 访问 BoundaryML Server，Server 负责 `.env`、持久化、LLM Access、Workflow/Asset/Execution Kit 生成。Local Server 默认使用 FileStorage，并会在首次启动时自动创建 `./data`；如需一次性内存模式，可显式设置 `BOUNDARYML_STORAGE_ADAPTER=memory`。
 
 ## Quick Start
 
@@ -120,7 +120,7 @@ node scripts/generate-example.js
 
 ## 数据与安全边界
 
-- 正式数据源是 Server + Storage，不是浏览器 localStorage。
+- 正式数据源是 Server + Storage，不是浏览器 localStorage。Local Server 默认将 Project / Workflow / Context / Assets / Jobs 持久化到 `./data`。
 - Local Demo Mode 仅保存演示 / UI 状态。
 - 所有 Project 相关数据必须处于 workspace scope。
 - LLM Context 只在用户触发生成 / Diff 时发送到配置的 provider。
