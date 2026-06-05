@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
 import { createExampleProject } from '../../../packages/core/src/sampleProject.js';
 import { createWorkflowFromTemplate, applyWorkflowPatch, applyDiff, createWorkflowSnapshot, markAffectedAssetsOutdated, normalizeWorkflowSpec } from '../../../packages/core/src/engine.js';
 import { getTemplateById, listPublicTemplates, selectTemplateForProject } from '../../../packages/core/src/templates.js';
@@ -19,8 +20,9 @@ import { detectSchemaVersion, migrateObjectIfNeeded } from '../../../packages/sc
 
 const port = Number(process.env.BOUNDARYML_SERVER_PORT || process.env.PORT || 8787);
 const runtimeMode = 'local_server';
-const storageAdapter = process.env.BOUNDARYML_STORAGE_ADAPTER || (process.env.STORAGE_MODE === 'file' ? 'file' : 'memory');
+const storageAdapter = process.env.BOUNDARYML_STORAGE_ADAPTER || process.env.STORAGE_MODE || 'file';
 const dataDir = process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || './data';
+if (storageAdapter === 'file') mkdirSync(dataDir, { recursive: true });
 const storage = storageAdapter === 'file' ? new FileStorage(dataDir) : new MemoryStorage();
 const ACTIVE_JOB_STATUS = new Set(['queued', 'running', 'succeeded']);
 const modelCalls = [];

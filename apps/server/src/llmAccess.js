@@ -33,6 +33,14 @@ function persistConfig() {
   writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
+function normalizeApiKey(value) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/^Bearer\s+/i, '')
+    .replace(/\s+/g, '');
+}
+
 function normalizeConfig(input = {}, { keepExistingApiKey = true } = {}) {
   const source = {
     ...input,
@@ -51,7 +59,12 @@ function normalizeConfig(input = {}, { keepExistingApiKey = true } = {}) {
   for (const [key, value] of Object.entries(source)) {
     if (!editableFields.has(key)) continue;
     if (value === undefined) continue;
-    if (key === 'api_key' && value === '' && keepExistingApiKey) continue;
+    if (key === 'api_key') {
+      const apiKey = normalizeApiKey(value);
+      if (apiKey === '' && keepExistingApiKey) continue;
+      next[key] = apiKey;
+      continue;
+    }
     if (key === 'timeout_ms') next[key] = Math.max(1000, Number(value || 60000));
     else if (key === 'structured_output_enabled' || key === 'allow_mock') next[key] = value === true || value === 'true' || value === 'on';
     else next[key] = String(value ?? '').trim();
@@ -61,11 +74,12 @@ function normalizeConfig(input = {}, { keepExistingApiKey = true } = {}) {
 }
 
 function publicConfig() {
+  const apiKey = String(config.api_key || '').trim();
   return {
     ...config,
     api_key: '',
-    api_key_configured: Boolean(config.api_key),
-    api_key_masked: config.api_key ? `${config.api_key.slice(0, 4)}...${config.api_key.slice(-4)}` : '',
+    api_key_configured: Boolean(apiKey),
+    api_key_masked: apiKey ? `${apiKey.slice(0, 4)}****${apiKey.slice(-4)}` : '',
     config_path: configPath,
   };
 }
@@ -88,7 +102,7 @@ function hasApiKey() {
 function validateModelConfigForRequest() {
   const apiKey = String(config.api_key || '').trim();
   if (!apiKey) return;
-  if (/[^\x20-\x7E]/.test(apiKey)) throw new Error('MODEL_API_KEY_INVALID_CHARACTERS: API key must use ASCII characters only. Check for pasted labels, spaces, or non-English punctuation.');
+  if (/[^\x20-\x7E]/.test(apiKey)) throw new Error('MODEL_API_KEY_INVALID_CHARACTERS: API key must use ASCII characters only. Keys such as sk-... are supported; check for pasted labels, full-width characters, or hidden text.');
   if (!/^https?:\/\//i.test(String(config.api_base_url || ''))) throw new Error('MODEL_BASE_URL_INVALID: Base URL must start with http:// or https://');
 }
 
@@ -129,7 +143,7 @@ function parseStructuredContent(content) {
 
 export async function runModel(task, payload) {
   if (!hasApiKey()) {
-    if (!config.allow_mock) throw new Error('MODEL_NOT_CONFIGURED');
+    if (!config.allow_mock) throw new Error('MODEL_API_KEY_NOT_CONFIGURED: Save an API key in Settings / Model Access before testing a real model, or enable Mock fallback.');
     return {
       task,
       provider: 'mock',

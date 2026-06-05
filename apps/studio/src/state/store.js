@@ -17,6 +17,8 @@ function initialState() {
     activeNodeDetailTab: 'overview',
     aiEdit: { open: false, request: '', diff: null },
     exportPreviewType: 'workflow_spec.yaml',
+    settingsNavOpen: false,
+    projectSearch: '',
     studioFilter: { mode: 'all', risk: 'all' },
     workflowViewport: { x: 0, y: 0, scale: 1 },
     assetsFilter: { type: 'prompt', phase: 'all', status: 'all' },
@@ -44,6 +46,8 @@ const listeners = new Set();
 function persistUiState() {
   const persisted = {
     currentPage: state.currentPage,
+    settingsNavOpen: state.settingsNavOpen,
+    projectSearch: state.projectSearch,
     studioFilter: state.studioFilter,
     workflowViewport: state.workflowViewport,
     assetsFilter: state.assetsFilter,
