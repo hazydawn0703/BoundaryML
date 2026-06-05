@@ -14,7 +14,7 @@ import { validateWorkflow as validateRulesWorkflow } from '../../../packages/rul
 import { validateProject, validateWorkflow, validateBoundaryMLProjectSpec, validateGenerationJob } from '../../../packages/schema/src/schema.js';
 import { MemoryStorage } from '../../../packages/storage/src/memoryStorage.js';
 import { FileStorage } from '../../../packages/storage/src/fileStorage.js';
-import { getModelStatus, runModel } from './llmAccess.js';
+import { getModelConfig, getModelStatus, runModel, updateModelConfig } from './llmAccess.js';
 import { detectSchemaVersion, migrateObjectIfNeeded } from '../../../packages/schema/src/migrations.js';
 
 const port = Number(process.env.BOUNDARYML_SERVER_PORT || process.env.PORT || 8787);
@@ -602,10 +602,21 @@ const server = createServer(async (req, res) => {
   }
 
   if (method === 'GET' && path === '/api/model/status') return ok(res, ctx, getModelStatus());
+  if (method === 'GET' && path === '/api/model/config') return ok(res, ctx, getModelConfig());
+  if (method === 'PUT' && path === '/api/model/config') {
+    const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
+    return ok(res, ctx, { status: updateModelConfig(body), config: getModelConfig() });
+  }
   if (method === 'POST' && path === '/api/model/test') {
-    const result = await runModel('test', { ping: true });
-    modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: result.model, purpose: 'test', status: result.status || 'succeeded', summary: result.output.summary });
-    return ok(res, ctx, { mode: getModelStatus().using_mock ? 'mock' : 'real', result: result.output });
+    const status = getModelStatus();
+    try {
+      const result = await runModel('test', { ping: true });
+      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: result.model, purpose: 'test', status: result.status || 'succeeded', summary: result.output.summary });
+      return ok(res, ctx, { status: result.status || 'succeeded', mode: status.using_mock ? 'mock' : 'real', result: result.output });
+    } catch (error) {
+      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: status.default_model, purpose: 'test', status: 'failed', summary: error.message || 'Model test failed' });
+      return ok(res, ctx, { status: 'failed', mode: status.using_mock ? 'mock' : 'real', error: error.message || 'Model test failed' });
+    }
   }
   if (method === 'GET' && path === '/api/model/calls') return ok(res, ctx, modelCalls.slice(0, 50));
 

@@ -57,6 +57,21 @@ async function main() {
   try {
     await waitForServer(baseUrl);
     const health = await apiFetch(baseUrl, '/api/health'); assert(health.status === 200, 'health should return 200');
+    const modelConfigSave = await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ provider: 'openai-compatible', api_base_url: 'https://example.test/v1', api_key: 'sk-smoke-secret', default_model: 'smoke-default', planning_model: 'smoke-planning', prompt_model: 'smoke-prompt', diff_model: 'smoke-diff', timeout_ms: 12345, structured_output_enabled: false, allow_mock: true, log_level: 'debug' }) });
+    assert(modelConfigSave.body.data.status.default_model === 'smoke-default', 'saved model config should update runtime status');
+    assert(modelConfigSave.body.data.status.mode === 'real', 'saved api key should switch model status out of mock mode');
+    const modelConfig = await apiFetch(baseUrl, '/api/model/config');
+    assert(modelConfig.body.data.default_model === 'smoke-default', 'model config should be readable');
+    assert(modelConfig.body.data.api_key === '', 'model config response should not expose raw api key');
+    assert(modelConfig.body.data.api_key_configured === true, 'model config should report configured api key');
+    const modelTest = await apiFetch(baseUrl, '/api/model/test', { method: 'POST' });
+    assert(modelTest.status === 200, 'model test should return an app-level result instead of proxying provider errors as HTTP failure');
+    assert(['failed', 'succeeded', 'mock'].includes(modelTest.body.data.status), 'model test should report an explicit status');
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ api_key: 'sk-invalid-配置' }) });
+    const invalidKeyTest = await apiFetch(baseUrl, '/api/model/test', { method: 'POST' });
+    assert(invalidKeyTest.body.data.status === 'failed', 'invalid api key characters should be reported as a model test failure');
+    assert(invalidKeyTest.body.data.error.includes('MODEL_API_KEY_INVALID_CHARACTERS'), 'invalid api key error should be explicit');
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ api_key: 'sk-smoke-secret' }) });
     const templates = await apiFetch(baseUrl, '/api/templates'); assert((templates.body.data.templates || []).length >= 3, 'templates should expose public MVP templates');
     const template = await apiFetch(baseUrl, '/api/templates/template-ai-saas-feature-mvp'); assert(template.body.data.id === 'template-ai-saas-feature-mvp', 'template detail should be fetchable');
     const created = await apiFetch(baseUrl, '/api/projects', { method: 'POST', body: JSON.stringify({ name: 'smoke-project', goal: 'smoke goal' }) });
@@ -94,6 +109,8 @@ async function main() {
     server.kill('SIGTERM'); await sleep(400);
     server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
     await waitForServer(baseUrl);
+    const persistedModelConfig = await apiFetch(baseUrl, '/api/model/config');
+    assert(persistedModelConfig.body.data.default_model === 'smoke-default', 'model config should persist across server restart');
     await apiFetch(baseUrl, `/api/projects/${projectId}`);
     await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`);
     console.log('✅ server smoke passed');
