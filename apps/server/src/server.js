@@ -720,10 +720,11 @@ const server = createServer(async (req, res) => {
     const project = getProject(ctx, diffGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
     const requestText = body.request || 'default';
-    const job = createJob(ctx, project, 'generate_workflow_diff', { request: requestText, workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
+    const contextScope = body.context_scope || body.contextScope || { scope: 'workflow' };
+    const job = createJob(ctx, project, 'generate_workflow_diff', { request: requestText, context_scope: contextScope, workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
     let modelResult = null;
     try {
-      modelResult = await runModel('workflow_diff', { request: requestText, workflow: project.workflow, assets: project.assets });
+      modelResult = await runModel('workflow_diff', { request: requestText, context_scope: contextScope, workflow: project.workflow, assets: project.assets });
       modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_diff', status: modelResult.status, summary: modelResult.output?.summary || `diff request: ${requestText}` });
     } catch (error) {
       modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().diff_model, purpose: 'workflow_diff', status: 'failed', summary: error.message });
@@ -732,6 +733,7 @@ const server = createServer(async (req, res) => {
       progress('calling_model', 'Generating workflow diff');
       const candidate = modelResult?.output?.diff || modelResult?.output;
       project.last_diff = candidate?.changes ? { ...candidate, id: candidate.id || `diff-${Date.now()}`, request: requestText, warnings: candidate.warnings || [], createdAt: candidate.createdAt || new Date().toISOString() } : generateWorkflowDiff(requestText, project.workflow, project.assets);
+      project.last_diff.context_scope = contextScope;
       project.last_diff.status = 'draft';
       return { type: 'workflow_diff', diff_id: project.last_diff.id };
     });

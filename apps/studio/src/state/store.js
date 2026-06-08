@@ -15,7 +15,7 @@ function initialState() {
     selectedNodeId: exampleProject.workflow.nodes[0]?.id || null,
     validationResults: validateWorkflow(exampleProject.workflow, exampleProject.assets),
     activeNodeDetailTab: 'overview',
-    aiEdit: { open: false, request: '', diff: null },
+    aiEdit: { open: false, request: '', diff: null, contextScope: 'auto', pending: false },
     exportPreviewType: 'workflow_spec.yaml',
     settingsNavOpen: false,
     projectSearch: '',

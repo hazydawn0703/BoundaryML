@@ -41,7 +41,11 @@ export function markAffectedAssetsOutdated(changeSet, assets) {
         ? { ...asset, status: 'outdated', outdated_reason: 'Node contract changed' }
         : asset
     )),
-    artifact_templates: assets.artifact_templates || assets.artifactTemplates || [],
+    artifact_templates: (assets.artifact_templates || assets.artifactTemplates || []).map((asset) => (
+      affectedNodeIds.includes(asset.node_id || asset.nodeId)
+        ? { ...asset, status: 'outdated', outdated_reason: 'Node contract changed' }
+        : asset
+    )),
   };
 }
 
@@ -56,17 +60,80 @@ export function applyWorkflowPatch(workflow, patch) {
 export function applyDiff(workflow, diff, selectedChangeIds = []) {
   const selected = (diff.changes || []).filter((change) => selectedChangeIds.length === 0 || selectedChangeIds.includes(change.id));
   const next = structuredClone(workflow);
+  const readTargetType = (change) => change.target_type || change.targetType;
+  const readTargetId = (change) => change.target_id || change.targetId;
+  const readField = (change) => change.field;
+  const readId = (value) => value?.id || value?.phase_id || value?.node_id || value?.edge_id;
+  const sameId = (value, id) => value?.id === id || value?.phase_id === id || value?.node_id === id || value?.edge_id === id;
+  const normalizeNodeField = (field) => ({
+    phaseId: 'phase_id',
+    executionMode: 'execution_mode',
+    riskLevel: 'risk_level',
+    humanOwnerRole: 'human_owner_role',
+    aiRole: 'ai_role',
+    artifactContract: 'artifact_contract',
+    reviewGate: 'review_gate',
+    promptStatus: 'prompt_status',
+    checklistStatus: 'checklist_status',
+  }[field] || field);
+  const normalizeEdgeField = (field) => ({
+    dependencyType: 'dependency_type',
+    requiredOutputs: 'required_outputs',
+    gateId: 'gate_id',
+  }[field] || field);
+  const removeNodeEdges = (nodeId) => {
+    next.edges = (next.edges || []).filter((edge) => edge.from !== nodeId && edge.to !== nodeId);
+  };
 
   selected.forEach((change) => {
-    const field = change.field;
-    if ((change.target_type || change.targetType) === 'node') {
-      const nodeId = change.target_id || change.targetId;
-      const node = (next.nodes || []).find((item) => item.id === nodeId || item.node_id === nodeId);
-      if (node && field && (change.after !== undefined)) {
-        node[field] = change.after;
+    const targetType = readTargetType(change);
+    const field = readField(change);
+    const targetId = readTargetId(change);
+
+    if (targetType === 'phase') {
+      const phase = (next.phases || []).find((item) => sameId(item, targetId));
+      if (change.type === 'deleted') {
+        const hasNodes = (next.nodes || []).some((node) => (node.phase_id || node.phaseId) === targetId);
+        if (!hasNodes) next.phases = (next.phases || []).filter((item) => !sameId(item, targetId));
+        return;
       }
-      if (!node && field === 'node' && change.after) {
+      if ((change.type === 'added' || field === 'phase') && change.after) {
+        if (!phase) next.phases = [...(next.phases || []), change.after];
+        return;
+      }
+      if (phase && field && change.after !== undefined) phase[field] = change.after;
+    }
+
+    if (targetType === 'node') {
+      const nodeId = targetId;
+      const node = (next.nodes || []).find((item) => item.id === nodeId || item.node_id === nodeId);
+      if (change.type === 'deleted') {
+        next.nodes = (next.nodes || []).filter((item) => !sameId(item, nodeId));
+        removeNodeEdges(nodeId);
+        return;
+      }
+      if (!node && (field === 'node' || change.type === 'added') && change.after) {
         next.nodes = [...(next.nodes || []), change.after];
+        return;
+      }
+      if (node && field && (change.after !== undefined)) {
+        node[normalizeNodeField(field)] = change.after;
+        node.history = [...(node.history || []), { at: new Date().toISOString(), action: `Diff applied: ${change.reason || field}` }];
+      }
+    }
+
+    if (targetType === 'edge') {
+      const edge = (next.edges || []).find((item) => sameId(item, targetId));
+      if (change.type === 'deleted') {
+        next.edges = (next.edges || []).filter((item) => !sameId(item, targetId));
+        return;
+      }
+      if ((change.type === 'added' || field === 'edge') && change.after) {
+        if (!edge) next.edges = [...(next.edges || []), change.after];
+        return;
+      }
+      if (edge && field && change.after !== undefined) {
+        edge[normalizeEdgeField(field)] = change.after;
       }
     }
   });

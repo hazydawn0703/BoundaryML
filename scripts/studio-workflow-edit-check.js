@@ -125,6 +125,11 @@ assert(!settingsRender.includes('serverError') && !settingsRender.includes('inli
 assert(server.includes("return ok(res, ctx, { status: 'failed'") && server.includes("purpose: 'test', status: 'failed'"), 'model test failures return app-level JSON instead of HTTP/proxy failure');
 assert(server.includes("runModel('workflow_generate'") && server.includes('modelWorkflowPayload(project, selectedTemplate)') && server.includes('normalizeGeneratedWorkflow(project, selectedTemplate, modelResult.output)'), 'workflow generation uses the configured real LLM before fallback');
 assert(server.includes('function createProjectShell') && server.includes('createEmptyWorkflow') && !server.includes('const base = createExampleProject()'), 'new project creation starts from an empty project shell instead of copying the sample project');
+assert(server.includes('context_scope: contextScope') && server.includes("runModel('workflow_diff'") && server.includes('context_scope: contextScope'), 'workflow diff generation passes context scope to the model layer and job payload');
+assert(server.includes('project.workflow = applyDiff(project.workflow, diff') && server.includes('markAffectedAssetsOutdated(diff.changes'), 'server diff apply updates workflow and marks affected assets outdated');
+const engine = readFileSync(new URL('../packages/core/src/engine.js', import.meta.url), 'utf-8');
+assert(engine.includes("targetType === 'phase'") && engine.includes("targetType === 'edge'") && engine.includes('removeNodeEdges'), 'core applyDiff covers phase, node, and edge changes');
+assert(engine.includes('normalizeNodeField') && engine.includes('artifact_contract') && engine.includes('review_gate'), 'core applyDiff normalizes node IO and review gate field aliases');
 assert(api.includes('regenerate: (projectId, assetId)'), 'assets regenerate api exists');
 assert(app.includes('edit-asset-field'), 'execution asset edit path exists');
 assert(app.includes('Role') && app.includes('Objective') && app.includes('Context Required') && app.includes('Output Format') && app.includes('Acceptance Criteria'), 'prompt structured fields exist');
@@ -138,6 +143,10 @@ assert(app.includes('Draft Kit') && app.includes('Final Kit'), 'draft/final kit 
 assert(api.includes('diffsApi') && api.includes('/diffs/generate') && api.includes('/apply'), 'diffs api exists');
 assert(app.includes('apiClient.diffsApi.generate') && app.includes('apiClient.diffsApi.apply') && app.includes('selected_change_ids'), 'server AI diff review path exists');
 assert(app.includes('Selected workflow context may be sent to the configured LLM provider'), 'model context warning exists');
+assert(app.includes('ai-composer') && app.includes('ai-conversation-drawer') && app.includes('set-ai-context-scope'), 'studio provides bottom AI input and left conversation drawer with context scope');
+assert(app.includes('buildAiEditContext') && app.includes('context_scope: buildAiEditContext') && app.includes('node_neighborhood') && app.includes('current_phase'), 'AI diff generation sends explicit workflow context scope');
+assert(!app.includes('AI Assisted Edit is disabled in Phase 3 server mode') && !app.includes('Diff apply from local mock is disabled in server mode'), 'server-backed AI diff generate/apply is not blocked by old local-mode guards');
+assert(app.includes('buildWorkflowDiffPreviewMap') && styles.includes('.node-card.diff-updated') && styles.includes('.node-card.diff-added') && styles.includes('.node-card.diff-deleted'), 'workflow canvas previews AI diff changes');
 assert(app.includes('update-artifact-contract-field') && app.includes('required_sections'), 'artifact contract required_sections edit path exists');
 assert(app.includes('completion_criteria'), 'artifact contract completion_criteria edit path exists');
 assert(app.includes('apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, edges: nextEdges })'), 'edge edit uses workflow patch + workflow version');
