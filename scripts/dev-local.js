@@ -2,13 +2,14 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const isWindows = process.platform === 'win32';
-const npmCommand = isWindows ? 'npm' : 'npm';
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
+const serverDir = fileURLToPath(new URL('../apps/server', import.meta.url));
+const studioDir = fileURLToPath(new URL('../apps/studio', import.meta.url));
 const serverBaseUrl = process.env.BOUNDARYML_API_BASE_URL || `http://localhost:${process.env.BOUNDARYML_SERVER_PORT || 8787}`;
 
 const processes = [
-  { name: 'server', color: '\x1b[36m', args: ['run', 'dev:server'], healthUrl: `${serverBaseUrl}/api/health` },
-  { name: 'studio', color: '\x1b[35m', args: ['run', 'dev:studio'] },
+  { name: 'server', color: '\x1b[36m', command: process.execPath, args: ['--watch', 'src/server.js'], cwd: serverDir, healthUrl: `${serverBaseUrl}/api/health` },
+  { name: 'studio', color: '\x1b[35m', command: process.execPath, args: ['../../scripts/dev-studio.js'], cwd: studioDir },
 ];
 
 let shuttingDown = false;
@@ -53,10 +54,10 @@ for (const proc of processes) {
     continue;
   }
 
-  const child = spawn(npmCommand, proc.args, {
-    cwd: rootDir,
+  const child = spawn(proc.command, proc.args, {
+    cwd: proc.cwd || rootDir,
     env: process.env,
-    shell: isWindows,
+    shell: false,
     stdio: ['inherit', 'pipe', 'pipe'],
     windowsHide: true,
   });
