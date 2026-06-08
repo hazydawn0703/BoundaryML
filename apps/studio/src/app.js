@@ -20,6 +20,19 @@ const UI_LANGUAGES = {
 };
 
 const ZH_HANS_REPLACEMENTS = [
+  ['AI Assisted Edit', 'AI 辅助编辑'],
+  ['Context', '上下文'],
+  ['Auto: node + neighbors', '自动：节点及上下游'],
+  ['Auto: entire workflow', '自动：整个工作流'],
+  ['Selected node', '选中节点'],
+  ['Node + neighbors', '节点及上下游'],
+  ['Current phase', '当前阶段'],
+  ['Entire workflow', '整个工作流'],
+  ['Close AI Assisted Edit', '关闭 AI 辅助编辑'],
+  ['Ask BoundaryML to modify this workflow...', '让 BoundaryML 修改这个工作流...'],
+  ['Generate reviewed workflow diff', '生成待审核工作流 Diff'],
+  ['Generating...', '生成中...'],
+  ['No diff generated yet.', '尚未生成 Diff。'],
   ['Search projects', '搜索项目'],
   ['Search by project name', '按项目名搜索'],
   ['Search jobs', '搜索任务'],
@@ -140,7 +153,6 @@ const ZH_HANS_REPLACEMENTS = [
   ['Manage BoundaryML projects', '管理 BoundaryML 项目'],
   ['Create a new BoundaryML project', '创建新的 BoundaryML 项目'],
   ['Manage model and runtime settings', '管理模型和运行时设置'],
-  ['Add Node to this phase', '向此阶段添加节点'],
   ['Add Phase', '添加阶段'],
   ['Rename Phase', '重命名阶段'],
   ['Delete Phase', '删除阶段'],
@@ -305,6 +317,7 @@ const ICONS = {
   filter: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/></svg>',
   more: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12h.01M19 12h.01M5 12h.01"/></svg>',
   send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
+  close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
 };
 
 function translateText(text, language) {
@@ -360,6 +373,16 @@ function applyWorkflowViewport(viewport) {
   content.style.transform = workflowTransform(viewport);
   const scaleText = app.querySelector('[data-workflow-zoom]');
   if (scaleText) scaleText.textContent = `${Math.round(viewport.scale * 100)}%`;
+}
+
+function autoResizeAiComposer() {
+  const input = app.querySelector('.ai-composer textarea[data-action="set-ai-request"]');
+  if (!input) return;
+  input.style.height = 'auto';
+  const maxHeight = Number.parseFloat(getComputedStyle(input).maxHeight) || 96;
+  const nextHeight = Math.min(input.scrollHeight, maxHeight);
+  input.style.height = `${nextHeight}px`;
+  input.style.overflowY = input.scrollHeight > maxHeight ? 'auto' : 'hidden';
 }
 
 function closestElement(target, selector) {
@@ -719,8 +742,8 @@ function renderCanvasTool(action, label, icon) {
 
 function renderWorkflowCanvasTools(viewport) {
   return `<div class="workflow-canvas-tools" aria-label="Workflow tools">
-    ${renderCanvasTool('add-phase', 'Add Phase', ICONS.addPhase)}
     ${renderCanvasTool('undo-workflow', 'Undo', ICONS.undo)}
+    <span class="workflow-zoom-badge">Zoom <span data-workflow-zoom>${Math.round(viewport.scale * 100)}%</span></span>
     <button class="canvas-tool-button" data-action="toggle-workflow-filters" aria-label="Filters" title="Filters" aria-expanded="${getState().workflowFiltersOpen ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.filter}</span><span class="canvas-tool-tip">Filters</span></button>
   </div>`;
 }
@@ -734,7 +757,7 @@ function renderWorkflowCanvasFilters(state) {
 }
 
 function renderWorkflowZoom(viewport) {
-  return `<div class="workflow-zoom-badge">Zoom <span data-workflow-zoom>${Math.round(viewport.scale * 100)}%</span></div>`;
+  return '';
 }
 
 function renderPhaseMenu(phase) {
@@ -752,15 +775,20 @@ function renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap
   const highRiskCount = effectiveNodes.filter((n) => n.riskLevel === 'high').length;
   const issueCount = state.validationResults.filter((v) => nodeIds.includes(v.targetId)).length;
   const phaseStatus = state.validationResults.some((v) => v.level === 'error' && nodeIds.includes(v.targetId)) ? 'error' : issueCount ? 'warning' : 'ok';
-  const phaseMenu = phase.id === '__unassigned__' ? '' : `<button class="icon-button phase-menu-trigger" data-action="toggle-phase-menu" data-phase-id="${phase.id}" aria-label="Phase actions" title="Phase actions">${ICONS.more}</button>${renderPhaseMenu(phase)}`;
-  return `<div class="lane" data-phase-id="${phase.id}"><div class="lane-head"><h4>${phase.name}</h4>${phaseMenu}</div><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, `${relationMap.get(node.id) || (selectedNode ? 'unrelated' : '')} ${previewMap.get(node.id) || ''}`.trim())).join('')}${previewNodes.map((node) => renderPreviewNodeCard(node)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
+  const phaseMenu = phase.id === '__unassigned__' || phase.__preview ? '' : `<button class="icon-button phase-menu-trigger" data-action="toggle-phase-menu" data-phase-id="${phase.id}" aria-label="Phase actions" title="Phase actions">${ICONS.more}</button>${renderPhaseMenu(phase)}`;
+  const addNodeButton = phase.__preview ? '<span class="badge">Preview phase</span>' : `<button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node</button>`;
+  return `<div class="lane ${phase.__preview ? 'diff-added' : ''}" data-phase-id="${phase.id}"><div class="lane-head"><h4>${phase.name}</h4>${phaseMenu}</div><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p>${addNodeButton}${effectiveNodes.map((node) => renderNodeCard(node, `${relationMap.get(node.id) || (selectedNode ? 'unrelated' : '')} ${previewMap.get(node.id) || ''}`.trim())).join('')}${previewNodes.map((node) => renderPreviewNodeCard(node)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
 }
 
 function renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport = getWorkflowViewport(state)) {
   const relationMap = buildWorkflowRelationMap(project, selectedNode);
   const previewMap = buildWorkflowDiffPreviewMap(state.aiEdit.diff);
+  const previewPhases = (state.aiEdit.diff?.changes || [])
+    .filter((change) => change.selected !== false && changeTargetType(change) === 'phase' && changeField(change) === 'phase' && change.after)
+    .map((change) => ({ ...change.after, __preview: true }));
+  const phases = [...project.workflow.phases, ...previewPhases, { id: '__unassigned__', name: 'Unassigned' }];
   return `<div class="workflow-canvas-content" style="transform:${workflowTransform(viewport)}">
-    <div class="canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap, previewMap)).join('')}</div>
+    <div class="canvas">${phases.map((phase) => renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap, previewMap)).join('')}</div>
   </div>`;
 }
 
@@ -780,7 +808,6 @@ function renderStudio(state) {
     <div class="workflow-canvas">
       ${renderWorkflowCanvasTools(viewport)}
       ${renderWorkflowCanvasFilters(state)}
-      ${renderWorkflowZoom(viewport)}
       ${renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport)}
       ${historyPanel}
       ${renderAiEdit(state, project, selectedNode)}
@@ -848,7 +875,7 @@ function renderAiComposer(state, project, selectedNode) {
   const scope = state.aiEdit.contextScope || 'auto';
   return `<div class="ai-composer">
     <label class="ai-context-select"><span>Context</span><select data-action="set-ai-context-scope">${renderAiContextOptions(state, selectedNode)}</select></label>
-    <textarea data-action="set-ai-request" placeholder="Ask BoundaryML to modify this workflow...">${state.aiEdit.request || ''}</textarea>
+    <textarea data-action="set-ai-request" rows="1" placeholder="Ask BoundaryML to modify this workflow...">${state.aiEdit.request || ''}</textarea>
     <button class="primary ai-send" data-action="generate-diff" aria-label="Generate reviewed workflow diff" title="Generate reviewed workflow diff" ${state.aiEdit.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span><span>${state.aiEdit.pending ? 'Generating...' : 'Generate Diff'}</span></button>
   </div>`;
 }
@@ -870,12 +897,14 @@ function renderDiffReview(state) {
 function renderAiEdit(state, project, selectedNode) {
   if (!state.aiEdit.open && !state.aiEdit.diff) return '';
   const scope = state.aiEdit.contextScope || 'auto';
-  return `<aside class="ai-conversation-drawer card panel">
-    <div class="toolbar"><div><h3>AI Assisted Edit</h3><p class="muted">${aiContextLabel(scope, selectedNode)}</p></div><button data-action="toggle-ai-edit">Close</button></div>
+  return `<aside class="ai-conversation-drawer">
+    <article class="card panel">
+    <div class="toolbar"><div><h3>AI Assisted Edit</h3><p class="muted">${aiContextLabel(scope, selectedNode)}</p></div><button class="icon-button" data-action="toggle-ai-edit" aria-label="Close AI Assisted Edit" title="Close">${ICONS.close}</button></div>
     <p class="muted">Server Mode generates a Workflow Diff for review; it never edits the formal workflow directly.</p>
     ${state.serverAvailable ? '<p class="inline-warning">Selected workflow context may be sent to the configured LLM provider.</p>' : '<p class="inline-warning">Mode: Local Demo / Mock Model</p>'}
     <div class="row">${AI_EDIT_SUGGESTIONS.map((suggestion) => `<button data-action="use-ai-suggestion" data-suggestion="${suggestion}">${suggestion}</button>`).join('')}</div>
     ${renderDiffReview(state)}
+    </article>
   </aside>`;
 }
 
@@ -1135,6 +1164,7 @@ function render() {
   const isStudioPage = state.currentPage === 'studio';
   app.innerHTML = `<div class="app-shell ${isStudioPage ? 'studio-shell' : ''}" data-theme="open-source">${isStudioPage ? '' : renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
   localizeDom(state.language || 'en');
+  autoResizeAiComposer();
 }
 
 function refreshSidebar() {
@@ -2525,6 +2555,7 @@ function handleInput(event) {
     updateUiStateSilently((state) => {
       state.aiEdit.request = target.value;
     });
+    autoResizeAiComposer();
     return;
   }
 

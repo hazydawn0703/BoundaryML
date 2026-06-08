@@ -44,7 +44,7 @@ assert(app.includes('workflow-board') && app.includes('workflow-detail'), 'workf
 assert(!app.includes('<div class="toolbar card"><div><strong>${project.name}</strong>'), 'studio page does not duplicate project info already shown in the topbar');
 assert(app.includes("['Studio', '工作台']") && app.includes("['Overview', '概览']") && app.includes("['IO', '输入/输出']"), 'Simplified Chinese covers Studio and node detail tabs');
 assert(!app.includes('<button data-action="add-node">Add Node</button><button data-action="undo-workflow">'), 'studio toolbar does not duplicate phase-level add node');
-assert(app.includes("renderCanvasTool('add-phase'") && app.includes("if (action === 'add-phase')"), 'workflow board supports adding phases');
+assert(!app.includes("renderCanvasTool('add-phase'") && app.includes("if (action === 'add-phase')"), 'workflow canvas does not expose a duplicate add phase button');
 assert(app.includes("projects: ['Projects', 'Manage BoundaryML projects']"), 'projects page topbar uses page title instead of active project name');
 assert(app.includes('data-action="search-projects"') && app.includes('function renderProjectGrid') && app.includes('project.name ||') && !app.includes('<p class="muted">Data-driven projects powered by BoundaryML domain model.</p>'), 'projects page replaces static description with project-name search');
 assert(app.includes('refreshProjectGrid()') && app.includes('state.projectSearch = target.value'), 'project search refreshes project results without a full page rerender');
@@ -60,8 +60,8 @@ assert(app.includes("selectedNode ? 'unrelated' : ''") && styles.includes('.node
 assert(app.includes('event.button === 0') && app.includes('draft.selectedNodeId = null') && app.includes("!closestElement(event.target, '.node-card')"), 'left-clicking blank workflow canvas clears node selection');
 assert(app.includes("if (action === 'toggle-phase-menu')") && app.includes("if (action === 'rename-phase')") && app.includes("if (action === 'delete-phase')"), 'phase action menu supports rename and delete');
 assert(app.includes('syncPhaseMenu()') && app.includes('data-phase-menu=') && app.includes('aria-expanded'), 'phase menu toggles without a full workflow rerender');
-assert(app.includes('renderWorkflowCanvasTools') && app.includes("renderCanvasTool('add-phase'") && app.includes("renderCanvasTool('undo-workflow'") && app.includes('toggle-workflow-filters'), 'add phase, undo, and filters are grouped in the canvas top-left controls');
-assert(app.includes('renderWorkflowZoom') && styles.includes('.workflow-zoom-badge') && styles.includes('bottom: 12px'), 'workflow zoom display is a standalone bottom-left canvas badge');
+assert(app.includes('renderWorkflowCanvasTools') && app.includes("renderCanvasTool('undo-workflow'") && app.includes('toggle-workflow-filters') && app.includes('workflow-zoom-badge'), 'undo, zoom, and filters are grouped in the canvas top-center controls');
+assert(styles.includes('.workflow-canvas-tools') && styles.includes('left: 50%') && styles.includes('transform: translateX(-50%)'), 'workflow canvas tools are centered at the top');
 assert(app.includes('renderWorkflowCanvasFilters') && app.includes('toggle-workflow-filters') && !app.includes('<div class="workflow-filters">'), 'workflow filters live behind a canvas icon popover');
 assert(app.includes('handleDocumentOverlayClick') && app.includes("closestElement(event.target, '.workflow-canvas-tools')") && app.includes("closestElement(event.target, '.workflow-filter-popover')") && app.includes('closeWorkflowFilters()'), 'workflow filter popover closes when clicking outside');
 assert(app.includes("if (action === 'set-filter-mode')") && app.includes('refreshWorkflowRegions()') && !app.includes("setState((prev) => ({ ...prev, workflowFiltersOpen: true, studioFilter"), 'workflow filter changes refresh workflow regions without full page render');
@@ -71,7 +71,9 @@ assert(styles.includes('grid-template-columns: repeat(7, 214px)') && styles.incl
 assert(styles.includes('.workflow-canvas-tools') && styles.includes('.canvas-tool-tip') && styles.includes('.phase-menu[hidden]'), 'canvas tooltips and overlay phase menus are styled');
 assert(styles.includes('.workflow-filter-control') && styles.includes('.workflow-filter-popover') && !styles.includes('.workflow-filters'), 'canvas filter popover is styled and old external filters are removed');
 assert(app.includes('save-workflow-history') && app.includes('workflowHistoryOpen') && app.includes('Save Current Version'), 'workflow history is explicitly saved by the user');
-assert(styles.includes('.workflow-canvas > .workflow-detail') && styles.includes('top: 12px') && styles.includes('width: min(410px') && styles.includes('drawer-slide-in'), 'node detail is a right-side drawer shown after node selection');
+assert(styles.includes('.workflow-canvas > .workflow-detail') && styles.includes('top: 12px') && styles.includes('bottom: 110px') && styles.includes('width: min(360px') && styles.includes('drawer-slide-in'), 'node detail is a compact right-side drawer shown after node selection');
+assert(styles.includes('.ai-conversation-drawer') && styles.includes('top: 12px') && styles.includes('bottom: 110px') && styles.includes('width: min(360px'), 'AI assisted edit drawer matches node detail drawer sizing and avoids the composer');
+assert(app.includes('ICONS.close') && app.includes('Close AI Assisted Edit'), 'AI assisted edit drawer closes with an icon button');
 assert(app.includes('selectedNode ? `<div class="workflow-detail"') && app.includes('let target = app.querySelector(\'.workflow-detail\')'), 'node detail drawer is hidden until a node is selected');
 assert(app.includes('studio-shell') && app.includes("isStudioPage ? '' : renderSidebar(state)") && app.includes('topbar-back') && app.includes('ICONS.back') && !app.includes('← Back'), 'studio page hides sidebar and exposes an icon back button');
 assert(app.includes("['Back',") && app.includes("renderCanvasTool('toggle-history'") && app.includes("renderCanvasTool('validate'"), 'studio topbar localizes back text and contains history/validate actions');
@@ -126,6 +128,7 @@ assert(server.includes("return ok(res, ctx, { status: 'failed'") && server.inclu
 assert(server.includes("runModel('workflow_generate'") && server.includes('modelWorkflowPayload(project, selectedTemplate)') && server.includes('normalizeGeneratedWorkflow(project, selectedTemplate, modelResult.output)'), 'workflow generation uses the configured real LLM before fallback');
 assert(server.includes('function createProjectShell') && server.includes('createEmptyWorkflow') && !server.includes('const base = createExampleProject()'), 'new project creation starts from an empty project shell instead of copying the sample project');
 assert(server.includes('context_scope: contextScope') && server.includes("runModel('workflow_diff'") && server.includes('context_scope: contextScope'), 'workflow diff generation passes context scope to the model layer and job payload');
+assert(server.includes('candidateHasChanges') && server.includes('candidate.changes.length > 0') && server.includes('generateWorkflowDiff(requestText'), 'workflow diff generation falls back when model returns zero changes');
 assert(server.includes('project.workflow = applyDiff(project.workflow, diff') && server.includes('markAffectedAssetsOutdated(diff.changes'), 'server diff apply updates workflow and marks affected assets outdated');
 const engine = readFileSync(new URL('../packages/core/src/engine.js', import.meta.url), 'utf-8');
 assert(engine.includes("targetType === 'phase'") && engine.includes("targetType === 'edge'") && engine.includes('removeNodeEdges'), 'core applyDiff covers phase, node, and edge changes');
@@ -144,9 +147,14 @@ assert(api.includes('diffsApi') && api.includes('/diffs/generate') && api.includ
 assert(app.includes('apiClient.diffsApi.generate') && app.includes('apiClient.diffsApi.apply') && app.includes('selected_change_ids'), 'server AI diff review path exists');
 assert(app.includes('Selected workflow context may be sent to the configured LLM provider'), 'model context warning exists');
 assert(app.includes('ai-composer') && app.includes('ai-conversation-drawer') && app.includes('set-ai-context-scope'), 'studio provides bottom AI input and left conversation drawer with context scope');
+assert(app.includes("['Auto: entire workflow'") && app.includes("['Current phase'") && app.includes("['Context'") && app.includes('autoResizeAiComposer'), 'AI composer context and textarea resizing are localized and ergonomic');
+assert(app.includes('rows="1"') && styles.includes('.ai-composer textarea') && styles.includes('resize: none') && styles.includes('max-height: 94px'), 'AI composer textarea auto-grows without manual resizing');
 assert(app.includes('buildAiEditContext') && app.includes('context_scope: buildAiEditContext') && app.includes('node_neighborhood') && app.includes('current_phase'), 'AI diff generation sends explicit workflow context scope');
 assert(!app.includes('AI Assisted Edit is disabled in Phase 3 server mode') && !app.includes('Diff apply from local mock is disabled in server mode'), 'server-backed AI diff generate/apply is not blocked by old local-mode guards');
 assert(app.includes('buildWorkflowDiffPreviewMap') && styles.includes('.node-card.diff-updated') && styles.includes('.node-card.diff-added') && styles.includes('.node-card.diff-deleted'), 'workflow canvas previews AI diff changes');
+assert(app.includes('previewPhases') && app.includes('Preview phase') && styles.includes('.lane.diff-added'), 'workflow canvas previews added phase lanes from AI diff');
+const diffCore = readFileSync(new URL('../packages/core/src/diff.js', import.meta.url), 'utf-8');
+assert(diffCore.includes('extractRequestedPhaseName') && diffCore.includes('新增|添加|增加') && diffCore.includes("targetType: 'phase'"), 'deterministic workflow diff supports Chinese/English add phase requests');
 assert(app.includes('update-artifact-contract-field') && app.includes('required_sections'), 'artifact contract required_sections edit path exists');
 assert(app.includes('completion_criteria'), 'artifact contract completion_criteria edit path exists');
 assert(app.includes('apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, edges: nextEdges })'), 'edge edit uses workflow patch + workflow version');

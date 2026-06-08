@@ -285,7 +285,7 @@
 ### Workflow Studio Changes
 - Toolbar 新增 `Undo` 与 `History`；保留 Validate。
 - Demo 模式显式 warning banner。
-- Phase 区域新增 `Add Node to this phase` 快捷入口。
+- Phase 区域新增 `Add Node` 快捷入口。
 
 ### Node Editing Changes
 - Overview 增加 `Delete Node` 按钮。

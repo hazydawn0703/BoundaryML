@@ -732,7 +732,8 @@ const server = createServer(async (req, res) => {
     runJob(ctx, project, job, (progress) => {
       progress('calling_model', 'Generating workflow diff');
       const candidate = modelResult?.output?.diff || modelResult?.output;
-      project.last_diff = candidate?.changes ? { ...candidate, id: candidate.id || `diff-${Date.now()}`, request: requestText, warnings: candidate.warnings || [], createdAt: candidate.createdAt || new Date().toISOString() } : generateWorkflowDiff(requestText, project.workflow, project.assets);
+      const candidateHasChanges = Array.isArray(candidate?.changes) && candidate.changes.length > 0;
+      project.last_diff = candidateHasChanges ? { ...candidate, id: candidate.id || `diff-${Date.now()}`, request: requestText, warnings: candidate.warnings || [], createdAt: candidate.createdAt || new Date().toISOString() } : generateWorkflowDiff(requestText, project.workflow, project.assets);
       project.last_diff.context_scope = contextScope;
       project.last_diff.status = 'draft';
       return { type: 'workflow_diff', diff_id: project.last_diff.id };
