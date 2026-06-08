@@ -331,7 +331,7 @@ textarea { min-height: 82px; resize: vertical; }
   width: min(780px, calc(100vw - 460px));
   min-height: 64px;
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
   padding: 10px;
@@ -342,13 +342,6 @@ textarea { min-height: 82px; resize: vertical; }
   backdrop-filter: blur(16px);
   transform: translateX(-50%);
   pointer-events: auto;
-}
-.ai-context-select {
-  display: grid;
-  gap: 5px;
-  color: #334155;
-  font-size: 12px;
-  font-weight: 800;
 }
 .ai-composer textarea {
   min-height: 44px;
@@ -629,6 +622,7 @@ textarea { min-height: 82px; resize: vertical; }
   display: grid;
   grid-template-columns: repeat(7, 214px);
   gap: 12px;
+  align-items: start;
   min-height: 640px;
   padding: 12px;
 }
