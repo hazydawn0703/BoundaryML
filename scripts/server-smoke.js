@@ -89,10 +89,14 @@ async function main() {
     await apiFetch(baseUrl, `/api/projects/${projectId}/context-pack`, { method: 'PUT', body: JSON.stringify({ team_roles:['PM'], approval_process:['Review'], tool_stack:['GitHub'], risk_constraints:['None'], historical_process_materials:'N/A' }) });
     const workflow = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`);
     assert(Array.isArray(workflow.body.data.nodes), 'workflow should include nodes array');
-    const initialNodeName = workflow.body.data.nodes[0].name;
-    const firstEditNodes = structuredClone(workflow.body.data.nodes);
+    assert(workflow.body.data.nodes.length === 0, 'new projects should start from an empty workflow before generation');
+    const generated = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/generate`, { method: 'POST' });
+    assert(generated.body.data.workflow.nodes.length > 0, 'workflow generation should create project-specific nodes');
+    const generatedWorkflow = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`);
+    const initialNodeName = generatedWorkflow.body.data.nodes[0].name;
+    const firstEditNodes = structuredClone(generatedWorkflow.body.data.nodes);
     firstEditNodes[0] = { ...firstEditNodes[0], name: 'smoke edit one' };
-    const firstEdit = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`, { method: 'PATCH', body: JSON.stringify({ workflow_version: workflow.body.data.version, nodes: firstEditNodes }) });
+    const firstEdit = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`, { method: 'PATCH', body: JSON.stringify({ workflow_version: generatedWorkflow.body.data.version, nodes: firstEditNodes }) });
     const secondEditNodes = structuredClone(firstEdit.body.data.workflow.nodes);
     secondEditNodes[0] = { ...secondEditNodes[0], name: 'smoke edit two' };
     const secondEdit = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`, { method: 'PATCH', body: JSON.stringify({ workflow_version: firstEdit.body.data.workflow.version, nodes: secondEditNodes }) });

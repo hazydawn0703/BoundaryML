@@ -1,7 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { createExampleProject } from '../../../packages/core/src/sampleProject.js';
 import { createWorkflowFromTemplate, applyWorkflowPatch, applyDiff, createWorkflowSnapshot, markAffectedAssetsOutdated, normalizeWorkflowSpec } from '../../../packages/core/src/engine.js';
 import { getTemplateById, listPublicTemplates, selectTemplateForProject } from '../../../packages/core/src/templates.js';
 import { generateWorkflowDraft } from '../../../packages/generators/src/workflowGenerator.js';
@@ -89,6 +88,241 @@ function getProject(ctx, projectId) { const p = storage.getProject(ctx.workspace
 function writeOwnership(ctx, obj, isCreate = false) {
   const now = new Date().toISOString();
   return { ...obj, workspace_id: ctx.workspace_id, created_by: isCreate ? ctx.user_id : (obj.created_by || ctx.user_id), updated_by: ctx.user_id, created_at: isCreate ? now : (obj.created_at || now), updated_at: now, boundaryml_version: obj.boundaryml_version || 'v0.1', schema_version: obj.schema_version || 'boundaryml-schema-v0.1' };
+}
+
+function safeId(value, fallback) {
+  const id = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  return id || fallback;
+}
+
+function asList(value, fallback = []) {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  if (typeof value === 'string') return value.split(/[,;\n]/).map((item) => item.trim()).filter(Boolean);
+  return fallback;
+}
+
+function createContextPack(input = {}) {
+  return {
+    team_roles: asList(input.team_roles || input.teamRoles),
+    approval_process: asList(input.approval_process || input.approvalProcess),
+    tool_stack: asList(input.tool_stack || input.toolStack),
+    risk_constraints: asList(input.risk_constraints || input.riskConstraints),
+    historical_process_materials: input.historical_process_materials || input.historicalProcessMaterials || '',
+    summary: null,
+    version: 1,
+  };
+}
+
+function createEmptyWorkflow(ctx, project, selectedTemplate) {
+  const phases = (selectedTemplate.content?.default_phases || selectedTemplate.default_phases || ['Discovery', 'Design', 'Development', 'Testing', 'Launch'])
+    .map((name, index) => ({ id: `phase-${index + 1}`, name, order: index + 1 }));
+  return {
+    id: `workflow-${project.id}`,
+    workspace_id: ctx.workspace_id,
+    project_id: project.id,
+    template_id: selectedTemplate.id,
+    context_pack_version: project.context_pack?.version || 1,
+    version: 0,
+    status: 'draft',
+    phases,
+    nodes: [],
+    edges: [],
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function createEmptyAssets() {
+  return { prompts: [], checklists: [], artifact_templates: [], artifactTemplates: [] };
+}
+
+function createProjectShell(ctx, body, selectedTemplate) {
+  const projectType = body.project_type || body.type || selectedTemplate.name;
+  const project = writeOwnership(ctx, {
+    id: body.id || `project_${Date.now()}`,
+    name: body.name || 'Untitled Project',
+    goal: body.goal || '',
+    type: projectType,
+    project_type: projectType,
+    current_stage: body.current_stage || body.currentStage || '',
+    risk_level: body.risk_level || body.riskLevel || 'medium',
+    target_deliverables: asList(body.target_deliverables || body.deliveryScope || body.delivery_scope),
+    expected_ai_scope: asList(body.expected_ai_scope || body.expectedAiScope),
+    sensitive_areas: asList(body.sensitive_areas || body.sensitiveAreas),
+    setup_mode: body.setup_mode || body.setupMode || 'quick_start',
+    output_language: body.output_language || 'en',
+    created_from_template: selectedTemplate.id,
+    template_version: selectedTemplate.version,
+    context_pack: createContextPack(body.context_pack || {}),
+    execution_kits: [],
+    generation_jobs: [],
+    model_call_logs: [],
+    deleted_at: null,
+  }, true);
+  project.workflow = createEmptyWorkflow(ctx, project, selectedTemplate);
+  project.assets = createEmptyAssets();
+  project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+  return project;
+}
+
+function normalizeGeneratedWorkflow(project, selectedTemplate, modelOutput) {
+  const rawEnvelope = modelOutput?.workflow_draft || modelOutput?.draft || modelOutput?.workflow || modelOutput;
+  const rawWorkflow = rawEnvelope?.workflow || rawEnvelope;
+  const normalized = normalizeWorkflowSpec({ workflow: rawWorkflow }).workflow;
+  const templatePhases = selectedTemplate.content?.default_phases || selectedTemplate.default_phases || ['Discovery', 'Design', 'Development', 'Testing', 'Launch'];
+  const phases = (normalized.phases?.length ? normalized.phases : templatePhases.map((name, index) => ({ id: `phase-${index + 1}`, name, order: index + 1 })))
+    .map((phase, index) => ({
+      id: safeId(phase.id, `phase-${index + 1}`),
+      name: String(phase.name || templatePhases[index] || `Phase ${index + 1}`),
+      order: Number(phase.order || index + 1),
+    }));
+  const phaseIds = new Set(phases.map((phase) => phase.id));
+  const defaultPhaseId = phases[0]?.id || 'phase-1';
+  const nodes = (normalized.nodes || []).map((node, index) => {
+    const nodeId = safeId(node.id, `node-${index + 1}`);
+    const phaseId = phaseIds.has(node.phase_id) ? node.phase_id : defaultPhaseId;
+    const executionMode = ['human_only', 'ai_draft_human_review', 'human_lead_ai_assist', 'ai_execute_human_approval', 'ai_autonomous'].includes(node.execution_mode)
+      ? node.execution_mode
+      : 'human_lead_ai_assist';
+    const riskLevel = ['low', 'medium', 'high'].includes(node.risk_level) ? node.risk_level : 'medium';
+    const outputs = asList(node.outputs, ['Draft output']);
+    const inputs = asList(node.inputs, index === 0 ? ['Project goal'] : ['Upstream output']);
+    const artifactContract = node.artifact_contract || {};
+    const reviewGate = node.review_gate || (riskLevel === 'high' || executionMode !== 'ai_autonomous' ? {
+      id: `gate-${nodeId}`,
+      name: `${node.name || `Node ${index + 1}`} Review`,
+      reviewer_role: node.human_owner_role || 'Project Owner',
+      criteria: ['Completeness', 'Risk controls present'],
+      pass_condition: 'Reviewer approves the output',
+      reject_condition: 'Required criteria are not met',
+      allow_ai_revision: true,
+      required: riskLevel !== 'low',
+    } : null);
+    return {
+      id: nodeId,
+      phase_id: phaseId,
+      name: String(node.name || `Workflow Step ${index + 1}`),
+      goal: String(node.goal || `Complete ${node.name || `workflow step ${index + 1}`}`),
+      execution_mode: executionMode,
+      risk_level: riskLevel,
+      status: node.status || 'draft',
+      human_owner_role: node.human_owner_role || 'Project Owner',
+      ai_role: node.ai_role || (executionMode === 'human_only' ? '' : 'AI Assistant'),
+      inputs,
+      outputs,
+      artifact_contract: {
+        id: artifactContract.id || `artifact-${nodeId}`,
+        format: artifactContract.format || 'markdown',
+        output_format: artifactContract.output_format || outputs.join(', '),
+        acceptance_criteria: asList(artifactContract.acceptance_criteria, ['Output addresses the node goal', 'Boundary rules are followed']),
+      },
+      review_gate: reviewGate,
+      prompt_status: executionMode === 'human_only' ? 'missing' : 'draft',
+      checklist_status: 'draft',
+      history: [{ at: new Date().toISOString(), action: 'Node generated by model' }],
+    };
+  });
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = (normalized.edges || [])
+    .map((edge, index) => ({ id: safeId(edge.id, `edge-${index + 1}`), from: edge.from, to: edge.to, required_outputs: asList(edge.required_outputs) }))
+    .filter((edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to));
+  if (!nodes.length) throw new Error('MODEL_WORKFLOW_EMPTY: Model output must include at least one workflow node.');
+  return {
+    id: normalized.id || `workflow-${project.id}`,
+    workspace_id: project.workspace_id,
+    project_id: project.id,
+    template_id: selectedTemplate.id,
+    context_pack_version: project.context_pack?.version || 1,
+    version: 1,
+    status: 'draft',
+    phases,
+    nodes,
+    edges,
+    updated_at: new Date().toISOString(),
+    generated_by: 'real_llm',
+  };
+}
+
+function buildAssetsForWorkflow(workflow, modelName = 'configured-planning-model') {
+  const prompts = workflow.nodes
+    .filter((node) => node.execution_mode !== 'human_only')
+    .map((node) => ({
+      id: `prompt-${node.id}`,
+      node_id: node.id,
+      phase_id: node.phase_id,
+      name: `Prompt: ${node.name}`,
+      model: modelName,
+      status: node.prompt_status || 'draft',
+      output_format: node.artifact_contract?.output_format || 'markdown',
+      acceptance_criteria: node.artifact_contract?.acceptance_criteria || [],
+      content: `# Role\n${node.ai_role || 'AI Assistant'}\n\n# Objective\n${node.goal}\n\n# Context Required\n${node.inputs.map((item) => `- ${item}`).join('\n')}\n\n# Output Format\n${node.artifact_contract?.output_format || 'Structured markdown'}\n\n# Acceptance Criteria\n${(node.artifact_contract?.acceptance_criteria || ['Meets node contract']).map((item) => `- ${item}`).join('\n')}`,
+      updated_at: new Date().toISOString(),
+    }));
+  const checklists = workflow.nodes.map((node) => ({
+    id: `checklist-${node.id}`,
+    node_id: node.id,
+    phase_id: node.phase_id,
+    name: `Checklist: ${node.name}`,
+    status: node.checklist_status || 'draft',
+    reviewer_role: node.review_gate?.reviewer_role || node.human_owner_role,
+    items: [
+      `Confirm goal of ${node.name} is met`,
+      ...asList(node.review_gate?.criteria, ['Validate quality and risk controls']),
+      `Verify pass condition: ${node.review_gate?.pass_condition || 'manual approval required'}`,
+    ],
+    updated_at: new Date().toISOString(),
+  }));
+  const artifact_templates = workflow.nodes.map((node) => ({
+    id: `artifact-template-${node.id}`,
+    node_id: node.id,
+    name: `${node.name} Artifact Template`,
+    content: `# ${node.name}\n\n## Goal\n${node.goal}\n\n## Required Output\n- ${node.outputs.join('\n- ')}`,
+    status: 'draft',
+  }));
+  return { prompts, checklists, artifact_templates, artifactTemplates: artifact_templates };
+}
+
+function modelWorkflowPayload(project, selectedTemplate) {
+  return {
+    instruction: 'Generate a BoundaryML workflow draft as strict JSON. Do not copy the sample AI SaaS Feature MVP unless the user project actually matches it.',
+    output_contract: {
+      workflow: {
+        phases: [{ id: 'phase-1', name: 'Discovery', order: 1 }],
+        nodes: [{
+          id: 'node-1',
+          phase_id: 'phase-1',
+          name: 'Specific project step',
+          goal: 'Concrete goal',
+          execution_mode: 'human_lead_ai_assist | ai_draft_human_review | ai_execute_human_approval | human_only | ai_autonomous',
+          risk_level: 'low | medium | high',
+          inputs: ['input artifact'],
+          outputs: ['output artifact'],
+          artifact_contract: { format: 'markdown', output_format: 'structured markdown', acceptance_criteria: ['criterion'] },
+          review_gate: { name: 'Review', reviewer_role: 'Owner', criteria: ['criterion'], pass_condition: 'approved', reject_condition: 'rework', allow_ai_revision: true, required: true },
+        }],
+        edges: [{ id: 'edge-1', from: 'node-1', to: 'node-2', required_outputs: ['output artifact'] }],
+      },
+    },
+    project: {
+      id: project.id,
+      name: project.name,
+      goal: project.goal,
+      project_type: project.project_type || project.type,
+      current_stage: project.current_stage,
+      risk_level: project.risk_level,
+      target_deliverables: project.target_deliverables || [],
+      expected_ai_scope: project.expected_ai_scope || [],
+      sensitive_areas: project.sensitive_areas || [],
+      output_language: project.output_language || 'en',
+    },
+    context_pack: project.context_pack || {},
+    template: selectedTemplate.content || selectedTemplate,
+    boundary_rules: [
+      'High risk nodes require a required review gate.',
+      'Human-only nodes must not have AI prompts.',
+      'AI autonomous is allowed only for low-risk non-production work.',
+      'Every node must have inputs, outputs, and acceptance criteria.',
+    ],
+  };
 }
 function ensureWorkflowHistory(project) {
   if (!Array.isArray(project.workflow_history_items)) project.workflow_history_items = [];
@@ -246,13 +480,9 @@ const server = createServer(async (req, res) => {
   if (method === 'GET' && path === '/api/projects') return ok(res, ctx, listScopedProjects(ctx).map((p) => ({ id: p.id, name: p.name, workspace_id: p.workspace_id, updated_at: p.updated_at })));
   if (method === 'POST' && path === '/api/projects') {
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
-    const base = createExampleProject();
     const selectedTemplate = selectTemplateForProject(body);
-    const project = writeOwnership(ctx, { ...base, id: body.id || `project_${Date.now()}`, name: body.name || base.name, goal: body.goal || base.goal, type: body.project_type || body.type || base.type, project_type: body.project_type || body.type || base.type, created_from_template: selectedTemplate.id, template_version: selectedTemplate.version, context_pack: base.contextPack, deleted_at: null }, true);
+    const project = createProjectShell(ctx, body, selectedTemplate);
     const v = validateProject(project); if (!v.ok) return fail(res, ctx, 400, 'SCHEMA_INVALID', 'Project invalid', v.errors);
-    project.workflow = normalizeWorkflowSpec({ workflow: project.workflow }).workflow;
-    project.workflow.version = 0;
-    project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
     ensureWorkflowHistory(project);
     storage.saveProject(ctx.workspace_id, project);
     return ok(res, ctx, project, 201);
@@ -322,16 +552,52 @@ const server = createServer(async (req, res) => {
   if (method === 'POST' && wfGen) {
     const project = getProject(ctx, wfGen[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const job = createJob(ctx, project, 'generate_workflow_draft', { context_pack: structuredClone(project.context_pack || {}), workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
+    const selectedTemplate = getTemplateById(project.created_from_template) || selectTemplateForProject(project);
+    let modelResult = null;
+    let modelError = null;
+    try {
+      modelResult = await runModel('workflow_generate', modelWorkflowPayload(project, selectedTemplate));
+      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_generate', status: modelResult.status || 'succeeded', summary: modelResult.output?.summary || (modelResult.status === 'mock' ? 'mock workflow fallback' : `generated workflow for ${project.name}`) });
+    } catch (error) {
+      modelError = error;
+      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().planning_model, purpose: 'workflow_generate', status: 'failed', summary: error.message || 'Workflow generation failed' });
+    }
     runJob(ctx, project, job, (progress) => {
       progress('calling_model', 'Generating workflow draft');
-      const drafted = generateWorkflowDraft(project, project.context_pack || {});
+      let workflow = null;
+      let assets = null;
+      if (modelResult && modelResult.status !== 'mock') {
+        progress('parsing_output', 'Parsing model workflow output');
+        try {
+          workflow = normalizeGeneratedWorkflow(project, selectedTemplate, modelResult.output);
+          assets = buildAssetsForWorkflow(workflow, modelResult.model);
+        } catch (error) {
+          modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_generate', status: 'failed', summary: error.message || 'Model workflow output invalid' });
+          if (!getModelStatus().allow_mock) throw error;
+          workflow = null;
+          assets = null;
+        }
+      } else if (modelError && !getModelStatus().allow_mock) {
+        throw modelError;
+      }
+      const drafted = workflow ? null : generateWorkflowDraft({
+        ...project,
+        currentStage: project.current_stage,
+        riskLevel: project.risk_level,
+        deliveryScope: project.target_deliverables,
+        expectedAiScope: project.expected_ai_scope,
+        sensitiveAreas: project.sensitive_areas,
+        setupMode: project.setup_mode,
+      }, project.context_pack || {});
       progress('parsing_output', 'Parsing generated output');
-      const workflow = createWorkflowFromTemplate(project, project.context_pack, drafted.workflow);
+      workflow = workflow || createWorkflowFromTemplate(project, project.context_pack, drafted.workflow);
+      assets = assets || drafted.assets || project.assets;
       const schema = validateWorkflow(workflow); if (!schema.ok) throw new Error(schema.errors.join('; '));
       progress('running_boundary_rules', 'Running boundary rules');
-      const validation = validateRulesWorkflow(workflow, project.assets, { forGeneration: true, modelConfig: null });
+      const validation = validateRulesWorkflow(workflow, assets, { forGeneration: true, modelConfig: modelResult && modelResult.status !== 'mock' ? getModelStatus() : null });
       recordUndoSnapshot(ctx, project, 'model_generation');
       project.workflow = workflow;
+      project.assets = assets;
       project.validation = validation;
       const specCheck = validateBoundaryMLProjectSpec({ boundaryml_version: 'v0.1', project, context_pack: project.context_pack, workflow, assets: project.assets, validation, execution_kits: project.execution_kits || [] });
       if (!specCheck.ok) throw new Error(specCheck.errors.join('; '));

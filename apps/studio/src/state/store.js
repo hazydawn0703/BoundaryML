@@ -27,6 +27,7 @@ function initialState() {
     modelStatus: null,
     modelConfig: null,
     toasts: [],
+    modelTestPending: false,
     serverError: '',
   };
 }

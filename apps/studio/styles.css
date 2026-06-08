@@ -479,8 +479,8 @@ textarea { min-height: 82px; resize: vertical; }
 .toast-stack {
   position: fixed;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: 76px;
+  transform: translateX(-50%);
   display: grid;
   gap: 10px;
   z-index: 80;

@@ -35,6 +35,7 @@ const ZH_HANS_REPLACEMENTS = [
   ['Saved to local server config', '保存到本地服务配置'],
   ['Test Model', '测试模型'],
   ['Save Configuration', '保存配置'],
+  ['Testing...', '测试中...'],
   ['Recent Model Calls', '最近模型调用'],
   ['No calls yet', '暂无调用'],
   ['Generate Workflow Draft', '生成工作流草稿'],
@@ -66,6 +67,10 @@ const ZH_HANS_REPLACEMENTS = [
   ['Project Name', '项目名称'],
   ['Project Goal', '项目目标'],
   ['Project Type', '项目类型'],
+  ['Discovery / Design / Development / Testing / Launch', '探索 / 设计 / 开发 / 测试 / 发布'],
+  ['PRD, prototype, API spec, launch plan', 'PRD、原型、API 规格、发布计划'],
+  ['PRD, code, tests, docs, review', 'PRD、代码、测试、文档、评审'],
+  ['Customer data, production release, security', '客户数据、生产发布、安全'],
   ['Risk Level', '风险等级'],
   ['Setup Mode', '设置模式'],
   ['Quick Start', '快速开始'],
@@ -454,7 +459,7 @@ function renderTopbar(state) {
     create: ['Create Project', 'Create a new BoundaryML project'],
     jobs: ['Jobs', 'Monitor recent generation tasks'],
     settings: ['Settings', 'Manage model and runtime settings'],
-    'settings-model': ['Model Access', '模型访问'],
+    'settings-model': ['Model Access', 'Manage model provider, keys, and runtime test calls'],
   };
   const [title, subtitle] = pageCopy[state.currentPage] || [
     project?.name || 'BoundaryML',
@@ -494,16 +499,15 @@ function renderProjectGrid(state) {
 }
 
 function renderCreatePage() {
-  return `<section class="page"><h2>Create Project</h2>
-  <form class="card form" data-form="create-project">
+  return `<section class="page"><form class="card form" data-form="create-project">
     <div class="grid-2">
       <label>Project Name<input name="name" required/></label>
       <label>Project Goal<input name="goal" required/></label>
       <label>Project Type<select name="type"><option>AI Feature</option><option>Internal Tool</option><option>Legacy Modernization</option></select></label>
-      <label>Current Stage<input name="currentStage" required/></label>
-      <label>Target Deliverables<input name="deliveryScope"/></label>
-      <label>Expected AI Scope<input name="expectedAiScope"/></label>
-      <label>Sensitive Areas<input name="sensitiveAreas"/></label>
+      <label>Current Stage<input name="currentStage" required placeholder="Discovery / Design / Development / Testing / Launch"/></label>
+      <label>Target Deliverables<input name="deliveryScope" placeholder="PRD, prototype, API spec, launch plan"/></label>
+      <label>Expected AI Scope<input name="expectedAiScope" placeholder="PRD, code, tests, docs, review"/></label>
+      <label>Sensitive Areas<input name="sensitiveAreas" placeholder="Customer data, production release, security"/></label>
       <label>Risk Level<select name="riskLevel"><option>low</option><option>medium</option><option>high</option></select></label>
       <label>Setup Mode<select name="setupMode"><option value="quick_start">Quick Start</option><option value="org_aware">Organization-Aware Setup</option></select></label>
     </div>
@@ -914,6 +918,7 @@ function renderSettings(state) {
   const structuredOutputEnabled = config.structured_output_enabled ?? modelStatus.structured_output_enabled ?? true;
   const allowMock = config.allow_mock ?? modelStatus.allow_mock ?? true;
   const logLevel = config.log_level || modelStatus.log_level || 'summary';
+  const testButtonText = state.modelTestPending ? 'Testing...' : 'Test Model';
   return `<section class="page"><div class="split-2">
     <form class="card form" data-form="model-config">
       <h3>Model Configuration</h3>
@@ -932,7 +937,7 @@ function renderSettings(state) {
         <label class="check"><input name="clear_api_key" type="checkbox"/> Clear saved API key</label>
       </div>
       <p class="muted">Saved to local server config: ${escapeAttr(config.config_path || 'n/a')}</p>
-      <div class="actions"><button type="button" data-action="test-model-config">Test Model</button><button type="button" data-action="refresh-model-status">Refresh</button><button type="submit" class="primary">Save Configuration</button></div>
+      <div class="actions"><button type="button" data-action="test-model-config" ${state.modelTestPending ? 'disabled' : ''}>${testButtonText}</button><button type="button" data-action="refresh-model-status">Refresh</button><button type="submit" class="primary">Save Configuration</button></div>
     </form>
     <div class="card panel">
       <h3>Runtime Status</h3>
@@ -1209,8 +1214,12 @@ async function bootstrapRuntimeMode() {
       apiClient.modelApi.config(),
     ]);
     const projects = projectsData?.projects || projectsData || [];
-    if (projects[0]?.id) {
-      await loadProjectRuntime(projects[0].id, { navigate: false, projectSummaries: projects });
+    const currentProjectId = getState().activeProjectId;
+    const targetProjectId = projects.some((project) => project.id === currentProjectId)
+      ? currentProjectId
+      : projects[0]?.id;
+    if (targetProjectId) {
+      await loadProjectRuntime(targetProjectId, { navigate: false, projectSummaries: projects });
       setState((prev) => ({ ...prev, modelStatus, modelConfig, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
     } else {
       setState((prev) => ({ ...prev, projects: [], modelStatus, modelConfig, runtimeMode: 'local_server', serverAvailable: true, serverError: '' }));
@@ -1900,15 +1909,24 @@ function handleAction(event) {
   }
 
   if (action === 'test-model-config') {
+    if (getState().modelTestPending) return;
+    updateUiStateSilently((state) => {
+      state.modelTestPending = true;
+    });
+    target.disabled = true;
+    target.textContent = translateText('Testing...', getState().language || 'en');
     apiClient.modelApi.test()
       .then((testResult) => Promise.all([apiClient.modelApi.status(), apiClient.modelApi.config(), apiClient.modelApi.calls()])
         .then(([statusResult, configResult, callsResult]) => ({ testResult, statusResult, configResult, callsResult })))
       .then(({ testResult, statusResult, configResult, callsResult }) => {
-        setState((prev) => ({ ...prev, modelStatus: statusResult.data || {}, modelConfig: configResult.data || {}, modelCalls: callsResult.data?.calls || callsResult.data || [] }));
+        setState((prev) => ({ ...prev, modelStatus: statusResult.data || {}, modelConfig: configResult.data || {}, modelCalls: callsResult.data?.calls || callsResult.data || [], modelTestPending: false }));
         if (testResult.data?.status === 'failed') showToast(testResult.data.error || 'Model test failed.', 'error');
         else showToast('Model test completed.', 'success');
       })
-      .catch((error) => showToast(error.message || 'Failed to test model configuration', 'error'));
+      .catch((error) => {
+        setState((prev) => ({ ...prev, modelTestPending: false }));
+        showToast(error.message || 'Failed to test model configuration', 'error');
+      });
   }
 
   if (action === 'job-retry') {
@@ -2413,7 +2431,8 @@ function handleSubmit(event) {
       }
       const projectsResult = await apiClient.projectsApi.list();
       const projects = projectsResult.data?.projects || projectsResult.data || [];
-      setState((prev) => ({ ...prev, projects, activeProjectId: createdProject.id, currentPage: data.setupMode === 'org_aware' ? 'context' : 'studio' }));
+      await loadProjectRuntime(createdProject.id, { navigate: false, projectSummaries: projects });
+      setState((prev) => ({ ...prev, activeProjectId: createdProject.id, currentPage: data.setupMode === 'org_aware' ? 'context' : 'studio' }));
     }).catch((error) => {
       setState((prev) => ({ ...prev, serverError: error.message || 'Failed to create project' }));
     });
