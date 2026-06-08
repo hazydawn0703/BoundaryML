@@ -36,6 +36,7 @@ assert(app.includes('data-action="open-project-page" data-page="assets"') && app
 assert(app.includes("if (action === 'open-project-page')") && app.includes("currentPage: page"), 'project card page actions open the selected project-bound page');
 assert(app.includes("['jobs', 'Jobs']") && app.includes("case 'jobs': return renderJobs(state);"), 'jobs has a first-level navigation page');
 assert(app.includes('function renderJobs') && app.includes('renderJobList') && app.includes('data-action="refresh-jobs"'), 'jobs page renders and refreshes generation tasks');
+assert(app.includes('data-action="search-jobs"') && app.includes('function getFilteredJobs') && !app.includes('generation task monitor'), 'jobs page replaces static monitor copy with searchable job filtering');
 const studioRender = app.slice(app.indexOf('function renderStudio'), app.indexOf('function renderAiEdit'));
 assert(!studioRender.includes('Recent Jobs'), 'studio page does not embed the recent jobs monitor');
 assert(!app.includes('<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button></div></div>'), 'studio toolbar should not duplicate topbar execution kit action');
@@ -47,6 +48,8 @@ assert(app.includes("renderCanvasTool('add-phase'") && app.includes("if (action 
 assert(app.includes("projects: ['Projects', 'Manage BoundaryML projects']"), 'projects page topbar uses page title instead of active project name');
 assert(app.includes('data-action="search-projects"') && app.includes('function renderProjectGrid') && app.includes('project.name ||') && !app.includes('<p class="muted">Data-driven projects powered by BoundaryML domain model.</p>'), 'projects page replaces static description with project-name search');
 assert(app.includes('refreshProjectGrid()') && app.includes('state.projectSearch = target.value'), 'project search refreshes project results without a full page rerender');
+assert(app.includes('toggle-project-menu') && app.includes('rename-project') && app.includes('delete-project') && styles.includes('.project-menu'), 'project cards expose an overflow menu for rename and delete actions');
+assert(app.includes('projectsApi.update(projectId') && app.includes('projectsApi.remove(projectId'), 'project rename/delete actions use server project APIs when available');
 assert(app.includes('WORKFLOW_MIN_SCALE = 0.25') && app.includes('WORKFLOW_MAX_SCALE = 4'), 'workflow canvas zoom range is constrained');
 assert(app.includes('workflow-canvas') && app.includes('handleWorkflowWheel') && app.includes('handleWorkflowPointerDown'), 'workflow canvas supports wheel zoom and right-button pan');
 assert(app.includes("if (closestElement(event.target, '.workflow-detail')) return;"), 'node detail wheel events scroll the detail panel instead of zooming the canvas');
@@ -85,6 +88,7 @@ assert(app.includes('edge-edit-field'), 'edge edit form field path exists');
 assert(app.includes('dependency_type') && app.includes('required_outputs') && app.includes('gate_id'), 'edge edit fields exist');
 assert(app.includes('restore-version') && app.includes('view-version'), 'version detail/restore actions exist');
 assert(app.includes('workflowApi.validate'), 'validate uses server api');
+assert(app.includes('topbar-title-badge') && app.includes('Outdated prompt') && app.includes('Validation: ${validationSummary.errors} errors'), 'studio topbar shows outdated prompt and validation summary beside project context');
 assert(app.includes('loadProjectRuntime') && app.includes('refresh-server-mode'), 'studio can reconnect to server and load full project runtime');
 assert(app.includes('const currentProjectId = getState().activeProjectId') && app.includes('const targetProjectId = projects.some((project) => project.id === currentProjectId)') && app.includes('await loadProjectRuntime(targetProjectId'), 'reconnect keeps the current active project when it still exists on the server');
 assert(app.includes('projectSummaries = null') && app.includes('withCamelAliases(projectSummaries).map'), 'server bootstrap replaces demo projects with server project summaries');

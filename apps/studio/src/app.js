@@ -22,6 +22,11 @@ const UI_LANGUAGES = {
 const ZH_HANS_REPLACEMENTS = [
   ['Search projects', '搜索项目'],
   ['Search by project name', '按项目名搜索'],
+  ['Search jobs', '搜索任务'],
+  ['Search by task type, status, stage, or message', '按任务类型、状态、阶段或消息搜索'],
+  ['No jobs match your search.', '没有匹配搜索的任务。'],
+  ['Rename Project', '重命名项目'],
+  ['Delete Project', '删除项目'],
   ['No projects match your search.', '没有匹配搜索的项目。'],
   ['Model Access', '模型访问'],
   ['Manage model provider, keys, and runtime test calls', '管理模型服务商、密钥和运行时测试调用'],
@@ -454,6 +459,11 @@ function renderSidebar(state) {
 function renderTopbar(state) {
   const project = getActiveProject(state);
   const stats = project ? countProjectStats(project) : { nodes: 0, aiNodes: 0, gates: 0 };
+  const validationSummary = {
+    errors: (state.validationResults || []).filter((item) => item.level === 'error').length,
+    warnings: (state.validationResults || []).filter((item) => item.level === 'warning').length,
+  };
+  const outdatedPromptCount = (project?.assets?.prompts || []).filter((prompt) => prompt.status === 'outdated' || prompt.outdatedReason || prompt.outdated_reason).length;
   const pageCopy = {
     projects: ['Projects', 'Manage BoundaryML projects'],
     create: ['Create Project', 'Create a new BoundaryML project'],
@@ -461,10 +471,14 @@ function renderTopbar(state) {
     settings: ['Settings', 'Manage model and runtime settings'],
     'settings-model': ['Model Access', 'Manage model provider, keys, and runtime test calls'],
   };
+  const isProjectTopbar = !pageCopy[state.currentPage] && Boolean(project?.id);
   const [title, subtitle] = pageCopy[state.currentPage] || [
     project?.name || 'BoundaryML',
-    `Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates`,
+    `Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates · Validation: ${validationSummary.errors} errors, ${validationSummary.warnings} warnings`,
   ];
+  const titleBadge = isProjectTopbar && outdatedPromptCount
+    ? `<span class="topbar-title-badge warning">Outdated prompt ${outdatedPromptCount}</span>`
+    : '';
   const runtimeBadge = state.serverAvailable
     ? `<span class="badge">Mode: Local Server</span>`
     : `<span class="badge risk-high">Mode: Local Demo / Mock Model</span><button data-action="refresh-server-mode">Reconnect Server</button>`;
@@ -472,7 +486,7 @@ function renderTopbar(state) {
   const languageSwitcher = `<label class="language-switcher"><span>Language</span><select data-action="set-language" aria-label="Language">${Object.entries(UI_LANGUAGES).map(([id, label]) => `<option value="${id}" ${language === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
   const canGenerateExecutionKit = Boolean(project?.id) && ['context', 'studio', 'assets', 'export'].includes(state.currentPage);
   const executionKitAction = canGenerateExecutionKit ? '<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button>' : '';
-  return `<header class="topbar"><div><h1>${title}</h1><p>${subtitle}</p></div>
+  return `<header class="topbar"><div><h1>${title}${titleBadge}</h1><p>${subtitle}</p></div>
   <div class="row">${runtimeBadge}${languageSwitcher}${executionKitAction}</div></header>`;
 }
 
@@ -490,7 +504,8 @@ function renderProjectGrid(state) {
   if (!projects.length) return '<div class="card panel"><p>No projects match your search.</p></div>';
   return `<div class="project-grid">${projects.map((project) => {
     const stats = countProjectStats(project);
-    return `<article class="card project"><h3>${project.name}</h3><p>${project.project_type || project.type} - ${(project.risk_level || project.riskLevel)} risk - ${(project.workflow?.status || 'draft')}</p>
+    const menuOpen = state.activeProjectMenuId === project.id;
+    return `<article class="card project"><div class="project-card-head"><h3>${project.name}</h3><div class="project-menu-control"><button class="icon-button project-menu-trigger ${menuOpen ? 'active' : ''}" data-action="toggle-project-menu" data-project-id="${project.id}" aria-label="Project actions" aria-expanded="${menuOpen ? 'true' : 'false'}">${ICONS.more}</button><div class="project-menu" data-project-menu="${project.id}" ${menuOpen ? '' : 'hidden'}><button data-action="rename-project" data-project-id="${project.id}">Rename Project</button><button data-action="delete-project" data-project-id="${project.id}" class="danger-text">Delete Project</button></div></div></div><p>${project.project_type || project.type} - ${(project.risk_level || project.riskLevel)} risk - ${(project.workflow?.status || 'draft')}</p>
       <div class="kv-row"><span>Nodes ${stats.nodes}</span><span>AI ${stats.aiNodes}</span><span>Gates ${stats.gates}</span></div>
       <div class="kv-row"><span>Stage</span><strong>${project.current_stage || project.currentStage || 'n/a'}</strong></div>
       <div class="kv-row"><span>Execution Kit</span><strong>${project.execution_kit?.status || project.executionKit?.status || 'not generated'}</strong></div>
@@ -694,6 +709,7 @@ function renderStudio(state) {
     errors: state.validationResults.filter((x) => x.level === 'error').length,
     warnings: state.validationResults.filter((x) => x.level === 'warning').length,
   };
+  const workflowAlerts = state.validationResults.filter((item) => item.title !== 'Outdated prompt' && !String(item.id || '').startsWith('outdated_prompt_warning'));
 
   const historyOpen = state.workflowHistoryOpen || (state.workflowHistory || []).length > 0;
   return `<section class="page">
@@ -702,7 +718,7 @@ function renderStudio(state) {
   ${historyOpen ? `<article class="card panel"><div class="toolbar"><h3>History</h3><button data-action="save-workflow-history">Save Current Version</button></div><ul>${(state.workflowHistory || []).length ? state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('') : '<li>No saved versions yet</li>'}</ul></article>` : ''}
   <section class="workflow-board card">
     <div class="workflow-board-head"><div><h3>Workflow</h3><p class="muted" data-workflow-validation-summary>Validation: ${summary.errors} errors, ${summary.warnings} warnings</p></div></div>
-    ${state.validationResults.length ? `<div class="workflow-alerts">${state.validationResults.slice(0, 4).map((x) => `<span class="inline-${x.level}">${x.title}</span>`).join('')}</div>` : ''}
+    ${workflowAlerts.length ? `<div class="workflow-alerts">${workflowAlerts.slice(0, 4).map((x) => `<span class="inline-${x.level}">${x.title}</span>`).join('')}</div>` : ''}
     <div class="workflow-canvas">
       ${renderWorkflowCanvasFilters(state)}
       ${renderWorkflowCanvasTools(viewport)}
@@ -900,13 +916,30 @@ function renderJobList(jobs) {
   }).join('');
 }
 
-function renderJobs(state) {
-  const project = getActiveProject(state);
+function getFilteredJobs(state) {
+  const query = (state.jobSearch || '').trim().toLowerCase();
   const jobs = state.jobs || [];
-  return `<section class="page"><div class="page-head"><p class="muted">${project?.name || 'No project selected'} - generation task monitor</p><button data-action="refresh-jobs">Refresh Jobs</button></div>
+  if (!query) return jobs;
+  return jobs.filter((job) => [
+    job.type,
+    job.status,
+    job.progress?.stage,
+    job.progress?.message,
+    job.id || job.job_id,
+  ].filter(Boolean).some((value) => String(value).toLowerCase().includes(query)));
+}
+
+function renderJobResults(state) {
+  const jobs = getFilteredJobs(state);
+  if (jobs.length) return `<ul class="job-list">${renderJobList(jobs)}</ul>`;
+  return (state.jobSearch || '').trim() ? '<p>No jobs match your search.</p>' : `<ul class="job-list">${renderJobList([])}</ul>`;
+}
+
+function renderJobs(state) {
+  return `<section class="page"><div class="page-head"><label class="project-search"><span>Search jobs</span><input data-action="search-jobs" value="${escapeAttr(state.jobSearch || '')}" placeholder="Search by task type, status, stage, or message"/></label><button data-action="refresh-jobs">Refresh Jobs</button></div>
     ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model. Server jobs are unavailable.</div>'}
     ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
-    <article class="card panel"><h3>Recent Jobs</h3><ul class="job-list">${renderJobList(jobs)}</ul></article>
+    <article class="card panel"><h3>Recent Jobs</h3><div data-job-results>${renderJobResults(state)}</div></article>
   </section>`;
 }
 
@@ -1029,6 +1062,26 @@ function refreshProjectGrid() {
   if (!target) return;
   target.outerHTML = `<div data-project-results>${renderProjectGrid(state)}</div>`;
   localizeDom(state.language || 'en');
+}
+
+function refreshJobResults() {
+  const state = getState();
+  const target = app.querySelector('[data-job-results]');
+  if (!target) return;
+  target.outerHTML = `<div data-job-results>${renderJobResults(state)}</div>`;
+  localizeDom(state.language || 'en');
+}
+
+function syncProjectMenu() {
+  const state = getState();
+  app.querySelectorAll('[data-project-menu]').forEach((menu) => {
+    menu.hidden = menu.dataset.projectMenu !== state.activeProjectMenuId;
+  });
+  app.querySelectorAll('.project-menu-trigger').forEach((button) => {
+    const active = button.dataset.projectId === state.activeProjectMenuId;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-expanded', active ? 'true' : 'false');
+  });
 }
 
 function syncPhaseMenu() {
@@ -1280,6 +1333,61 @@ function handleAction(event) {
     loadProjectRuntime(projectId, { navigate: false })
       .then(() => setState((prev) => ({ ...prev, currentPage: page })))
       .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || `Failed to load project ${page}` })));
+  }
+  if (action === 'toggle-project-menu') {
+    const projectId = target.dataset.projectId;
+    updateUiStateSilently((state) => {
+      state.activeProjectMenuId = state.activeProjectMenuId === projectId ? null : projectId;
+    });
+    syncProjectMenu();
+    return;
+  }
+  if (action === 'rename-project') {
+    const projectId = target.dataset.projectId;
+    const project = getState().projects.find((item) => item.id === projectId);
+    if (!project) return;
+    const nextName = window.prompt('Rename Project', project.name || '');
+    if (!nextName || nextName.trim() === project.name) {
+      updateUiStateSilently((state) => { state.activeProjectMenuId = null; });
+      syncProjectMenu();
+      return;
+    }
+    const applyRename = (updatedProject) => setState((prev) => ({
+      ...prev,
+      projects: prev.projects.map((item) => (item.id === projectId ? { ...item, ...updatedProject, name: nextName.trim() } : item)),
+      activeProjectMenuId: null,
+    }));
+    if (getState().serverAvailable) {
+      apiClient.projectsApi.update(projectId, { name: nextName.trim() })
+        .then(({ data }) => applyRename(data))
+        .catch((error) => showToast(error.message || 'Failed to rename project', 'error'));
+    } else {
+      applyRename({ name: nextName.trim() });
+    }
+    return;
+  }
+  if (action === 'delete-project') {
+    const projectId = target.dataset.projectId;
+    const project = getState().projects.find((item) => item.id === projectId);
+    if (!project) return;
+    if (!window.confirm(`Delete project "${project.name}"?`)) {
+      updateUiStateSilently((state) => { state.activeProjectMenuId = null; });
+      syncProjectMenu();
+      return;
+    }
+    const applyDelete = () => setState((prev) => {
+      const projects = prev.projects.filter((item) => item.id !== projectId);
+      const activeProjectId = prev.activeProjectId === projectId ? projects[0]?.id || null : prev.activeProjectId;
+      return { ...prev, projects, activeProjectId, currentPage: 'projects', activeProjectMenuId: null };
+    });
+    if (getState().serverAvailable) {
+      apiClient.projectsApi.remove(projectId)
+        .then(applyDelete)
+        .catch((error) => showToast(error.message || 'Failed to delete project', 'error'));
+    } else {
+      applyDelete();
+    }
+    return;
   }
   if (action === 'select-node') {
     selectWorkflowNode(target.dataset.nodeId);
@@ -2240,6 +2348,13 @@ function handleInput(event) {
     refreshProjectGrid();
     return;
   }
+  if (target.dataset.action === 'search-jobs') {
+    updateUiStateSilently((state) => {
+      state.jobSearch = target.value;
+    });
+    refreshJobResults();
+    return;
+  }
   if (target.dataset.action === 'set-ai-request') {
     setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.value } }));
     return;
@@ -2492,6 +2607,12 @@ function handleSubmit(event) {
 function handleDocumentOverlayClick(event) {
   if (closestElement(event.target, '.workflow-filter-control')) return;
   closeWorkflowFilters();
+  if (closestElement(event.target, '.project-menu-control')) return;
+  if (!getState().activeProjectMenuId) return;
+  updateUiStateSilently((state) => {
+    state.activeProjectMenuId = null;
+  });
+  syncProjectMenu();
 }
 
 subscribe(render);
