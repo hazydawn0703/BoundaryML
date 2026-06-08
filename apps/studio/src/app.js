@@ -21,6 +21,7 @@ const UI_LANGUAGES = {
 
 const ZH_HANS_REPLACEMENTS = [
   ['AI Assisted Edit', 'AI 辅助编辑'],
+  ['Open AI Assisted Edit', '打开AI辅助编辑'],
   ['Context', '上下文'],
   ['Auto: node + neighbors', '自动：节点及上下游'],
   ['Auto: entire workflow', '自动：整个工作流'],
@@ -378,11 +379,15 @@ function applyWorkflowViewport(viewport) {
 function autoResizeAiComposer() {
   const input = app.querySelector('.ai-composer textarea[data-action="set-ai-request"]');
   if (!input) return;
+  const composer = input.closest('.ai-composer');
   input.style.height = 'auto';
-  const maxHeight = Number.parseFloat(getComputedStyle(input).maxHeight) || 96;
+  const style = getComputedStyle(input);
+  const maxHeight = Number.parseFloat(style.maxHeight) || 96;
+  const minHeight = Number.parseFloat(style.minHeight) || 44;
   const nextHeight = Math.min(input.scrollHeight, maxHeight);
   input.style.height = `${nextHeight}px`;
   input.style.overflowY = input.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  composer?.classList.toggle('is-expanded', input.scrollHeight > minHeight + 2);
 }
 
 function closestElement(target, selector) {
@@ -823,8 +828,9 @@ function renderStudio(state) {
 
 function renderAiComposer(state, project, selectedNode) {
   return `<div class="ai-composer">
+    <button class="icon-button ai-drawer-open" data-action="open-ai-edit" aria-label="Open AI Assisted Edit" title="Open AI Assisted Edit"><span class="canvas-tool-icon">${ICONS.history}</span></button>
     <textarea data-action="set-ai-request" rows="1" placeholder="Ask BoundaryML to modify this workflow...">${state.aiEdit.request || ''}</textarea>
-    <button class="primary ai-send" data-action="generate-diff" aria-label="Generate reviewed workflow diff" title="Generate reviewed workflow diff" ${state.aiEdit.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span><span>${state.aiEdit.pending ? 'Generating...' : 'Generate Diff'}</span></button>
+    <button class="primary ai-send" data-action="generate-diff" aria-label="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" title="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" ${state.aiEdit.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span></button>
   </div>`;
 }
 
@@ -1304,6 +1310,14 @@ function handleWorkflowPointerUp(event) {
 }
 
 function handleWorkflowWheel(event) {
+  const composer = closestElement(event.target, '.ai-composer');
+  if (composer) {
+    const input = composer.querySelector('textarea[data-action="set-ai-request"]');
+    if (input) input.scrollTop += event.deltaY;
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   if (closestElement(event.target, '.workflow-detail')) return;
   const canvas = closestElement(event.target, '.workflow-canvas');
   if (!canvas) return;
@@ -2053,6 +2067,7 @@ function handleAction(event) {
   }
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
+  if (action === 'open-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, request: target.dataset.suggestion } }));
   if (action === 'generate-diff') {
     const st = getState();
