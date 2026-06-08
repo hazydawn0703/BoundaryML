@@ -622,6 +622,27 @@
 - Real LLM workflow generation/prompt generation 仍可继续深化；本轮重点是 Model Access Layer 基础能力与 AI Diff Review server 化。
 - Diff UI 仍是轻量列表，不做复杂 Diff Viewer。
 
+## Phase 8 Enhancement - Conversational Workflow Diff on Studio Canvas
+
+### Open-source Scope
+- This remains part of public Phase 0-9, specifically Phase 8 AI Assisted Edit + Diff Review.
+- It does not enter Phase 10-14 Pro / Enterprise / SaaS scope.
+
+### UX Decision
+- Studio canvas gets a bottom floating natural-language input for workflow edit requests.
+- AI conversation / diff review lives in a left drawer.
+- Node Detail remains a right drawer; both drawers can coexist without blocking each other.
+- Context scope is explicit: selected node, selected node + neighbors, current phase, or entire workflow.
+- LLM output must remain a reviewed workflow diff. The model proposes changes; the user selects and applies them; server validation remains authoritative.
+
+### Apply Logic Target
+- Phase changes: add, rename/update, delete empty phase, reorder through phase fields.
+- Node changes: add, update fields, delete.
+- IO / artifact contract changes: inputs, outputs, artifact contract, acceptance criteria.
+- Review gate changes: add/update/remove gate fields.
+- Edge changes: add, update dependency metadata, delete.
+- Asset handling: structural node changes mark related prompts/checklists/templates outdated first; direct prompt regeneration remains a separate user action.
+
 ### Phase 9 Readiness
 - Ready.
 - Phase 9 should focus on MVP Templates / Examples / README / Release Hardening, not private Phase 10–14 commercial work.

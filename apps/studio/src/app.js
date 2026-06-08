@@ -304,6 +304,7 @@ const ICONS = {
   validate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg>',
   filter: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/></svg>',
   more: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12h.01M19 12h.01M5 12h.01"/></svg>',
+  send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
 };
 
 function translateText(text, language) {
@@ -611,6 +612,49 @@ function buildWorkflowRelationMap(project, selectedNode) {
   return relations;
 }
 
+function changeTargetType(change) {
+  return change.targetType || change.target_type;
+}
+
+function changeTargetId(change) {
+  return change.targetId || change.target_id;
+}
+
+function changeField(change) {
+  return change.field;
+}
+
+function buildWorkflowDiffPreviewMap(diff) {
+  const preview = new Map();
+  for (const change of diff?.changes || []) {
+    if (change.selected === false) continue;
+    if (changeTargetType(change) !== 'node') continue;
+    const targetId = changeTargetId(change);
+    if (change.type === 'deleted') {
+      preview.set(targetId, 'diff-deleted');
+    } else if (changeField(change) === 'node' && change.after?.id) {
+      preview.set(change.after.id, 'diff-added');
+    } else if (targetId) {
+      preview.set(targetId, 'diff-updated');
+    }
+  }
+  return preview;
+}
+
+function nodePhaseId(node) {
+  return node.phaseId || node.phase_id || null;
+}
+
+function renderPreviewNodeCard(node) {
+  const name = node.name || 'New workflow node';
+  const mode = EXECUTION_MODES[node.executionMode || node.execution_mode] || EXECUTION_MODES.human_lead_ai_assist;
+  return `<div class="node-card diff-added preview-node">
+    <div class="node-head"><strong>${name}</strong>${badge(node.riskLevel || node.risk_level || 'medium', `risk-${node.riskLevel || node.risk_level || 'medium'}`)}</div>
+    <div class="mode-pill" style="border-color:${mode.color};color:${mode.color}">${mode.label}</div>
+    <div class="meta">Preview node from AI diff</div>
+  </div>`;
+}
+
 function renderEdgeHints(project, phaseNodes) {
   const ids = phaseNodes.map((n) => n.id);
   return project.workflow.edges.filter((edge) => ids.includes(edge.from)).map((edge) => {
@@ -697,21 +741,26 @@ function renderPhaseMenu(phase) {
   return `<div class="phase-menu" data-phase-menu="${phase.id}" hidden><label>Rename Phase<input data-action="phase-name-field" data-phase-id="${phase.id}" value="${phase.name}"/></label><div class="row"><button data-action="rename-phase" data-phase-id="${phase.id}">Save Phase</button><button data-action="delete-phase" data-phase-id="${phase.id}">Delete Phase</button></div></div>`;
 }
 
-function renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap) {
+function renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap, previewMap) {
   const phaseNodes = nodes.filter((node) => node.phaseId === phase.id);
   const effectiveNodes = phase.id === '__unassigned__' ? nodes.filter((n) => !project.workflow.phases.find((p) => p.id === n.phaseId)) : phaseNodes;
+  const previewNodes = (state.aiEdit.diff?.changes || [])
+    .filter((change) => change.selected !== false && changeTargetType(change) === 'node' && changeField(change) === 'node' && change.after)
+    .map((change) => change.after)
+    .filter((node) => (phase.id === '__unassigned__' ? !nodePhaseId(node) : nodePhaseId(node) === phase.id));
   const nodeIds = effectiveNodes.map((n) => n.id);
   const highRiskCount = effectiveNodes.filter((n) => n.riskLevel === 'high').length;
   const issueCount = state.validationResults.filter((v) => nodeIds.includes(v.targetId)).length;
   const phaseStatus = state.validationResults.some((v) => v.level === 'error' && nodeIds.includes(v.targetId)) ? 'error' : issueCount ? 'warning' : 'ok';
   const phaseMenu = phase.id === '__unassigned__' ? '' : `<button class="icon-button phase-menu-trigger" data-action="toggle-phase-menu" data-phase-id="${phase.id}" aria-label="Phase actions" title="Phase actions">${ICONS.more}</button>${renderPhaseMenu(phase)}`;
-  return `<div class="lane" data-phase-id="${phase.id}"><div class="lane-head"><h4>${phase.name}</h4>${phaseMenu}</div><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, relationMap.get(node.id) || (selectedNode ? 'unrelated' : ''))).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
+  return `<div class="lane" data-phase-id="${phase.id}"><div class="lane-head"><h4>${phase.name}</h4>${phaseMenu}</div><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, `${relationMap.get(node.id) || (selectedNode ? 'unrelated' : '')} ${previewMap.get(node.id) || ''}`.trim())).join('')}${previewNodes.map((node) => renderPreviewNodeCard(node)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
 }
 
 function renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport = getWorkflowViewport(state)) {
   const relationMap = buildWorkflowRelationMap(project, selectedNode);
+  const previewMap = buildWorkflowDiffPreviewMap(state.aiEdit.diff);
   return `<div class="workflow-canvas-content" style="transform:${workflowTransform(viewport)}">
-    <div class="canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap)).join('')}</div>
+    <div class="canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap, previewMap)).join('')}</div>
   </div>`;
 }
 
@@ -734,31 +783,100 @@ function renderStudio(state) {
       ${renderWorkflowZoom(viewport)}
       ${renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport)}
       ${historyPanel}
+      ${renderAiEdit(state, project, selectedNode)}
+      ${renderAiComposer(state, project, selectedNode)}
       ${selectedNode ? `<div class="workflow-detail">${renderNodeDetail(state, project, selectedNode)}</div>` : ''}
     </div>
   </section>
-  ${renderAiEdit(state)}
-  ${renderDiffDrawer(state)}
   </section>`;
 }
 
-function renderAiEdit(state) {
-  if (!state.aiEdit.open) return '';
-  return `<div class="drawer"><div class="card panel"><h3>AI Assisted Edit</h3>
-    <p class="muted">Server Mode generates a Workflow Diff for review; it never edits the formal workflow directly.</p>
-    ${state.serverAvailable ? '<p class="inline-warning">Selected workflow context may be sent to the configured LLM provider.</p>' : '<p class="inline-warning">Mode: Local Demo / Mock Model</p>'}
-    <textarea data-action="set-ai-request" placeholder="Describe edits...">${state.aiEdit.request}</textarea>
-    <div class="row">${AI_EDIT_SUGGESTIONS.map((suggestion) => `<button data-action="use-ai-suggestion" data-suggestion="${suggestion}">${suggestion}</button>`).join('')}</div>
-    <div class="actions"><button data-action="generate-diff">Generate Diff</button><button data-action="toggle-ai-edit">Close</button></div></div></div>`;
+function aiContextLabel(scope, selectedNode) {
+  const labels = {
+    auto: selectedNode ? 'Selected node + neighbors' : 'Entire workflow',
+    selected_node: 'Selected node',
+    node_neighborhood: 'Selected node + neighbors',
+    current_phase: 'Current phase',
+    workflow: 'Entire workflow',
+  };
+  return labels[scope] || labels.auto;
 }
 
-function renderDiffDrawer(state) {
-  if (!state.aiEdit.diff) return '';
+function resolveAiContextScope(state, project) {
+  const scope = state.aiEdit.contextScope || 'auto';
+  const selectedNode = (project.workflow.nodes || []).find((node) => node.id === state.selectedNodeId) || null;
+  if (scope !== 'auto') return scope;
+  return selectedNode ? 'node_neighborhood' : 'workflow';
+}
+
+function buildAiEditContext(state, project) {
+  const selectedNode = (project.workflow.nodes || []).find((node) => node.id === state.selectedNodeId) || null;
+  const scope = resolveAiContextScope(state, project);
+  const selectedPhaseId = selectedNode?.phaseId || selectedNode?.phase_id || null;
+  const neighborIds = new Set([selectedNode?.id].filter(Boolean));
+  for (const edge of project.workflow.edges || []) {
+    if (edge.from === selectedNode?.id) neighborIds.add(edge.to);
+    if (edge.to === selectedNode?.id) neighborIds.add(edge.from);
+  }
+  return {
+    scope,
+    selected_node_id: selectedNode?.id || null,
+    selected_phase_id: selectedPhaseId,
+    node_ids: scope === 'selected_node'
+      ? [selectedNode?.id].filter(Boolean)
+      : scope === 'node_neighborhood'
+        ? [...neighborIds]
+        : scope === 'current_phase'
+          ? (project.workflow.nodes || []).filter((node) => (node.phaseId || node.phase_id) === selectedPhaseId).map((node) => node.id)
+          : [],
+  };
+}
+
+function renderAiContextOptions(state, selectedNode) {
+  const scope = state.aiEdit.contextScope || 'auto';
+  const options = [
+    ['auto', selectedNode ? 'Auto: node + neighbors' : 'Auto: entire workflow'],
+    ['selected_node', 'Selected node'],
+    ['node_neighborhood', 'Node + neighbors'],
+    ['current_phase', 'Current phase'],
+    ['workflow', 'Entire workflow'],
+  ];
+  return options.map(([value, label]) => `<option value="${value}" ${scope === value ? 'selected' : ''}>${label}</option>`).join('');
+}
+
+function renderAiComposer(state, project, selectedNode) {
+  const scope = state.aiEdit.contextScope || 'auto';
+  return `<div class="ai-composer">
+    <label class="ai-context-select"><span>Context</span><select data-action="set-ai-context-scope">${renderAiContextOptions(state, selectedNode)}</select></label>
+    <textarea data-action="set-ai-request" placeholder="Ask BoundaryML to modify this workflow...">${state.aiEdit.request || ''}</textarea>
+    <button class="primary ai-send" data-action="generate-diff" aria-label="Generate reviewed workflow diff" title="Generate reviewed workflow diff" ${state.aiEdit.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span><span>${state.aiEdit.pending ? 'Generating...' : 'Generate Diff'}</span></button>
+  </div>`;
+}
+
+function renderDiffReview(state) {
+  if (!state.aiEdit.diff) return '<p class="muted">No diff generated yet.</p>';
   const diff = state.aiEdit.diff;
-  return `<div class="drawer"><div class="card panel"><h3>Diff Review</h3><p>${diff.request}</p>
-  ${(diff.warnings || []).map((warning) => `<p class="inline-warning">${warning}</p>`).join('')}
-  <ul>${(diff.changes || []).map((change) => `<li><label class="check"><input type="checkbox" data-action="toggle-diff-change" data-change-id="${change.id}" ${change.selected ? 'checked' : ''}/> <strong>${change.type}</strong> ${change.targetType || change.target_type} ${change.targetId || change.target_id}<br/>Reason: ${change.reason}<br/>Impact: ${change.impact}</label></li>`).join('')}</ul>
-  <div class="actions"><button data-action="apply-diff-all" class="primary">Apply All</button><button data-action="apply-diff-selected">Apply Selected</button><button data-action="reject-diff">Reject All</button></div></div></div>`;
+  const changes = diff.changes || [];
+  const selectedCount = changes.filter((change) => change.selected !== false).length;
+  return `<section class="diff-review">
+    <div class="diff-summary"><strong>${changes.length} changes</strong><span>${selectedCount} selected</span></div>
+    <p class="muted">${diff.request || ''}</p>
+    ${(diff.warnings || []).map((warning) => `<p class="inline-warning">${warning}</p>`).join('')}
+    <ul>${changes.map((change) => `<li><label class="check"><input type="checkbox" data-action="toggle-diff-change" data-change-id="${change.id}" ${change.selected !== false ? 'checked' : ''}/> <span><strong>${change.type}</strong> ${changeTargetType(change)} ${changeTargetId(change) || change.after?.id || ''}<br/>Reason: ${change.reason || '-'}<br/>Impact: ${change.impact || '-'}</span></label></li>`).join('')}</ul>
+    <div class="actions"><button data-action="apply-diff-all" class="primary">Apply All</button><button data-action="apply-diff-selected">Apply Selected</button><button data-action="reject-diff">Reject All</button></div>
+  </section>`;
+}
+
+function renderAiEdit(state, project, selectedNode) {
+  if (!state.aiEdit.open && !state.aiEdit.diff) return '';
+  const scope = state.aiEdit.contextScope || 'auto';
+  return `<aside class="ai-conversation-drawer card panel">
+    <div class="toolbar"><div><h3>AI Assisted Edit</h3><p class="muted">${aiContextLabel(scope, selectedNode)}</p></div><button data-action="toggle-ai-edit">Close</button></div>
+    <p class="muted">Server Mode generates a Workflow Diff for review; it never edits the formal workflow directly.</p>
+    ${state.serverAvailable ? '<p class="inline-warning">Selected workflow context may be sent to the configured LLM provider.</p>' : '<p class="inline-warning">Mode: Local Demo / Mock Model</p>'}
+    <div class="row">${AI_EDIT_SUGGESTIONS.map((suggestion) => `<button data-action="use-ai-suggestion" data-suggestion="${suggestion}">${suggestion}</button>`).join('')}</div>
+    ${renderDiffReview(state)}
+  </aside>`;
 }
 
 async function refreshProjectRuntime(projectId) {
@@ -1158,6 +1276,8 @@ function handleWorkflowPointerDown(event) {
     && !closestElement(event.target, '.workflow-canvas-tools')
     && !closestElement(event.target, '.workflow-filter-popover')
     && !closestElement(event.target, '.workflow-history-panel')
+    && !closestElement(event.target, '.ai-conversation-drawer')
+    && !closestElement(event.target, '.ai-composer')
     && !closestElement(event.target, '.phase-menu')
     && !closestElement(event.target, 'button, input, select, textarea, a, label')) {
     updateUiStateSilently((draft) => {
@@ -1956,22 +2076,30 @@ function handleAction(event) {
   }
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
-  if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.dataset.suggestion } }));
+  if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, request: target.dataset.suggestion } }));
+  if (action === 'set-ai-context-scope') {
+    updateUiStateSilently((state) => {
+      state.aiEdit.contextScope = target.value;
+    });
+    return;
+  }
 
   if (action === 'generate-diff') {
-    if (getState().serverAvailable) {
-      setState((prev) => ({ ...prev, serverError: 'AI Assisted Edit is disabled in Phase 3 server mode.' }));
-      return;
-    }
     const st = getState();
     const project = getActiveProject(st);
+    const request = (st.aiEdit.request || '').trim();
+    if (!request) {
+      showToast('Describe the workflow change first.', 'error');
+      return;
+    }
+    setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: true } }));
     if (st.serverAvailable && project?.id) {
-      apiClient.diffsApi.generate(project.id, { request: st.aiEdit.request, workflow_version: project.workflow.version })
-        .then(({ data }) => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: data.diff }, jobs: data.job_id ? prev.jobs : prev.jobs, modelStatus: data.model_status || prev.modelStatus })))
-        .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+      apiClient.diffsApi.generate(project.id, { request, workflow_version: project.workflow.version, context_scope: buildAiEditContext(st, project) })
+        .then(({ data }) => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, diff: data.diff }, jobs: data.job_id ? prev.jobs : prev.jobs, modelStatus: data.model_status || prev.modelStatus })))
+        .catch((error) => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, pending: false }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
-      const diff = modelGenerateWorkflowDiff(st.aiEdit.request, project.workflow, project.assets);
-      setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff } }));
+      const diff = modelGenerateWorkflowDiff(request, project.workflow, project.assets);
+      setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, diff } }));
     }
   }
 
@@ -1980,23 +2108,23 @@ function handleAction(event) {
   }
 
   if (action === 'apply-diff-all' || action === 'apply-diff-selected') {
-    if (getState().serverAvailable) {
-      setState((prev) => ({ ...prev, serverError: 'Diff apply from local mock is disabled in server mode.' }));
-      return;
-    }
     const st = getState();
     const project = getActiveProject(st);
     if (st.serverAvailable && project?.id && st.aiEdit.diff?.id) {
-      const selectedIds = action === 'apply-diff-selected' ? (st.aiEdit.diff.changes || []).filter((change) => change.selected).map((change) => change.id) : [];
+      const selectedIds = action === 'apply-diff-selected' ? (st.aiEdit.diff.changes || []).filter((change) => change.selected !== false).map((change) => change.id) : [];
+      if (action === 'apply-diff-selected' && !selectedIds.length) {
+        showToast('Select at least one diff change to apply.', 'error');
+        return;
+      }
       apiClient.diffsApi.apply(project.id, st.aiEdit.diff.id, { workflow_version: project.workflow.version, selected_change_ids: selectedIds })
         .then(() => refreshProjectRuntime(project.id))
-        .then(() => setState((prev) => ({ ...prev, aiEdit: { open: false, request: '', diff: null } })))
+        .then(() => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: false, request: '', diff: null, pending: false } })))
         .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
       const updated = applyWorkflowDiff(project, st.aiEdit.diff, action === 'apply-diff-selected');
-      markProjectWorkflowChanged(updated, 'Diff applied', st.aiEdit.diff.changes.filter((change) => change.selected || action === 'apply-diff-all').map((change) => change.targetId));
+      markProjectWorkflowChanged(updated, 'Diff applied', st.aiEdit.diff.changes.filter((change) => change.selected !== false || action === 'apply-diff-all').map((change) => changeTargetId(change)).filter(Boolean));
       replaceActiveProject(updated);
-      setState((prev) => ({ ...prev, aiEdit: { open: false, request: '', diff: null } }));
+      setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: false, request: '', diff: null, pending: false } }));
     }
   }
 
@@ -2394,7 +2522,9 @@ function handleInput(event) {
     return;
   }
   if (target.dataset.action === 'set-ai-request') {
-    setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, request: target.value } }));
+    updateUiStateSilently((state) => {
+      state.aiEdit.request = target.value;
+    });
     return;
   }
 
