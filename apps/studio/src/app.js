@@ -95,6 +95,7 @@ const ZH_HANS_REPLACEMENTS = [
   ['Loading project', '正在加载项目'],
   ['Loading workflow, assets, validation, and history from BoundaryML Server.', '正在从 BoundaryML Server 加载工作流、资产、校验和历史。'],
   ['Back to Projects', '返回项目'],
+  ['Back', '返回'],
   ['Loading Studio', '正在加载 Studio'],
   ['Loading Execution Assets', '正在加载执行资产'],
   ['Loading Export', '正在加载导出'],
@@ -296,6 +297,7 @@ let workflowPan = null;
 let workflowViewportCommitTimer = null;
 
 const ICONS = {
+  back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/><path d="M9 12h12"/></svg>',
   addPhase: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/><path d="M4 4h6v6H4zM14 14h6v6h-6z"/></svg>',
   undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 1 1 0 12h-3"/></svg>',
   history: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>',
@@ -458,6 +460,7 @@ function renderSidebar(state) {
 
 function renderTopbar(state) {
   const project = getActiveProject(state);
+  const isStudioPage = state.currentPage === 'studio';
   const stats = project ? countProjectStats(project) : { nodes: 0, aiNodes: 0, gates: 0 };
   const validationSummary = {
     errors: (state.validationResults || []).filter((item) => item.level === 'error').length,
@@ -486,8 +489,10 @@ function renderTopbar(state) {
   const languageSwitcher = `<label class="language-switcher"><span>Language</span><select data-action="set-language" aria-label="Language">${Object.entries(UI_LANGUAGES).map(([id, label]) => `<option value="${id}" ${language === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
   const canGenerateExecutionKit = Boolean(project?.id) && ['context', 'studio', 'assets', 'export'].includes(state.currentPage);
   const executionKitAction = canGenerateExecutionKit ? '<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button>' : '';
-  return `<header class="topbar"><div><h1>${title}${titleBadge}</h1><p>${subtitle}</p></div>
-  <div class="row">${runtimeBadge}${languageSwitcher}${executionKitAction}</div></header>`;
+  const studioActions = isStudioPage ? `${renderCanvasTool('toggle-history', 'History', ICONS.history)}${renderCanvasTool('validate', 'Validate', ICONS.validate)}` : '';
+  const backAction = isStudioPage ? `<button class="topbar-back" data-action="goto" data-page="projects" aria-label="Back to Projects"><span class="canvas-tool-icon">${ICONS.back}</span><span>Back</span></button>` : '';
+  return `<header class="topbar">${backAction}<div class="topbar-title"><h1>${title}${titleBadge}</h1><p>${subtitle}</p></div>
+  <div class="row">${studioActions}${runtimeBadge}${languageSwitcher}${executionKitAction}</div></header>`;
 }
 
 function renderProjects(state) {
@@ -584,15 +589,26 @@ function withCamelAliases(value) {
   }, {});
 }
 
-function renderNodeCard(node, selected) {
+function renderNodeCard(node, relation = '') {
   const mode = EXECUTION_MODES[node.executionMode] || EXECUTION_MODES.human_lead_ai_assist;
-  return `<button class="node-card ${selected ? 'selected' : ''} ${node.muted ? 'muted-node' : ''}" data-action="select-node" data-node-id="${node.id}">
+  return `<button class="node-card ${relation} ${node.muted ? 'muted-node' : ''}" data-action="select-node" data-node-id="${node.id}">
     <div class="node-head"><strong>${node.name}</strong>${badge(node.riskLevel, `risk-${node.riskLevel}`)}</div>
     <div class="mode-pill" style="border-color:${mode.color};color:${mode.color}">${mode.label}</div>
     <div class="meta">Gate: ${node.reviewGate?.name || 'none'} · Owner: ${node.humanOwnerRole || 'n/a'}</div>
     <div class="meta">Prompt: ${node.promptStatus} · Status: ${node.status}</div>
     <div class="meta">In: ${(node.inputs || []).join(', ') || 'none'} · Out: ${(node.outputs || []).join(', ') || 'none'}</div>
   </button>`;
+}
+
+function buildWorkflowRelationMap(project, selectedNode) {
+  const relations = new Map();
+  if (!selectedNode) return relations;
+  relations.set(selectedNode.id, 'selected');
+  for (const edge of project.workflow.edges || []) {
+    if (edge.to === selectedNode.id && !relations.has(edge.from)) relations.set(edge.from, 'upstream');
+    if (edge.from === selectedNode.id && !relations.has(edge.to)) relations.set(edge.to, 'downstream');
+  }
+  return relations;
 }
 
 function renderEdgeHints(project, phaseNodes) {
@@ -659,30 +675,29 @@ function renderCanvasTool(action, label, icon) {
 
 function renderWorkflowCanvasTools(viewport) {
   return `<div class="workflow-canvas-tools" aria-label="Workflow tools">
-    <span class="badge">Zoom <span data-workflow-zoom>${Math.round(viewport.scale * 100)}%</span></span>
     ${renderCanvasTool('add-phase', 'Add Phase', ICONS.addPhase)}
     ${renderCanvasTool('undo-workflow', 'Undo', ICONS.undo)}
-    ${renderCanvasTool('toggle-history', 'History', ICONS.history)}
-    ${renderCanvasTool('validate', 'Validate', ICONS.validate)}
+    <button class="canvas-tool-button" data-action="toggle-workflow-filters" aria-label="Filters" title="Filters" aria-expanded="${getState().workflowFiltersOpen ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.filter}</span><span class="canvas-tool-tip">Filters</span></button>
   </div>`;
 }
 
 function renderWorkflowCanvasFilters(state) {
   const open = state.workflowFiltersOpen ? '' : ' hidden';
-  return `<div class="workflow-filter-control">
-    <button class="canvas-tool-button" data-action="toggle-workflow-filters" aria-label="Filters" title="Filters" aria-expanded="${state.workflowFiltersOpen ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.filter}</span><span class="canvas-tool-tip">Filters</span></button>
-    <div class="workflow-filter-popover"${open}>
+  return `<div class="workflow-filter-popover"${open}>
       <label>Execution Mode<select data-action="set-filter-mode"><option value="all">All</option>${Object.entries(EXECUTION_MODES).map(([k, v]) => `<option value="${k}" ${(state.studioFilter?.mode || 'all') === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>
       <label>Risk<select data-action="set-filter-risk"><option value="all">All</option>${['low', 'medium', 'high'].map((x) => `<option value="${x}" ${(state.studioFilter?.risk || 'all') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
-    </div>
   </div>`;
+}
+
+function renderWorkflowZoom(viewport) {
+  return `<div class="workflow-zoom-badge">Zoom <span data-workflow-zoom>${Math.round(viewport.scale * 100)}%</span></div>`;
 }
 
 function renderPhaseMenu(phase) {
   return `<div class="phase-menu" data-phase-menu="${phase.id}" hidden><label>Rename Phase<input data-action="phase-name-field" data-phase-id="${phase.id}" value="${phase.name}"/></label><div class="row"><button data-action="rename-phase" data-phase-id="${phase.id}">Save Phase</button><button data-action="delete-phase" data-phase-id="${phase.id}">Delete Phase</button></div></div>`;
 }
 
-function renderPhaseLane(state, project, nodes, selectedNode, phase) {
+function renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap) {
   const phaseNodes = nodes.filter((node) => node.phaseId === phase.id);
   const effectiveNodes = phase.id === '__unassigned__' ? nodes.filter((n) => !project.workflow.phases.find((p) => p.id === n.phaseId)) : phaseNodes;
   const nodeIds = effectiveNodes.map((n) => n.id);
@@ -690,12 +705,13 @@ function renderPhaseLane(state, project, nodes, selectedNode, phase) {
   const issueCount = state.validationResults.filter((v) => nodeIds.includes(v.targetId)).length;
   const phaseStatus = state.validationResults.some((v) => v.level === 'error' && nodeIds.includes(v.targetId)) ? 'error' : issueCount ? 'warning' : 'ok';
   const phaseMenu = phase.id === '__unassigned__' ? '' : `<button class="icon-button phase-menu-trigger" data-action="toggle-phase-menu" data-phase-id="${phase.id}" aria-label="Phase actions" title="Phase actions">${ICONS.more}</button>${renderPhaseMenu(phase)}`;
-  return `<div class="lane" data-phase-id="${phase.id}"><div class="lane-head"><h4>${phase.name}</h4>${phaseMenu}</div><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, node.id === selectedNode?.id)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
+  return `<div class="lane" data-phase-id="${phase.id}"><div class="lane-head"><h4>${phase.name}</h4>${phaseMenu}</div><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p><button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node to this phase</button>${effectiveNodes.map((node) => renderNodeCard(node, relationMap.get(node.id) || (selectedNode ? 'unrelated' : ''))).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
 }
 
 function renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport = getWorkflowViewport(state)) {
+  const relationMap = buildWorkflowRelationMap(project, selectedNode);
   return `<div class="workflow-canvas-content" style="transform:${workflowTransform(viewport)}">
-    <div class="canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => renderPhaseLane(state, project, nodes, selectedNode, phase)).join('')}</div>
+    <div class="canvas">${[...project.workflow.phases, { id: '__unassigned__', name: 'Unassigned' }].map((phase) => renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap)).join('')}</div>
   </div>`;
 }
 
@@ -704,26 +720,21 @@ function renderStudio(state) {
   if (!hasProjectRuntime(project)) return renderProjectLoading(state, 'Loading Studio');
   const nodes = filteredNodes(state, project);
   const viewport = getWorkflowViewport(state);
-  const selectedNode = (project.workflow.nodes || []).find((node) => node.id === state.selectedNodeId) || project.workflow.nodes?.[0];
-  const summary = {
-    errors: state.validationResults.filter((x) => x.level === 'error').length,
-    warnings: state.validationResults.filter((x) => x.level === 'warning').length,
-  };
-  const workflowAlerts = state.validationResults.filter((item) => item.title !== 'Outdated prompt' && !String(item.id || '').startsWith('outdated_prompt_warning'));
-
+  const selectedNode = (project.workflow.nodes || []).find((node) => node.id === state.selectedNodeId) || null;
   const historyOpen = state.workflowHistoryOpen || (state.workflowHistory || []).length > 0;
-  return `<section class="page">
-  ${state.serverAvailable ? '' : '<div class="card panel inline-warning">Mode: Local Demo / Mock Model</div>'}
-  ${state.serverError ? `<div class="card panel inline-error">${state.serverError}</div>` : ''}
-  ${historyOpen ? `<article class="card panel"><div class="toolbar"><h3>History</h3><button data-action="save-workflow-history">Save Current Version</button></div><ul>${(state.workflowHistory || []).length ? state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('') : '<li>No saved versions yet</li>'}</ul></article>` : ''}
-  <section class="workflow-board card">
-    <div class="workflow-board-head"><div><h3>Workflow</h3><p class="muted" data-workflow-validation-summary>Validation: ${summary.errors} errors, ${summary.warnings} warnings</p></div></div>
-    ${workflowAlerts.length ? `<div class="workflow-alerts">${workflowAlerts.slice(0, 4).map((x) => `<span class="inline-${x.level}">${x.title}</span>`).join('')}</div>` : ''}
+  const historyPanel = historyOpen
+    ? `<div class="workflow-history-panel card panel"><div class="toolbar"><h3>History</h3><button data-action="save-workflow-history">Save Current Version</button></div><ul>${(state.workflowHistory || []).length ? state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('') : '<li>No saved versions yet</li>'}</ul></div>`
+    : '';
+
+  return `<section class="page studio-page">
+  <section class="workflow-board">
     <div class="workflow-canvas">
-      ${renderWorkflowCanvasFilters(state)}
       ${renderWorkflowCanvasTools(viewport)}
+      ${renderWorkflowCanvasFilters(state)}
+      ${renderWorkflowZoom(viewport)}
       ${renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport)}
-      <div class="workflow-detail">${renderNodeDetail(state, project, selectedNode)}</div>
+      ${historyPanel}
+      ${selectedNode ? `<div class="workflow-detail">${renderNodeDetail(state, project, selectedNode)}</div>` : ''}
     </div>
   </section>
   ${renderAiEdit(state)}
@@ -1003,7 +1014,8 @@ function renderPage(state) {
 
 function render() {
   const state = getState();
-  app.innerHTML = `<div class="app-shell" data-theme="open-source">${renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
+  const isStudioPage = state.currentPage === 'studio';
+  app.innerHTML = `<div class="app-shell ${isStudioPage ? 'studio-shell' : ''}" data-theme="open-source">${isStudioPage ? '' : renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
   localizeDom(state.language || 'en');
 }
 
@@ -1018,9 +1030,20 @@ function refreshSidebar() {
 function refreshWorkflowDetail() {
   const state = getState();
   const project = getActiveProject(state);
-  const target = app.querySelector('.workflow-detail');
-  if (!target || !project?.workflow?.nodes) return;
-  const selectedNode = project.workflow.nodes.find((node) => node.id === state.selectedNodeId) || project.workflow.nodes[0];
+  if (!project?.workflow?.nodes) return;
+  let target = app.querySelector('.workflow-detail');
+  const selectedNode = project.workflow.nodes.find((node) => node.id === state.selectedNodeId);
+  if (!selectedNode) {
+    target?.remove();
+    return;
+  }
+  if (!target) {
+    const canvas = app.querySelector('.workflow-canvas');
+    if (!canvas) return;
+    target = document.createElement('div');
+    target.className = 'workflow-detail';
+    canvas.appendChild(target);
+  }
   target.innerHTML = renderNodeDetail(state, project, selectedNode);
   localizeDom(state.language || 'en');
 }
@@ -1031,7 +1054,7 @@ function refreshWorkflowCanvas() {
   const canvas = app.querySelector('.workflow-canvas');
   if (!canvas || !hasProjectRuntime(project)) return;
   const nodes = filteredNodes(state, project);
-  const selectedNode = project.workflow.nodes.find((node) => node.id === state.selectedNodeId) || project.workflow.nodes[0];
+  const selectedNode = project.workflow.nodes.find((node) => node.id === state.selectedNodeId) || null;
   const oldContent = canvas.querySelector('.workflow-canvas-content');
   const wrapper = document.createElement('div');
   wrapper.innerHTML = renderWorkflowCanvasContent(state, project, nodes, selectedNode);
@@ -1122,14 +1145,29 @@ function selectWorkflowNode(nodeId) {
   updateUiStateSilently((draft) => {
     draft.selectedNodeId = nodeId;
   });
-  app.querySelectorAll('.node-card.selected').forEach((node) => node.classList.remove('selected'));
-  app.querySelector(`.node-card[data-node-id="${CSS.escape(nodeId)}"]`)?.classList.add('selected');
+  refreshWorkflowCanvas();
   refreshWorkflowDetail();
 }
 
 function handleWorkflowPointerDown(event) {
   const canvas = closestElement(event.target, '.workflow-canvas');
-  if (!canvas || event.button !== 2) return;
+  if (!canvas) return;
+  if (event.button === 0
+    && !closestElement(event.target, '.node-card')
+    && !closestElement(event.target, '.workflow-detail')
+    && !closestElement(event.target, '.workflow-canvas-tools')
+    && !closestElement(event.target, '.workflow-filter-popover')
+    && !closestElement(event.target, '.workflow-history-panel')
+    && !closestElement(event.target, '.phase-menu')
+    && !closestElement(event.target, 'button, input, select, textarea, a, label')) {
+    updateUiStateSilently((draft) => {
+      draft.selectedNodeId = null;
+    });
+    refreshWorkflowCanvas();
+    refreshWorkflowDetail();
+    return;
+  }
+  if (event.button !== 2) return;
   event.preventDefault();
   const viewport = getWorkflowViewport();
   workflowPan = {
@@ -1252,7 +1290,7 @@ async function loadProjectRuntime(projectId, { navigate = true, projectSummaries
     jobs: withCamelAliases(jobsResult.data?.jobs || jobsResult.data || []),
     workflowHistory: withCamelAliases(historyResult.data || []),
     validationResults: withCamelAliases(workflowPayload.validation || workflowPayload.validation_results || prev.validationResults),
-    selectedNodeId: merged.workflow?.nodes?.[0]?.id || prev.selectedNodeId,
+    selectedNodeId: merged.workflow?.nodes?.some((node) => node.id === prev.selectedNodeId) ? prev.selectedNodeId : null,
     serverError: '',
   }));
   return merged;
@@ -1309,7 +1347,7 @@ function handleAction(event) {
         ...prev,
         activeProjectId: projectId,
         currentPage: 'studio',
-        selectedNodeId: localProject.workflow?.nodes?.[0]?.id || prev.selectedNodeId,
+        selectedNodeId: null,
         serverError: 'Mode: Local Demo / Mock Model. Start the local server and click Reconnect Server for persisted editing.',
       }));
       return;
@@ -2605,7 +2643,7 @@ function handleSubmit(event) {
 }
 
 function handleDocumentOverlayClick(event) {
-  if (closestElement(event.target, '.workflow-filter-control')) return;
+  if (closestElement(event.target, '.workflow-canvas-tools') || closestElement(event.target, '.workflow-filter-popover')) return;
   closeWorkflowFilters();
   if (closestElement(event.target, '.project-menu-control')) return;
   if (!getState().activeProjectMenuId) return;
