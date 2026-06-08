@@ -828,7 +828,7 @@ function renderStudio(state) {
 
 function renderAiComposer(state, project, selectedNode) {
   return `<div class="ai-composer">
-    <button class="icon-button ai-drawer-open" data-action="open-ai-edit" aria-label="Open AI Assisted Edit" title="Open AI Assisted Edit"><span class="canvas-tool-icon">${ICONS.history}</span></button>
+    <button class="icon-button ai-drawer-open" data-action="open-ai-edit" aria-label="Open AI Assisted Edit" title="Open AI Assisted Edit" aria-expanded="${state.aiEdit.open ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.history}</span></button>
     <textarea data-action="set-ai-request" rows="1" placeholder="Ask BoundaryML to modify this workflow...">${state.aiEdit.request || ''}</textarea>
     <button class="primary ai-send" data-action="generate-diff" aria-label="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" title="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" ${state.aiEdit.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span></button>
   </div>`;
@@ -849,7 +849,7 @@ function renderDiffReview(state) {
 }
 
 function renderAiEdit(state, project, selectedNode) {
-  if (!state.aiEdit.open && !state.aiEdit.diff) return '';
+  if (!state.aiEdit.open) return '';
   return `<aside class="ai-conversation-drawer">
     <article class="card panel">
     <div class="toolbar"><div><h3>AI Assisted Edit</h3><p class="muted">Agent infers workflow context from your request.</p></div><button class="icon-button" data-action="toggle-ai-edit" aria-label="Close AI Assisted Edit" title="Close">${ICONS.close}</button></div>
@@ -1147,6 +1147,36 @@ function refreshWorkflowDetail() {
   }
   target.innerHTML = renderNodeDetail(state, project, selectedNode);
   localizeDom(state.language || 'en');
+}
+
+function syncAiComposerButton() {
+  const state = getState();
+  const button = app.querySelector('[data-action="open-ai-edit"]');
+  if (!button) return;
+  button.classList.toggle('active', Boolean(state.aiEdit.open));
+  button.setAttribute('aria-expanded', state.aiEdit.open ? 'true' : 'false');
+}
+
+function refreshAiEdit() {
+  const state = getState();
+  const project = getActiveProject(state);
+  const canvas = app.querySelector('.workflow-canvas');
+  if (!canvas || !project) return;
+  const selectedNode = project.workflow?.nodes?.find((node) => node.id === state.selectedNodeId) || null;
+  const existing = canvas.querySelector('.ai-conversation-drawer');
+  const html = renderAiEdit(state, project, selectedNode);
+  if (!html) {
+    existing?.remove();
+    syncAiComposerButton();
+    return;
+  }
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = html;
+  const next = wrapper.firstElementChild;
+  if (existing) existing.replaceWith(next);
+  else canvas.insertBefore(next, canvas.querySelector('.ai-composer') || null);
+  localizeDom(state.language || 'en');
+  syncAiComposerButton();
 }
 
 function refreshWorkflowCanvas() {
@@ -2066,8 +2096,20 @@ function handleAction(event) {
     }).catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
   }
 
-  if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
-  if (action === 'open-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
+  if (action === 'toggle-ai-edit') {
+    updateUiStateSilently((state) => {
+      state.aiEdit.open = !state.aiEdit.open;
+    });
+    refreshAiEdit();
+    return;
+  }
+  if (action === 'open-ai-edit') {
+    updateUiStateSilently((state) => {
+      state.aiEdit.open = !state.aiEdit.open;
+    });
+    refreshAiEdit();
+    return;
+  }
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, request: target.dataset.suggestion } }));
   if (action === 'generate-diff') {
     const st = getState();
