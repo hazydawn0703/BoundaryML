@@ -1,9 +1,48 @@
 import { generatePrompt } from '../../generators/src/promptGenerator.js';
 
+function safeDiffId(value, fallback) {
+  const id = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  return id || fallback;
+}
+
+function extractRequestedPhaseName(userRequest) {
+  const quoted = userRequest.match(/[“"']([^”"']+)[”"']/);
+  if (quoted?.[1]) return quoted[1].trim();
+  const chinese = userRequest.match(/(?:新增|添加|增加)(?:一个|新的|新)?阶段\s*([^\s，。,.;；]+)/);
+  if (chinese?.[1]) return chinese[1].trim();
+  const english = userRequest.match(/add (?:a |new )?phase (?:called |named )?([a-z0-9 _-]+)/i);
+  if (english?.[1]) return english[1].trim();
+  return '';
+}
+
 export function generateWorkflowDiff(userRequest, workflow, assets) {
   const request = userRequest.toLowerCase().trim();
   const changes = [];
   const warnings = [];
+  const requestedPhaseName = extractRequestedPhaseName(userRequest);
+
+  if (requestedPhaseName && (request.includes('phase') || /(?:新增|添加|增加)(?:一个|新的|新)?阶段/.test(userRequest))) {
+    const phaseId = safeDiffId(`phase-${requestedPhaseName}`, `phase-${Date.now()}`);
+    const existing = workflow.phases.some((phase) => phase.id === phaseId || phase.name === requestedPhaseName);
+    if (!existing) {
+      changes.push({
+        id: `change-add-${phaseId}`,
+        type: 'added',
+        targetType: 'phase',
+        targetId: phaseId,
+        field: 'phase',
+        before: null,
+        after: {
+          id: phaseId,
+          name: requestedPhaseName,
+          order: (workflow.phases || []).length + 1,
+        },
+        reason: `Requested a new workflow phase: ${requestedPhaseName}`,
+        impact: 'adds a new phase lane for subsequent workflow nodes',
+        selected: true,
+      });
+    }
+  }
 
   if (request.includes('add review gates to all high-risk nodes')) {
     workflow.nodes.forEach((node) => {
