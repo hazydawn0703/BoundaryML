@@ -760,8 +760,11 @@ function renderWorkflowZoom(viewport) {
   return '';
 }
 
-function renderPhaseMenu(phase) {
-  return `<div class="phase-menu" data-phase-menu="${phase.id}" hidden><label>Rename Phase<input data-action="phase-name-field" data-phase-id="${phase.id}" value="${phase.name}"/></label><div class="row"><button data-action="rename-phase" data-phase-id="${phase.id}">Save Phase</button><button data-action="delete-phase" data-phase-id="${phase.id}">Delete Phase</button></div></div>`;
+function renderPhaseMenu(state, phase) {
+  const editing = state.activePhaseRenameId === phase.id;
+  return `<div class="phase-menu" data-phase-menu="${phase.id}" hidden>${editing
+    ? `<label>Phase name<input data-action="phase-name-field" data-phase-id="${phase.id}" value="${phase.name}"/></label><div class="row"><button data-action="cancel-rename-phase" data-phase-id="${phase.id}">Cancel</button><button data-action="rename-phase" data-phase-id="${phase.id}" class="primary">Rename</button></div>`
+    : `<button data-action="start-rename-phase" data-phase-id="${phase.id}">Rename Phase</button><button data-action="delete-phase" data-phase-id="${phase.id}">Delete Phase</button>`}</div>`;
 }
 
 function renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap, previewMap) {
@@ -775,7 +778,7 @@ function renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap
   const highRiskCount = effectiveNodes.filter((n) => n.riskLevel === 'high').length;
   const issueCount = state.validationResults.filter((v) => nodeIds.includes(v.targetId)).length;
   const phaseStatus = state.validationResults.some((v) => v.level === 'error' && nodeIds.includes(v.targetId)) ? 'error' : issueCount ? 'warning' : 'ok';
-  const phaseMenu = phase.id === '__unassigned__' || phase.__preview ? '' : `<button class="icon-button phase-menu-trigger" data-action="toggle-phase-menu" data-phase-id="${phase.id}" aria-label="Phase actions" title="Phase actions">${ICONS.more}</button>${renderPhaseMenu(phase)}`;
+  const phaseMenu = phase.id === '__unassigned__' || phase.__preview ? '' : `<button class="icon-button phase-menu-trigger" data-action="toggle-phase-menu" data-phase-id="${phase.id}" aria-label="Phase actions" title="Phase actions">${ICONS.more}</button>${renderPhaseMenu(state, phase)}`;
   const addNodeButton = phase.__preview ? '<span class="badge">Preview phase</span>' : `<button data-action="add-node-phase" data-phase-id="${phase.id}">Add Node</button>`;
   return `<div class="lane ${phase.__preview ? 'diff-added' : ''}" data-phase-id="${phase.id}"><div class="lane-head"><h4>${phase.name}</h4>${phaseMenu}</div><p class="muted">nodes:${effectiveNodes.length} · high-risk:${highRiskCount} · validation:${issueCount} · status:${phaseStatus}</p>${addNodeButton}${effectiveNodes.map((node) => renderNodeCard(node, `${relationMap.get(node.id) || (selectedNode ? 'unrelated' : '')} ${previewMap.get(node.id) || ''}`.trim())).join('')}${previewNodes.map((node) => renderPreviewNodeCard(node)).join('')}<ul class="edge-hints">${renderEdgeHints(project, effectiveNodes)}</ul></div>`;
 }
@@ -818,63 +821,8 @@ function renderStudio(state) {
   </section>`;
 }
 
-function aiContextLabel(scope, selectedNode) {
-  const labels = {
-    auto: selectedNode ? 'Selected node + neighbors' : 'Entire workflow',
-    selected_node: 'Selected node',
-    node_neighborhood: 'Selected node + neighbors',
-    current_phase: 'Current phase',
-    workflow: 'Entire workflow',
-  };
-  return labels[scope] || labels.auto;
-}
-
-function resolveAiContextScope(state, project) {
-  const scope = state.aiEdit.contextScope || 'auto';
-  const selectedNode = (project.workflow.nodes || []).find((node) => node.id === state.selectedNodeId) || null;
-  if (scope !== 'auto') return scope;
-  return selectedNode ? 'node_neighborhood' : 'workflow';
-}
-
-function buildAiEditContext(state, project) {
-  const selectedNode = (project.workflow.nodes || []).find((node) => node.id === state.selectedNodeId) || null;
-  const scope = resolveAiContextScope(state, project);
-  const selectedPhaseId = selectedNode?.phaseId || selectedNode?.phase_id || null;
-  const neighborIds = new Set([selectedNode?.id].filter(Boolean));
-  for (const edge of project.workflow.edges || []) {
-    if (edge.from === selectedNode?.id) neighborIds.add(edge.to);
-    if (edge.to === selectedNode?.id) neighborIds.add(edge.from);
-  }
-  return {
-    scope,
-    selected_node_id: selectedNode?.id || null,
-    selected_phase_id: selectedPhaseId,
-    node_ids: scope === 'selected_node'
-      ? [selectedNode?.id].filter(Boolean)
-      : scope === 'node_neighborhood'
-        ? [...neighborIds]
-        : scope === 'current_phase'
-          ? (project.workflow.nodes || []).filter((node) => (node.phaseId || node.phase_id) === selectedPhaseId).map((node) => node.id)
-          : [],
-  };
-}
-
-function renderAiContextOptions(state, selectedNode) {
-  const scope = state.aiEdit.contextScope || 'auto';
-  const options = [
-    ['auto', selectedNode ? 'Auto: node + neighbors' : 'Auto: entire workflow'],
-    ['selected_node', 'Selected node'],
-    ['node_neighborhood', 'Node + neighbors'],
-    ['current_phase', 'Current phase'],
-    ['workflow', 'Entire workflow'],
-  ];
-  return options.map(([value, label]) => `<option value="${value}" ${scope === value ? 'selected' : ''}>${label}</option>`).join('');
-}
-
 function renderAiComposer(state, project, selectedNode) {
-  const scope = state.aiEdit.contextScope || 'auto';
   return `<div class="ai-composer">
-    <label class="ai-context-select"><span>Context</span><select data-action="set-ai-context-scope">${renderAiContextOptions(state, selectedNode)}</select></label>
     <textarea data-action="set-ai-request" rows="1" placeholder="Ask BoundaryML to modify this workflow...">${state.aiEdit.request || ''}</textarea>
     <button class="primary ai-send" data-action="generate-diff" aria-label="Generate reviewed workflow diff" title="Generate reviewed workflow diff" ${state.aiEdit.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span><span>${state.aiEdit.pending ? 'Generating...' : 'Generate Diff'}</span></button>
   </div>`;
@@ -896,11 +844,10 @@ function renderDiffReview(state) {
 
 function renderAiEdit(state, project, selectedNode) {
   if (!state.aiEdit.open && !state.aiEdit.diff) return '';
-  const scope = state.aiEdit.contextScope || 'auto';
   return `<aside class="ai-conversation-drawer">
     <article class="card panel">
-    <div class="toolbar"><div><h3>AI Assisted Edit</h3><p class="muted">${aiContextLabel(scope, selectedNode)}</p></div><button class="icon-button" data-action="toggle-ai-edit" aria-label="Close AI Assisted Edit" title="Close">${ICONS.close}</button></div>
-    <p class="muted">Server Mode generates a Workflow Diff for review; it never edits the formal workflow directly.</p>
+    <div class="toolbar"><div><h3>AI Assisted Edit</h3><p class="muted">Agent infers workflow context from your request.</p></div><button class="icon-button" data-action="toggle-ai-edit" aria-label="Close AI Assisted Edit" title="Close">${ICONS.close}</button></div>
+    <p class="muted">Server Mode generates a Workflow Diff for review; the agent proposes JSON-level workflow changes and never edits the formal workflow directly.</p>
     ${state.serverAvailable ? '<p class="inline-warning">Selected workflow context may be sent to the configured LLM provider.</p>' : '<p class="inline-warning">Mode: Local Demo / Mock Model</p>'}
     <div class="row">${AI_EDIT_SUGGESTIONS.map((suggestion) => `<button data-action="use-ai-suggestion" data-suggestion="${suggestion}">${suggestion}</button>`).join('')}</div>
     ${renderDiffReview(state)}
@@ -2107,13 +2054,6 @@ function handleAction(event) {
 
   if (action === 'toggle-ai-edit') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: !prev.aiEdit.open } }));
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, request: target.dataset.suggestion } }));
-  if (action === 'set-ai-context-scope') {
-    updateUiStateSilently((state) => {
-      state.aiEdit.contextScope = target.value;
-    });
-    return;
-  }
-
   if (action === 'generate-diff') {
     const st = getState();
     const project = getActiveProject(st);
@@ -2124,7 +2064,7 @@ function handleAction(event) {
     }
     setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: true } }));
     if (st.serverAvailable && project?.id) {
-      apiClient.diffsApi.generate(project.id, { request, workflow_version: project.workflow.version, context_scope: buildAiEditContext(st, project) })
+      apiClient.diffsApi.generate(project.id, { request, workflow_version: project.workflow.version })
         .then(({ data }) => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, diff: data.diff }, jobs: data.job_id ? prev.jobs : prev.jobs, modelStatus: data.model_status || prev.modelStatus })))
         .catch((error) => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, pending: false }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
@@ -2342,8 +2282,33 @@ function handleAction(event) {
   if (action === 'toggle-phase-menu') {
     const phaseId = target.dataset.phaseId;
     updateUiStateSilently((state) => {
-      state.activePhaseMenuId = state.activePhaseMenuId === phaseId ? null : phaseId;
+      const closing = state.activePhaseMenuId === phaseId;
+      state.activePhaseMenuId = closing ? null : phaseId;
+      if (closing || state.activePhaseRenameId !== phaseId) state.activePhaseRenameId = null;
     });
+    syncPhaseMenu();
+    return;
+  }
+
+  if (action === 'start-rename-phase') {
+    const phaseId = target.dataset.phaseId;
+    updateUiStateSilently((state) => {
+      state.activePhaseMenuId = phaseId;
+      state.activePhaseRenameId = phaseId;
+    });
+    refreshWorkflowCanvas();
+    syncPhaseMenu();
+    app.querySelector(`input[data-action="phase-name-field"][data-phase-id="${CSS.escape(phaseId)}"]`)?.focus();
+    return;
+  }
+
+  if (action === 'cancel-rename-phase') {
+    const phaseId = target.dataset.phaseId;
+    updateUiStateSilently((state) => {
+      state.activePhaseMenuId = phaseId;
+      state.activePhaseRenameId = null;
+    });
+    refreshWorkflowCanvas();
     syncPhaseMenu();
     return;
   }
@@ -2359,7 +2324,7 @@ function handleAction(event) {
     if (st.serverAvailable && project?.id) {
       apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, phases: nextPhases })
         .then(() => refreshProjectRuntime(project.id))
-        .then(() => setState((prev) => ({ ...prev, activePhaseMenuId: null })))
+        .then(() => setState((prev) => ({ ...prev, activePhaseMenuId: null, activePhaseRenameId: null })))
         .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : (error.message || 'Failed to rename phase') })));
       return;
     }
@@ -2367,7 +2332,7 @@ function handleAction(event) {
       draft.workflow.phases = nextPhases;
       draft.workflow.version += 1;
     }, 'Phase renamed');
-    setState((prev) => ({ ...prev, activePhaseMenuId: null }));
+    setState((prev) => ({ ...prev, activePhaseMenuId: null, activePhaseRenameId: null }));
   }
 
   if (action === 'delete-phase') {
@@ -2381,7 +2346,7 @@ function handleAction(event) {
     if (st.serverAvailable && project?.id) {
       apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, phases: nextPhases, nodes: nextNodes })
         .then(() => refreshProjectRuntime(project.id))
-        .then(() => setState((prev) => ({ ...prev, activePhaseMenuId: null })))
+        .then(() => setState((prev) => ({ ...prev, activePhaseMenuId: null, activePhaseRenameId: null })))
         .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : (error.message || 'Failed to delete phase') })));
       return;
     }
@@ -2390,7 +2355,7 @@ function handleAction(event) {
       draft.workflow.nodes = nextNodes;
       draft.workflow.version += 1;
     }, 'Phase deleted');
-    setState((prev) => ({ ...prev, activePhaseMenuId: null }));
+    setState((prev) => ({ ...prev, activePhaseMenuId: null, activePhaseRenameId: null }));
   }
 
   if (action === 'add-node' || action === 'add-node-phase') {

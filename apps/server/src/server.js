@@ -6,7 +6,7 @@ import { getTemplateById, listPublicTemplates, selectTemplateForProject } from '
 import { generateWorkflowDraft } from '../../../packages/generators/src/workflowGenerator.js';
 import { generatePrompt } from '../../../packages/generators/src/promptGenerator.js';
 import { generateChecklist } from '../../../packages/generators/src/checklistGenerator.js';
-import { generateWorkflowDiff } from '../../../packages/core/src/diff.js';
+import { buildWorkflowIndex, extractFocusedSubgraph, generateWorkflowContextPlan, generateWorkflowDiff, normalizeAgentDiff, normalizeContextPlan, workflowDiffOutputContract } from '../../../packages/core/src/diff.js';
 import { generateExecutionKit } from '../../../packages/generators/src/executionKitGenerator.js';
 import { exportExecutionKit } from '../../../packages/exporter/src/executionKitExporter.js';
 import { loadAiSaasFeatureMvpSpec } from '../../../packages/examples/src/aiSaasFeatureMvp.js';
@@ -720,21 +720,63 @@ const server = createServer(async (req, res) => {
     const project = getProject(ctx, diffGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
     const requestText = body.request || 'default';
-    const contextScope = body.context_scope || body.contextScope || { scope: 'workflow' };
-    const job = createJob(ctx, project, 'generate_workflow_diff', { request: requestText, context_scope: contextScope, workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
+    const contextScope = body.context_scope || body.contextScope || null;
+    const agentContextPolicy = 'infer_context_from_request_and_workflow_json';
+    const workflowIndex = buildWorkflowIndex(project.workflow);
+    const outputContract = workflowDiffOutputContract();
+    let contextPlan = generateWorkflowContextPlan(requestText, workflowIndex);
+    let focusedSubgraph = extractFocusedSubgraph(project.workflow, project.assets, contextPlan);
+    const job = createJob(ctx, project, 'generate_workflow_diff', { request: requestText, context_policy: agentContextPolicy, workflow_index: workflowIndex }, readIdempotencyKey(req));
+    let planResult = null;
     let modelResult = null;
     try {
-      modelResult = await runModel('workflow_diff', { request: requestText, context_scope: contextScope, workflow: project.workflow, assets: project.assets });
+      planResult = await runModel('workflow_context_plan', {
+        request: requestText,
+        context_policy: agentContextPolicy,
+        workflow_index: workflowIndex,
+        output_contract: {
+          intent: 'workflow_edit',
+          targets: [{ type: 'node|phase', id: 'existing id', required_context: 'node_with_neighbors|phase|workflow' }],
+          graph_expansion: { upstream_depth: 0, downstream_depth: 2 },
+          operation_scope: ['add_phase', 'rename_phase', 'add_node', 'update_node', 'delete_node', 'add_edge', 'delete_edge', 'add_review_gate', 'generate_prompt'],
+        },
+      });
+      const modelContextPlan = normalizeContextPlan(planResult.output, workflowIndex);
+      if (modelContextPlan && (modelContextPlan.targets.length > 0 || modelContextPlan.operation_scope.length > 0)) {
+        contextPlan = modelContextPlan;
+        focusedSubgraph = extractFocusedSubgraph(project.workflow, project.assets, contextPlan);
+      }
+      modelCalls.unshift({ id: `call_${Date.now()}_plan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: planResult.model, purpose: 'workflow_context_plan', status: planResult.status, summary: planResult.output?.summary || `context plan: ${requestText}` });
+    } catch (error) {
+      modelCalls.unshift({ id: `call_${Date.now()}_plan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().planning_model, purpose: 'workflow_context_plan', status: 'failed', summary: error.message });
+    }
+    try {
+      modelResult = await runModel('workflow_diff', {
+        request: requestText,
+        context_policy: agentContextPolicy,
+        ...(contextScope ? { context_scope: contextScope } : {}),
+        context_plan: contextPlan,
+        workflow_index: workflowIndex,
+        focused_subgraph: focusedSubgraph,
+        output_contract: outputContract,
+      });
       modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_diff', status: modelResult.status, summary: modelResult.output?.summary || `diff request: ${requestText}` });
     } catch (error) {
       modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().diff_model, purpose: 'workflow_diff', status: 'failed', summary: error.message });
     }
     runJob(ctx, project, job, (progress) => {
       progress('calling_model', 'Generating workflow diff');
-      const candidate = modelResult?.output?.diff || modelResult?.output;
+      const candidate = normalizeAgentDiff(modelResult?.output, requestText, project.workflow, contextPlan);
       const candidateHasChanges = Array.isArray(candidate?.changes) && candidate.changes.length > 0;
-      project.last_diff = candidateHasChanges ? { ...candidate, id: candidate.id || `diff-${Date.now()}`, request: requestText, warnings: candidate.warnings || [], createdAt: candidate.createdAt || new Date().toISOString() } : generateWorkflowDiff(requestText, project.workflow, project.assets);
-      project.last_diff.context_scope = contextScope;
+      project.last_diff = candidateHasChanges ? candidate : generateWorkflowDiff(requestText, project.workflow, project.assets);
+      project.last_diff.context_policy = agentContextPolicy;
+      project.last_diff.context_plan = contextPlan;
+      project.last_diff.focused_subgraph_summary = {
+        phases: focusedSubgraph.phases.length,
+        nodes: focusedSubgraph.nodes.length,
+        edges: focusedSubgraph.edges.length,
+      };
+      if (contextScope) project.last_diff.context_scope = contextScope;
       project.last_diff.status = 'draft';
       return { type: 'workflow_diff', diff_id: project.last_diff.id };
     });
