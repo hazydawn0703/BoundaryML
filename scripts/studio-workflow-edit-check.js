@@ -156,6 +156,8 @@ assert(app.includes('buildWorkflowDiffPreviewMap') && styles.includes('.node-car
 assert(app.includes('previewPhases') && app.includes('Preview phase') && styles.includes('.lane.diff-added'), 'workflow canvas previews added phase lanes from AI diff');
 const diffCore = readFileSync(new URL('../packages/core/src/diff.js', import.meta.url), 'utf-8');
 assert(diffCore.includes('buildWorkflowIndex') && diffCore.includes('generateWorkflowContextPlan') && diffCore.includes('extractFocusedSubgraph') && diffCore.includes('workflowDiffOutputContract') && diffCore.includes('normalizeAgentDiff'), 'core diff module supports two-step workflow edit agent planning');
+assert(diffCore.includes('EDITABLE_NODE_FIELDS') && diffCore.includes('buildNodeFieldUpdateChanges') && diffCore.includes('node_edit_contract'), 'core diff module supports natural language node detail edits');
+assert(diffCore.includes('normalizeNodeDiffField') && diffCore.includes('riskLevel') && diffCore.includes('humanOwnerRole') && diffCore.includes('inputs') && diffCore.includes('outputs'), 'node detail diff fields are normalized for model and local fallback output');
 assert(diffCore.includes('extractRequestedPhaseName') && diffCore.includes('\\u65b0\\u589e') && diffCore.includes("targetType: 'phase'"), 'deterministic workflow diff supports Chinese/English add phase requests');
 assert(diffCore.includes('buildHumanConfirmationChanges') && diffCore.includes('\\u4eba\\u5de5\\u786e\\u8ba4') && diffCore.includes("targetType: 'edge'"), 'deterministic workflow diff supports inserting human confirmation after a target node');
 assert(app.includes('update-artifact-contract-field') && app.includes('required_sections'), 'artifact contract required_sections edit path exists');

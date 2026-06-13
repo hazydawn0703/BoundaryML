@@ -5,6 +5,53 @@ function safeDiffId(value, fallback) {
   return id || fallback;
 }
 
+const NODE_FIELD_ALIASES = {
+  phase: 'phaseId',
+  phase_id: 'phaseId',
+  phaseId: 'phaseId',
+  mode: 'executionMode',
+  execution_mode: 'executionMode',
+  executionMode: 'executionMode',
+  risk: 'riskLevel',
+  risk_level: 'riskLevel',
+  riskLevel: 'riskLevel',
+  owner: 'humanOwnerRole',
+  human_owner: 'humanOwnerRole',
+  human_owner_role: 'humanOwnerRole',
+  humanOwnerRole: 'humanOwnerRole',
+  ai_role: 'aiRole',
+  aiRole: 'aiRole',
+  artifact_contract: 'artifactContract',
+  artifactContract: 'artifactContract',
+  review_gate: 'reviewGate',
+  reviewGate: 'reviewGate',
+  prompt_status: 'promptStatus',
+  promptStatus: 'promptStatus',
+  checklist_status: 'checklistStatus',
+  checklistStatus: 'checklistStatus',
+};
+
+const EDITABLE_NODE_FIELDS = [
+  'name',
+  'goal',
+  'phaseId',
+  'status',
+  'riskLevel',
+  'executionMode',
+  'humanOwnerRole',
+  'aiRole',
+  'inputs',
+  'outputs',
+  'artifactContract',
+  'reviewGate',
+  'promptStatus',
+  'checklistStatus',
+];
+
+function normalizeNodeDiffField(field) {
+  return NODE_FIELD_ALIASES[field] || field;
+}
+
 function readNodePhaseId(node) {
   return node?.phase_id || node?.phaseId || 'unassigned';
 }
@@ -39,6 +86,24 @@ function readNodeReviewGate(node) {
 
 function readNodeArtifactContract(node) {
   return node?.artifact_contract || node?.artifactContract || null;
+}
+
+function readNodeField(node, field) {
+  const normalized = normalizeNodeDiffField(field);
+  const readers = {
+    phaseId: readNodePhaseId,
+    executionMode: readNodeMode,
+    riskLevel: readNodeRisk,
+    humanOwnerRole: readNodeOwner,
+    aiRole: readNodeAiRole,
+    inputs: readNodeInputs,
+    outputs: readNodeOutputs,
+    reviewGate: readNodeReviewGate,
+    artifactContract: readNodeArtifactContract,
+    promptStatus: (item) => item?.prompt_status || item?.promptStatus,
+    checklistStatus: (item) => item?.checklist_status || item?.checklistStatus,
+  };
+  return readers[normalized] ? readers[normalized](node) : node?.[normalized];
 }
 
 function readAssetNodeId(asset) {
@@ -208,6 +273,30 @@ export function generateWorkflowContextPlan(userRequest, workflowIndex) {
   if (includesAny(request, ['delete phase', '\u5220\u9664\u9636\u6bb5'])) operationScope.push('delete_phase');
   if (includesAny(request, ['add node', 'add step', '\u6dfb\u52a0\u8282\u70b9', '\u589e\u52a0\u8282\u70b9', '\u65b0\u589e\u8282\u70b9', '\u4eba\u5de5\u786e\u8ba4'])) operationScope.push('add_node');
   if (includesAny(request, ['after', 'before', '\u540e\u9762', '\u4e4b\u540e', '\u524d\u9762', '\u4e4b\u524d'])) operationScope.push('add_edge');
+  if (includesAny(request, [
+    'update node',
+    'change node',
+    'modify node',
+    'set node',
+    'rename node',
+    'goal',
+    'status',
+    'risk',
+    'owner',
+    'inputs',
+    'outputs',
+    '\u4fee\u6539',
+    '\u66f4\u65b0',
+    '\u8bbe\u7f6e',
+    '\u6539\u4e3a',
+    '\u6539\u6210',
+    '\u76ee\u6807',
+    '\u72b6\u6001',
+    '\u98ce\u9669',
+    '\u8d1f\u8d23\u4eba',
+    '\u8f93\u5165',
+    '\u8f93\u51fa',
+  ])) operationScope.push('update_node');
   if (includesAny(request, ['review gate', '\u5ba1\u6838\u95e8\u7981', '\u4eba\u5de5\u5ba1\u6838'])) operationScope.push('add_review_gate');
   if (includesAny(request, ['conservative', '\u4fdd\u5b88'])) operationScope.push('update_execution_mode');
   if (includesAny(request, ['prompt', '\u63d0\u793a\u8bcd'])) operationScope.push('generate_prompt');
@@ -225,7 +314,7 @@ export function generateWorkflowContextPlan(userRequest, workflowIndex) {
       downstream_depth: operationScope.includes('add_edge') || operationScope.includes('add_node') ? 2 : 1,
     },
     operation_scope: unique(operationScope),
-    needed_fields: ['phases', 'nodes', 'edges', 'assets_for_target_nodes'],
+    needed_fields: ['phases', 'nodes', 'edges', 'node_detail_fields', 'assets_for_target_nodes'],
     confidence: targets.length || operationScope.length ? 'deterministic' : 'fallback',
   };
 }
@@ -301,8 +390,18 @@ export function workflowDiffOutputContract() {
     change_fields: ['id?', 'type', 'targetType', 'targetId', 'field', 'before', 'after', 'reason', 'impact', 'selected'],
     allowed_target_types: ['phase', 'node', 'edge', 'prompt', 'checklist', 'artifact_template'],
     allowed_change_types: ['added', 'updated', 'deleted'],
-    node_field_aliases: ['phaseId', 'phase_id', 'executionMode', 'execution_mode', 'riskLevel', 'risk_level', 'reviewGate', 'review_gate', 'artifactContract', 'artifact_contract'],
-    instruction: 'Return reviewable diffs only. Do not rewrite the entire workflow. Use existing ids for updates/deletes and stable ids for added phases/nodes/edges.',
+    editable_node_fields: EDITABLE_NODE_FIELDS,
+    node_field_aliases: ['name', 'goal', 'phaseId', 'phase_id', 'status', 'executionMode', 'execution_mode', 'mode', 'riskLevel', 'risk_level', 'risk', 'humanOwnerRole', 'human_owner_role', 'owner', 'aiRole', 'ai_role', 'inputs', 'outputs', 'reviewGate', 'review_gate', 'artifactContract', 'artifact_contract', 'promptStatus', 'prompt_status', 'checklistStatus', 'checklist_status'],
+    node_edit_contract: {
+      scalar_fields: ['name', 'goal', 'phaseId', 'status', 'riskLevel', 'executionMode', 'humanOwnerRole', 'aiRole', 'promptStatus', 'checklistStatus'],
+      list_fields: ['inputs', 'outputs'],
+      object_fields: ['artifactContract', 'reviewGate'],
+      examples: [
+        { type: 'updated', targetType: 'node', targetId: 'node-10', field: 'riskLevel', before: 'high', after: 'medium' },
+        { type: 'updated', targetType: 'node', targetId: 'node-10', field: 'inputs', before: ['Old input'], after: ['New input'] },
+      ],
+    },
+    instruction: 'Return reviewable diffs only. Do not rewrite the entire workflow. For node detail edits, emit one updated node change per edited field using editable_node_fields. Use existing ids for updates/deletes and stable ids for added phases/nodes/edges.',
   };
 }
 
@@ -312,12 +411,13 @@ function normalizeChange(change, index) {
   const targetId = change.targetId || change.target_id || change.after?.id || change.after?.node_id || change.after?.phase_id;
   const type = change.type || (change.before === null ? 'added' : 'updated');
   if (!targetType || !targetId) return null;
+  const field = targetType === 'node' ? normalizeNodeDiffField(change.field || targetType) : (change.field || targetType);
   return {
     id: change.id || `change-${index + 1}-${safeDiffId(`${targetType}-${targetId}`, `${targetType}-${index + 1}`)}`,
     type,
     targetType,
     targetId,
-    field: change.field || targetType,
+    field,
     before: change.before ?? null,
     after: change.after,
     reason: change.reason || 'Proposed by workflow edit agent',
@@ -450,6 +550,81 @@ function buildHumanConfirmationChanges(userRequest, workflow) {
   return changes;
 }
 
+function extractValueAfterVerb(userRequest) {
+  const value = String(userRequest || '').match(/(?:to|as|=|:|\u4e3a|\u6539\u4e3a|\u6539\u6210|\u8bbe\u4e3a|\u8bbe\u7f6e\u4e3a|\u66f4\u65b0\u4e3a)\s*[\u201c\u201d"']?(.+?)[\u201c\u201d"']?\s*$/i);
+  return value?.[1]?.trim() || '';
+}
+
+function normalizeRiskValue(value) {
+  const text = lower(value);
+  if (includesAny(text, ['high', '\u9ad8'])) return 'high';
+  if (includesAny(text, ['low', '\u4f4e'])) return 'low';
+  if (includesAny(text, ['medium', 'mid', '\u4e2d'])) return 'medium';
+  return value.trim();
+}
+
+function normalizeExecutionModeValue(value) {
+  const text = lower(value);
+  if (includesAny(text, ['human only', 'human_only', '\u4eba\u5de5'])) return 'human_only';
+  if (includesAny(text, ['approval', 'human approval', 'ai_execute_human_approval', '\u5ba1\u6279'])) return 'ai_execute_human_approval';
+  if (includesAny(text, ['review', 'ai_draft_human_review', '\u590d\u6838', '\u5ba1\u6838'])) return 'ai_draft_human_review';
+  if (includesAny(text, ['autonomous', 'ai_autonomous', '\u81ea\u4e3b'])) return 'ai_autonomous';
+  if (includesAny(text, ['assist', 'human_lead_ai_assist', '\u8f85\u52a9'])) return 'human_lead_ai_assist';
+  return value.trim();
+}
+
+function normalizeNodeEditValue(field, value) {
+  if (field === 'riskLevel') return normalizeRiskValue(value);
+  if (field === 'executionMode') return normalizeExecutionModeValue(value);
+  if (field === 'inputs' || field === 'outputs') {
+    return String(value || '')
+      .split(/[\n,;\uff0c\uff1b\u3001]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return value.trim();
+}
+
+function inferNodeEditField(userRequest) {
+  const checks = [
+    ['executionMode', ['execution mode', 'mode', '\u6267\u884c\u6a21\u5f0f', '\u6a21\u5f0f']],
+    ['riskLevel', ['risk level', 'risk', '\u98ce\u9669\u7b49\u7ea7', '\u98ce\u9669']],
+    ['humanOwnerRole', ['human owner', 'owner', 'owner role', '\u4eba\u5de5\u8d1f\u8d23\u4eba', '\u8d1f\u8d23\u4eba']],
+    ['aiRole', ['ai role', 'ai persona', '\u0041\u0049\u89d2\u8272', '\u667a\u80fd\u4f53\u89d2\u8272']],
+    ['inputs', ['inputs', 'input', '\u8f93\u5165']],
+    ['outputs', ['outputs', 'output', '\u8f93\u51fa']],
+    ['status', ['status', '\u72b6\u6001']],
+    ['goal', ['goal', 'objective', '\u76ee\u6807']],
+    ['name', ['rename node', 'node name', 'name', '\u8282\u70b9\u540d\u79f0', '\u540d\u79f0', '\u540d\u5b57']],
+  ];
+  return checks.find(([, needles]) => includesAny(userRequest, needles))?.[0] || '';
+}
+
+function buildNodeFieldUpdateChanges(userRequest, workflow) {
+  const target = findMatchingNodes(userRequest, workflow)[0];
+  if (!target) return [];
+  const field = inferNodeEditField(userRequest);
+  if (!field) return [];
+  const rawValue = extractValueAfterVerb(userRequest);
+  if (!rawValue) return [];
+  const after = normalizeNodeEditValue(field, rawValue);
+  if (Array.isArray(after) && after.length === 0) return [];
+  const before = readNodeField(target, field);
+  if (JSON.stringify(before ?? null) === JSON.stringify(after)) return [];
+  return [{
+    id: `change-node-${safeDiffId(`${target.id}-${field}`, `${Date.now()}`)}`,
+    type: 'updated',
+    targetType: 'node',
+    targetId: target.id || target.node_id,
+    field,
+    before,
+    after,
+    reason: `Update ${target.name} ${field} from natural language request`,
+    impact: 'updates node detail data without changing workflow topology',
+    selected: true,
+  }];
+}
+
 export function generateWorkflowDiff(userRequest, workflow, assets) {
   const request = lower(userRequest).trim();
   const changes = [];
@@ -463,6 +638,7 @@ export function generateWorkflowDiff(userRequest, workflow, assets) {
   }
 
   changes.push(...buildHumanConfirmationChanges(userRequest, workflow));
+  changes.push(...buildNodeFieldUpdateChanges(userRequest, workflow));
 
   if (request.includes('add review gates to all high-risk nodes')) {
     (workflow.nodes || []).forEach((node) => {
