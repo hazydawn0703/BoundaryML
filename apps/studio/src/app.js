@@ -1,4 +1,4 @@
-import { EXECUTION_MODES, AI_EDIT_SUGGESTIONS } from '../../../packages/schema/src/constants.js';
+import { EXECUTION_MODES } from '../../../packages/schema/src/constants.js';
 import { getState, setState, subscribe, getActiveProject, replaceActiveProject, replaceActiveProjectSilently, recomputeValidation, setRuntimeMode, updateUiStateSilently } from './state/store.js';
 import { apiClient } from './api-client/index.js';
 import {
@@ -13,6 +13,7 @@ import {
 import { applyWorkflowDiff } from '../../../packages/core/src/diff.js';
 
 const app = document.getElementById('app');
+const AI_CONVERSATION_LIMIT = 20;
 
 const UI_LANGUAGES = {
   en: 'English',
@@ -33,7 +34,30 @@ const ZH_HANS_REPLACEMENTS = [
   ['Ask BoundaryML to modify this workflow...', '让 BoundaryML 修改这个工作流...'],
   ['Generate reviewed workflow diff', '生成待审核工作流 Diff'],
   ['Generating...', '生成中...'],
+  ['Generating workflow diff...', '正在生成工作流 Diff...'],
+  ['BoundaryML is planning the edit and preparing reviewable changes.', 'BoundaryML 正在规划修改并准备可审核的变更。'],
   ['No diff generated yet.', '尚未生成 Diff。'],
+  ['No AI edit history yet.', '暂无 AI 编辑历史。'],
+  ['You', '你'],
+  ['Agent', 'Agent'],
+  ['I can add the node, but I need a few details first so we do not create an empty node.', '我可以帮你新增节点，但需要先补全关键信息，避免创建空白节点。'],
+  ['What is the goal of this new node?', '这个新节点的目标是什么？'],
+  ['What inputs does it need, and what outputs should it produce?', '它需要哪些输入，产出哪些输出？'],
+  ['Who owns it, and should it be human-only, AI draft with review, or AI execution with human approval?', '谁负责该节点，希望是人工执行、AI 起草后人工审核，还是 AI 执行后人工审批？'],
+  ['What risk level should it use: low, medium, or high?', '该节点的风险等级是低、中还是高？'],
+  ['Agent infers workflow context from your request.', 'Agent 会根据你的请求自动推断工作流上下文。'],
+  ['Server Mode generates a Workflow Diff for review; the agent proposes JSON-level workflow changes and never edits the formal workflow directly.', 'Server 模式会生成用于审核的工作流 Diff；Agent 会提出 JSON 级工作流修改，不会直接修改正式工作流。'],
+  ['Workflow edit source', '工作流修改来源'],
+  ['LLM generated changes', 'LLM 生成的变更'],
+  ['Deterministic fallback after mock model', 'Mock 模型后的确定性兜底'],
+  ['Deterministic fallback after empty model response', '模型空响应后的确定性兜底'],
+  ['Deterministic fallback after model failure', '模型失败后的确定性兜底'],
+  ['Local mock fallback', '本地 Mock 兜底'],
+  ['make this workflow more conservative', '让这个工作流更保守'],
+  ['add review gates to all high-risk nodes', '为所有高风险节点增加审核门禁'],
+  ['add testing nodes before launch', '在发布前增加测试节点'],
+  ['generate prompts for all ai nodes', '为所有 AI 节点生成提示词'],
+  ['workflow', '工作流'],
   ['Search projects', '搜索项目'],
   ['Search by project name', '按项目名搜索'],
   ['Search jobs', '搜索任务'],
@@ -834,31 +858,232 @@ function renderAiComposer(state, project, selectedNode) {
   </div>`;
 }
 
-function renderDiffReview(state) {
-  if (!state.aiEdit.diff) return '<p class="muted">No diff generated yet.</p>';
-  const diff = state.aiEdit.diff;
+function renderDiffPending() {
+  return '<div class="diff-pending" role="status" aria-live="polite"><span class="diff-pending-dot"></span><div><strong>Generating workflow diff...</strong><p class="muted">BoundaryML is planning the edit and preparing reviewable changes.</p></div></div>';
+}
+
+function workflowDiffSourceLabel(diff) {
+  const sourceLabels = {
+    llm: 'LLM generated changes',
+    mock_fallback: 'Deterministic fallback after mock model',
+    model_empty_fallback: 'Deterministic fallback after empty model response',
+    model_failed_fallback: 'Deterministic fallback after model failure',
+    local_mock: 'Local mock fallback',
+  };
+  const source = diff?.generation_source || diff?.generationSource || 'unknown';
+  return sourceLabels[source] || source;
+}
+
+function renderDiffReview(state, diff = state.aiEdit.diff, includeActions = true) {
+  if (!diff) return state.aiEdit.pending ? renderDiffPending() : '<p class="muted">No diff generated yet.</p>';
   const changes = diff.changes || [];
   const selectedCount = changes.filter((change) => change.selected !== false).length;
+  const sourceLabel = workflowDiffSourceLabel(diff);
   return `<section class="diff-review">
     <div class="diff-summary"><strong>${changes.length} changes</strong><span>${selectedCount} selected</span></div>
+    <p class="muted"><strong>Workflow edit source:</strong> ${sourceLabel}</p>
     <p class="muted">${diff.request || ''}</p>
     ${(diff.warnings || []).map((warning) => `<p class="inline-warning">${warning}</p>`).join('')}
     <ul>${changes.map((change) => `<li><label class="check"><input type="checkbox" data-action="toggle-diff-change" data-change-id="${change.id}" ${change.selected !== false ? 'checked' : ''}/> <span><strong>${change.type}</strong> ${changeTargetType(change)} ${changeTargetId(change) || change.after?.id || ''}<br/>Reason: ${change.reason || '-'}<br/>Impact: ${change.impact || '-'}</span></label></li>`).join('')}</ul>
-    <div class="actions"><button data-action="apply-diff-all" class="primary">Apply All</button><button data-action="apply-diff-selected">Apply Selected</button><button data-action="reject-diff">Reject All</button></div>
+    ${includeActions ? '<div class="actions"><button data-action="apply-diff-all" class="primary">Apply All</button><button data-action="apply-diff-selected">Apply Selected</button><button data-action="reject-diff">Reject All</button></div>' : ''}
   </section>`;
+}
+
+function getAiConversation(project) {
+  const conversation = project?.aiConversation || project?.ai_conversation || [];
+  return Array.isArray(conversation) ? conversation.slice(-AI_CONVERSATION_LIMIT) : [];
+}
+
+function renderAgentConversationSummary(message) {
+  const source = message.generation_source || message.generationSource;
+  const status = message.status ? ` · ${message.status}` : '';
+  const rawCount = message.changes_count ?? message.changesCount;
+  const count = Number.isFinite(Number(rawCount)) ? `${rawCount} changes` : '';
+  const questions = message.clarification_questions || message.clarificationQuestions || [];
+  return `<div class="ai-agent-summary">
+    ${count ? `<strong>${count}</strong>` : ''}
+    ${source ? `<span>${workflowDiffSourceLabel({ generation_source: source })}${status}</span>` : (status ? `<span>${status.slice(3)}</span>` : '')}
+    ${message.content ? `<p>${message.content}</p>` : ''}
+    ${questions.length ? `<ul class="ai-clarification-list">${questions.map((question) => `<li>${question}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+
+function renderAiConversationMessages(state, project) {
+  const messages = getAiConversation(project);
+  const activeDiffId = state.aiEdit.diff?.id;
+  const pendingMessages = state.aiEdit.pending
+    ? [
+      { id: 'pending-user', role: 'user', content: state.aiEdit.request || '' },
+      { id: 'pending-agent', role: 'agent', pending: true },
+    ]
+    : [];
+  const renderedMessages = [...messages, ...pendingMessages];
+  if (!renderedMessages.length) return '<div class="ai-chat-empty">No AI edit history yet.</div>';
+  return renderedMessages.map((message) => {
+    const role = message.role === 'user' ? 'user' : 'agent';
+    const diffId = message.diff_id || message.diffId;
+    const showActiveDiff = role === 'agent' && activeDiffId && diffId === activeDiffId;
+    const body = message.pending
+      ? renderDiffPending()
+      : (showActiveDiff ? renderDiffReview(state, state.aiEdit.diff, true) : (role === 'agent' ? renderAgentConversationSummary(message) : `<p>${message.content || message.request || ''}</p>`));
+    return `<div class="ai-chat-message ${role}">
+      <div class="ai-chat-meta">${role === 'user' ? 'You' : 'Agent'}${message.created_at || message.createdAt ? ` · ${message.created_at || message.createdAt}` : ''}</div>
+      <div class="ai-chat-bubble">${body}</div>
+    </div>`;
+  }).join('');
 }
 
 function renderAiEdit(state, project, selectedNode) {
   if (!state.aiEdit.open) return '';
   return `<aside class="ai-conversation-drawer">
     <article class="card panel">
-    <div class="toolbar"><div><h3>AI Assisted Edit</h3><p class="muted">Agent infers workflow context from your request.</p></div><button class="icon-button" data-action="toggle-ai-edit" aria-label="Close AI Assisted Edit" title="Close">${ICONS.close}</button></div>
-    <p class="muted">Server Mode generates a Workflow Diff for review; the agent proposes JSON-level workflow changes and never edits the formal workflow directly.</p>
-    ${state.serverAvailable ? '<p class="inline-warning">Selected workflow context may be sent to the configured LLM provider.</p>' : '<p class="inline-warning">Mode: Local Demo / Mock Model</p>'}
-    <div class="row">${AI_EDIT_SUGGESTIONS.map((suggestion) => `<button data-action="use-ai-suggestion" data-suggestion="${suggestion}">${suggestion}</button>`).join('')}</div>
-    ${renderDiffReview(state)}
+    <div class="toolbar"><h3>AI Assisted Edit</h3><button class="icon-button" data-action="toggle-ai-edit" aria-label="Close AI Assisted Edit" title="Close">${ICONS.close}</button></div>
+    <div class="ai-chat-list">${renderAiConversationMessages(state, project)}</div>
     </article>
   </aside>`;
+}
+
+function setProjectAiConversation(projectId, conversation) {
+  const normalized = withCamelAliases(conversation || []);
+  setState((prev) => ({
+    ...prev,
+    projects: prev.projects.map((project) => (
+      project.id === projectId ? { ...project, aiConversation: normalized, ai_conversation: normalized } : project
+    )),
+  }));
+}
+
+function appendLocalAiConversation(projectId, request, diff) {
+  const now = new Date().toISOString();
+  const changes = diff?.changes || [];
+  setState((prev) => ({
+    ...prev,
+    projects: prev.projects.map((project) => {
+      if (project.id !== projectId) return project;
+      const conversation = getAiConversation(project);
+      const nextConversation = [...conversation, {
+        id: `msg_user_${Date.now()}`,
+        role: 'user',
+        content: request,
+        request,
+        workflow_version: project.workflow?.version || 0,
+        created_at: now,
+      }, {
+        id: `msg_agent_${Date.now()}`,
+        role: 'agent',
+        diff_id: diff.id,
+        content: diff.summary || `${changes.length} changes proposed`,
+        request,
+        changes_count: changes.length,
+        selected_count: changes.filter((change) => change.selected !== false).length,
+        generation_source: diff.generation_source || diff.generationSource || 'local_mock',
+        status: 'draft',
+        created_at: now,
+      }].slice(-AI_CONVERSATION_LIMIT);
+      return { ...project, aiConversation: nextConversation, ai_conversation: nextConversation };
+    }),
+  }));
+}
+
+function updateLocalAiConversationStatus(projectId, diffId, status) {
+  setState((prev) => ({
+    ...prev,
+    projects: prev.projects.map((project) => {
+      if (project.id !== projectId) return project;
+      const conversation = getAiConversation(project).map((message) => (
+        (message.diff_id === diffId || message.diffId === diffId)
+          ? { ...message, status, updated_at: new Date().toISOString() }
+          : message
+      ));
+      return { ...project, aiConversation: conversation, ai_conversation: conversation };
+    }),
+  }));
+}
+
+function aiTextHasChinese(text) {
+  return /[\u4e00-\u9fff]/.test(String(text || ''));
+}
+
+function aiTextIncludesAny(text, needles) {
+  const value = String(text || '').toLowerCase();
+  return needles.some((needle) => value.includes(String(needle).toLowerCase()));
+}
+
+function isAiAddNodeRequest(text) {
+  return aiTextIncludesAny(text, ['add node', 'add step', 'new node', '新增节点', '添加节点', '增加节点']);
+}
+
+function getPendingLocalClarification(project) {
+  const conversation = getAiConversation(project);
+  for (let index = conversation.length - 1; index >= 0; index -= 1) {
+    const message = conversation[index];
+    if (message.role === 'agent' && message.status === 'needs_clarification' && message.intent === 'add_node') {
+      const previousUser = conversation.slice(0, index).reverse().find((item) => item.role === 'user');
+      return { message, previousUser };
+    }
+    if (message.role === 'agent' && ['draft', 'applied', 'rejected'].includes(message.status)) break;
+  }
+  return null;
+}
+
+function resolveLocalAiRequest(project, request) {
+  const pending = getPendingLocalClarification(project);
+  if (!pending) return request;
+  const original = pending.previousUser?.content || pending.previousUser?.request || '';
+  return `${original}\nAdditional node details: ${request}`;
+}
+
+function buildLocalNodeClarification(project, request) {
+  if (!isAiAddNodeRequest(request)) return null;
+  const missing = [];
+  if (!aiTextIncludesAny(request, ['goal', 'objective', 'purpose', '目标', '用来', '为了'])) missing.push('goal');
+  if (!aiTextIncludesAny(request, ['input', 'inputs', 'depend', 'from', '输入', '依赖', '基于'])) missing.push('inputs');
+  if (!aiTextIncludesAny(request, ['output', 'outputs', 'deliverable', 'artifact', '输出', '交付', '产出'])) missing.push('outputs');
+  if (!aiTextIncludesAny(request, ['owner', 'responsible', 'role', 'human', 'ai', '负责', '角色', '人工', '自动', '智能'])) missing.push('execution');
+  if (!aiTextIncludesAny(request, ['risk', 'high', 'medium', 'low', '风险', '高', '中', '低'])) missing.push('risk');
+  if (missing.length < 3) return null;
+  const isChinese = aiTextHasChinese(request);
+  const phaseNames = (project.workflow?.phases || []).map((phase) => phase.name).filter(Boolean);
+  return {
+    status: 'needs_clarification',
+    content: isChinese
+      ? `我可以帮你新增节点，但需要先补全关键信息，避免创建空白节点。${phaseNames.length ? `当前可选阶段：${phaseNames.join('、')}。` : ''}`
+      : `I can add the node, but I need a few details first so we do not create an empty node.${phaseNames.length ? ` Available phases: ${phaseNames.join(', ')}.` : ''}`,
+    questions: isChinese
+      ? ['这个新节点的目标是什么？', '它需要哪些输入，产出哪些输出？', '谁负责该节点，希望是人工执行、AI 起草后人工审核，还是 AI 执行后人工审批？', '该节点的风险等级是低、中还是高？']
+      : ['What is the goal of this new node?', 'What inputs does it need, and what outputs should it produce?', 'Who owns it, and should it be human-only, AI draft with review, or AI execution with human approval?', 'What risk level should it use: low, medium, or high?'],
+    missing_fields: missing,
+  };
+}
+
+function appendLocalAiClarification(projectId, request, effectiveRequest, clarification) {
+  const now = new Date().toISOString();
+  setState((prev) => ({
+    ...prev,
+    projects: prev.projects.map((project) => {
+      if (project.id !== projectId) return project;
+      const conversation = getAiConversation(project);
+      const nextConversation = [...conversation, {
+        id: `msg_user_${Date.now()}`,
+        role: 'user',
+        content: request,
+        request,
+        workflow_version: project.workflow?.version || 0,
+        created_at: now,
+      }, {
+        id: `msg_agent_${Date.now()}`,
+        role: 'agent',
+        intent: 'add_node',
+        status: 'needs_clarification',
+        content: clarification.content,
+        clarification_questions: clarification.questions,
+        missing_fields: clarification.missing_fields,
+        request: effectiveRequest,
+        created_at: now,
+      }].slice(-AI_CONVERSATION_LIMIT);
+      return { ...project, aiConversation: nextConversation, ai_conversation: nextConversation };
+    }),
+  }));
 }
 
 async function refreshProjectRuntime(projectId) {
@@ -2122,10 +2347,22 @@ function handleAction(event) {
     setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: true } }));
     if (st.serverAvailable && project?.id) {
       apiClient.diffsApi.generate(project.id, { request, workflow_version: project.workflow.version })
-        .then(({ data }) => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, diff: data.diff }, jobs: data.job_id ? prev.jobs : prev.jobs, modelStatus: data.model_status || prev.modelStatus })))
+        .then(({ data }) => {
+          if (data.ai_conversation || data.aiConversation) setProjectAiConversation(project.id, data.ai_conversation || data.aiConversation);
+          setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, request: data.clarification ? '' : prev.aiEdit.request, diff: data.clarification ? null : withCamelAliases(data.diff) }, jobs: data.job_id ? prev.jobs : prev.jobs, modelStatus: data.model_status || prev.modelStatus }));
+        })
         .catch((error) => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, pending: false }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
-      const diff = modelGenerateWorkflowDiff(request, project.workflow, project.assets);
+      const effectiveRequest = resolveLocalAiRequest(project, request);
+      const clarification = buildLocalNodeClarification(project, effectiveRequest);
+      if (clarification) {
+        appendLocalAiClarification(project.id, request, effectiveRequest, clarification);
+        setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, request: '', diff: null } }));
+        return;
+      }
+      const diff = modelGenerateWorkflowDiff(effectiveRequest, project.workflow, project.assets);
+      diff.generation_source = 'local_mock';
+      appendLocalAiConversation(project.id, request, diff);
       setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, diff } }));
     }
   }
@@ -2144,13 +2381,17 @@ function handleAction(event) {
         return;
       }
       apiClient.diffsApi.apply(project.id, st.aiEdit.diff.id, { workflow_version: project.workflow.version, selected_change_ids: selectedIds })
-        .then(() => refreshProjectRuntime(project.id))
+        .then(({ data }) => {
+          if (data.ai_conversation || data.aiConversation) setProjectAiConversation(project.id, data.ai_conversation || data.aiConversation);
+          return refreshProjectRuntime(project.id);
+        })
         .then(() => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: false, request: '', diff: null, pending: false } })))
         .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
       const updated = applyWorkflowDiff(project, st.aiEdit.diff, action === 'apply-diff-selected');
       markProjectWorkflowChanged(updated, 'Diff applied', st.aiEdit.diff.changes.filter((change) => change.selected !== false || action === 'apply-diff-all').map((change) => changeTargetId(change)).filter(Boolean));
       replaceActiveProject(updated);
+      updateLocalAiConversationStatus(project.id, st.aiEdit.diff.id, 'applied');
       setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: false, request: '', diff: null, pending: false } }));
     }
   }
@@ -2160,9 +2401,13 @@ function handleAction(event) {
     const project = getActiveProject(st);
     if (st.serverAvailable && project?.id && st.aiEdit.diff?.id) {
       apiClient.diffsApi.reject(project.id, st.aiEdit.diff.id)
-        .then(() => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: null } })))
+        .then(({ data }) => {
+          if (data.ai_conversation || data.aiConversation) setProjectAiConversation(project.id, data.ai_conversation || data.aiConversation);
+          setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: null } }));
+        })
         .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
+      if (project?.id && st.aiEdit.diff?.id) updateLocalAiConversationStatus(project.id, st.aiEdit.diff.id, 'rejected');
       setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: null } }));
     }
   }
