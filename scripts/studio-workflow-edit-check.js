@@ -129,7 +129,8 @@ assert(server.includes("runModel('workflow_generate'") && server.includes('model
 assert(server.includes('function createProjectShell') && server.includes('createEmptyWorkflow') && !server.includes('const base = createExampleProject()'), 'new project creation starts from an empty project shell instead of copying the sample project');
 assert(server.includes('agentContextPolicy') && server.includes('infer_context_from_request_and_workflow_json') && server.includes("runModel('workflow_context_plan'") && server.includes("runModel('workflow_diff'"), 'workflow diff generation asks the agent to infer context before generating changes');
 assert(server.includes('workflow_index: workflowIndex') && server.includes('focused_subgraph: focusedSubgraph') && server.includes('context_plan: contextPlan'), 'workflow diff generation sends compact index, focused subgraph, and context plan');
-assert(server.includes('candidateHasChanges') && server.includes('candidate.changes.length > 0') && server.includes('generateWorkflowDiff(requestText'), 'workflow diff generation falls back when model returns zero changes');
+assert(server.includes('candidateHasChanges') && server.includes('candidate.changes.length > 0') && server.includes('generateWorkflowDiff(effectiveRequestText'), 'workflow diff generation falls back when model returns zero changes');
+assert(server.includes('generationSource') && server.includes('model_empty_fallback') && server.includes('model_failed_fallback') && server.includes('mock_fallback'), 'workflow diff generation records whether changes came from the LLM or deterministic fallback');
 assert(server.includes('project.workflow = applyDiff(project.workflow, diff') && server.includes('markAffectedAssetsOutdated(diff.changes'), 'server diff apply updates workflow and marks affected assets outdated');
 const engine = readFileSync(new URL('../packages/core/src/engine.js', import.meta.url), 'utf-8');
 assert(engine.includes("targetType === 'phase'") && engine.includes("targetType === 'edge'") && engine.includes('removeNodeEdges'), 'core applyDiff covers phase, node, and edge changes');
@@ -146,9 +147,15 @@ assert(app.includes('generate-kit-preview') && app.includes('set-kit-type') && a
 assert(app.includes('Draft Kit') && app.includes('Final Kit'), 'draft/final kit UI exists');
 assert(api.includes('diffsApi') && api.includes('/diffs/generate') && api.includes('/apply'), 'diffs api exists');
 assert(app.includes('apiClient.diffsApi.generate') && app.includes('apiClient.diffsApi.apply') && app.includes('selected_change_ids'), 'server AI diff review path exists');
-assert(app.includes('Selected workflow context may be sent to the configured LLM provider'), 'model context warning exists');
 assert(app.includes('ai-composer') && app.includes('ai-conversation-drawer') && !app.includes('set-ai-context-scope') && !app.includes('ai-context-select'), 'studio provides bottom AI input and lets the agent infer workflow context');
-assert(app.includes('Agent infers workflow context from your request.') && app.includes('autoResizeAiComposer'), 'AI composer explains agent-inferred context and resizes ergonomically');
+const aiEditRender = app.slice(app.indexOf('function renderAiEdit'), app.indexOf('function setProjectAiConversation'));
+assert(app.includes('ai-chat-list') && app.includes('renderAiConversationMessages') && app.includes("role === 'user' ? 'user' : 'agent'") && app.includes('autoResizeAiComposer'), 'AI drawer renders chat history and the composer resizes ergonomically');
+assert(!aiEditRender.includes('Agent infers workflow context from your request.') && !aiEditRender.includes('Server Mode generates a Workflow Diff') && !aiEditRender.includes('AI_EDIT_SUGGESTIONS'), 'AI drawer no longer renders initial helper copy or suggestion chips');
+assert(app.includes('diff-pending') && app.includes('Generating workflow diff...'), 'AI drawer shows a pending state while workflow diff generation is running');
+assert(app.includes('Workflow edit source') && app.includes('LLM generated changes') && app.includes('Deterministic fallback after mock model'), 'AI drawer shows the workflow diff generation source');
+assert(server.includes('AI_CONVERSATION_LIMIT') && server.includes('appendAiConversation') && server.includes('ai_conversation'), 'server persists bounded AI edit conversation history with the project');
+assert(server.includes('buildNodeClarification') && server.includes("status: 'needs_clarification'") && server.includes('resolveWorkflowEditRequest'), 'server asks follow-up questions before creating underspecified new nodes');
+assert(app.includes('buildLocalNodeClarification') && app.includes('ai-clarification-list') && app.includes('data.clarification ? null'), 'studio renders node-creation clarification instead of an empty diff');
 assert(app.includes('rows="1"') && styles.includes('.ai-composer textarea') && styles.includes('resize: none') && styles.includes('max-height: 94px'), 'AI composer textarea auto-grows without manual resizing');
 assert(!app.includes('buildAiEditContext') && app.includes('apiClient.diffsApi.generate(project.id, { request, workflow_version: project.workflow.version })'), 'AI diff generation sends the request and workflow version without manual context scope selection');
 assert(!app.includes('AI Assisted Edit is disabled in Phase 3 server mode') && !app.includes('Diff apply from local mock is disabled in server mode'), 'server-backed AI diff generate/apply is not blocked by old local-mode guards');
@@ -160,6 +167,8 @@ assert(diffCore.includes('EDITABLE_NODE_FIELDS') && diffCore.includes('buildNode
 assert(diffCore.includes('normalizeNodeDiffField') && diffCore.includes('riskLevel') && diffCore.includes('humanOwnerRole') && diffCore.includes('inputs') && diffCore.includes('outputs'), 'node detail diff fields are normalized for model and local fallback output');
 assert(diffCore.includes('extractRequestedPhaseName') && diffCore.includes('\\u65b0\\u589e') && diffCore.includes("targetType: 'phase'"), 'deterministic workflow diff supports Chinese/English add phase requests');
 assert(diffCore.includes('buildHumanConfirmationChanges') && diffCore.includes('\\u4eba\\u5de5\\u786e\\u8ba4') && diffCore.includes("targetType: 'edge'"), 'deterministic workflow diff supports inserting human confirmation after a target node');
+assert(diffCore.includes('buildRequestedNodeAddChanges') && diffCore.includes('PHASE_NAME_ALIASES') && diffCore.includes('\\u53d1\\u5e03'), 'deterministic workflow diff supports adding nodes to localized phase names');
+assert(diffCore.includes('extractNodeDetailText') && diffCore.includes('inferRequestedExecutionMode') && diffCore.includes('inferRequestedRisk'), 'deterministic node creation fills node details from clarified user answers');
 assert(app.includes('update-artifact-contract-field') && app.includes('required_sections'), 'artifact contract required_sections edit path exists');
 assert(app.includes('completion_criteria'), 'artifact contract completion_criteria edit path exists');
 assert(app.includes('apiClient.workflowApi.patch(project.id, { workflow_version: project.workflow.version, edges: nextEdges })'), 'edge edit uses workflow patch + workflow version');

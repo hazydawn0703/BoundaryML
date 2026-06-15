@@ -25,6 +25,7 @@ if (storageAdapter === 'file') mkdirSync(dataDir, { recursive: true });
 const storage = storageAdapter === 'file' ? new FileStorage(dataDir) : new MemoryStorage();
 const ACTIVE_JOB_STATUS = new Set(['queued', 'running', 'succeeded']);
 const modelCalls = [];
+const AI_CONVERSATION_LIMIT = 20;
 
 function makeContext() {
   return {
@@ -45,6 +46,111 @@ function ok(res, ctx, data, statusCode = 200) {
 function fail(res, ctx, statusCode, code, message, details = []) {
   respond(res, statusCode, { ok: false, error: { code, message, details }, meta: { requestId: ctx.request_id } });
 }
+
+function ensureAiConversation(project) {
+  const conversation = project.ai_conversation || project.aiConversation || [];
+  project.ai_conversation = Array.isArray(conversation) ? conversation : [];
+  project.aiConversation = project.ai_conversation;
+  return project.ai_conversation;
+}
+
+function appendAiConversation(project, entries) {
+  const conversation = ensureAiConversation(project);
+  project.ai_conversation = [...conversation, ...entries].slice(-AI_CONVERSATION_LIMIT);
+  project.aiConversation = project.ai_conversation;
+  return project.ai_conversation;
+}
+
+function updateAiConversationMessage(project, diffId, patch) {
+  const conversation = ensureAiConversation(project);
+  const updatedAt = new Date().toISOString();
+  project.ai_conversation = conversation.map((message) => (
+    (message.diff_id === diffId || message.diffId === diffId)
+      ? { ...message, ...patch, updated_at: updatedAt }
+      : message
+  ));
+  project.aiConversation = project.ai_conversation;
+  return project.ai_conversation;
+}
+
+function textHasChinese(text) {
+  return /[\u4e00-\u9fff]/.test(String(text || ''));
+}
+
+function textIncludesAny(text, needles) {
+  const value = String(text || '').toLowerCase();
+  return needles.some((needle) => value.includes(String(needle).toLowerCase()));
+}
+
+function isAddNodeRequest(text) {
+  return textIncludesAny(text, ['add node', 'add step', 'new node', '\u65b0\u589e\u8282\u70b9', '\u6dfb\u52a0\u8282\u70b9', '\u589e\u52a0\u8282\u70b9']);
+}
+
+function hasNodeDetailSignal(text, needles) {
+  return textIncludesAny(text, needles);
+}
+
+function buildNodeClarification(project, requestText) {
+  const request = String(requestText || '');
+  if (!isAddNodeRequest(request)) return null;
+  const isChinese = textHasChinese(request);
+  const missing = [];
+  if (!hasNodeDetailSignal(request, ['goal', 'objective', 'purpose', '\u76ee\u6807', '\u7528\u6765', '\u4e3a\u4e86'])) missing.push('goal');
+  if (!hasNodeDetailSignal(request, ['input', 'inputs', 'depend', 'from', '\u8f93\u5165', '\u4f9d\u8d56', '\u57fa\u4e8e'])) missing.push('inputs');
+  if (!hasNodeDetailSignal(request, ['output', 'outputs', 'deliverable', 'artifact', '\u8f93\u51fa', '\u4ea4\u4ed8', '\u4ea7\u51fa'])) missing.push('outputs');
+  if (!hasNodeDetailSignal(request, ['owner', 'responsible', 'role', 'human', 'ai', '\u8d1f\u8d23', '\u89d2\u8272', '\u4eba\u5de5', '\u81ea\u52a8', '\u667a\u80fd'])) missing.push('execution');
+  if (!hasNodeDetailSignal(request, ['risk', 'high', 'medium', 'low', '\u98ce\u9669', '\u9ad8', '\u4e2d', '\u4f4e'])) missing.push('risk');
+  if (missing.length < 3) return null;
+  const phaseNames = (project.workflow?.phases || []).map((phase) => phase.name).filter(Boolean);
+  const questions = isChinese
+    ? [
+      '\u8fd9\u4e2a\u65b0\u8282\u70b9\u7684\u76ee\u6807\u662f\u4ec0\u4e48\uff1f',
+      '\u5b83\u9700\u8981\u54ea\u4e9b\u8f93\u5165\uff0c\u4ea7\u51fa\u54ea\u4e9b\u8f93\u51fa\uff1f',
+      '\u8c01\u8d1f\u8d23\u8be5\u8282\u70b9\uff0c\u5e0c\u671b\u662f\u4eba\u5de5\u6267\u884c\u3001AI \u8d77\u8349\u8fd8\u662f AI \u6267\u884c\u540e\u4eba\u5de5\u5ba1\u6279\uff1f',
+      '\u8be5\u8282\u70b9\u7684\u98ce\u9669\u7b49\u7ea7\u662f\u4f4e\u3001\u4e2d\u8fd8\u662f\u9ad8\uff1f',
+    ]
+    : [
+      'What is the goal of this new node?',
+      'What inputs does it need, and what outputs should it produce?',
+      'Who owns it, and should it be human-only, AI draft with review, or AI execution with human approval?',
+      'What risk level should it use: low, medium, or high?',
+    ];
+  return {
+    status: 'needs_clarification',
+    reason: isChinese
+      ? '\u65b0\u8282\u70b9\u7f3a\u5c11\u76ee\u6807\u3001\u8f93\u5165\u8f93\u51fa\u3001\u8d1f\u8d23\u4eba\u6216\u98ce\u9669\u7b49\u7ea7\u7b49\u5173\u952e\u4fe1\u606f\u3002'
+      : 'The new node is missing key details such as goal, inputs, outputs, ownership, or risk level.',
+    content: isChinese
+      ? `\u6211\u53ef\u4ee5\u5e2e\u4f60\u65b0\u589e\u8282\u70b9\uff0c\u4f46\u9700\u8981\u5148\u8865\u5168\u5173\u952e\u4fe1\u606f\uff0c\u907f\u514d\u521b\u5efa\u7a7a\u767d\u8282\u70b9\u3002${phaseNames.length ? `\u5f53\u524d\u53ef\u9009\u9636\u6bb5\uff1a${phaseNames.join('\u3001')}\u3002` : ''}`
+      : `I can add the node, but I need a few details first so we do not create an empty node.${phaseNames.length ? ` Available phases: ${phaseNames.join(', ')}.` : ''}`,
+    questions,
+    missing_fields: missing,
+  };
+}
+
+function getPendingNodeClarification(project) {
+  const conversation = ensureAiConversation(project);
+  for (let index = conversation.length - 1; index >= 0; index -= 1) {
+    const message = conversation[index];
+    if (message.role === 'agent' && message.status === 'needs_clarification' && message.intent === 'add_node') {
+      const previousUser = conversation.slice(0, index).reverse().find((item) => item.role === 'user');
+      return { message, previousUser };
+    }
+    if (message.role === 'agent' && (message.status === 'draft' || message.status === 'applied' || message.status === 'rejected')) break;
+  }
+  return null;
+}
+
+function resolveWorkflowEditRequest(project, requestText) {
+  const pending = getPendingNodeClarification(project);
+  if (!pending) return { effectiveRequest: requestText, pending: null };
+  const original = pending.previousUser?.content || pending.previousUser?.request || '';
+  return {
+    effectiveRequest: `${original}\nAdditional node details: ${requestText}`,
+    pending,
+  };
+}
+
 function validateSchemaCompatibility(obj) {
   const version = detectSchemaVersion(obj);
   if (!version) return;
@@ -156,6 +262,8 @@ function createProjectShell(ctx, body, selectedTemplate) {
     execution_kits: [],
     generation_jobs: [],
     model_call_logs: [],
+    ai_conversation: [],
+    aiConversation: [],
     deleted_at: null,
   }, true);
   project.workflow = createEmptyWorkflow(ctx, project, selectedTemplate);
@@ -720,18 +828,48 @@ const server = createServer(async (req, res) => {
     const project = getProject(ctx, diffGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
     const requestText = body.request || 'default';
+    const resolvedRequest = resolveWorkflowEditRequest(project, requestText);
+    const effectiveRequestText = resolvedRequest.effectiveRequest;
+    const clarification = buildNodeClarification(project, effectiveRequestText);
+    if (clarification) {
+      const createdAt = new Date().toISOString();
+      appendAiConversation(project, [
+        {
+          id: `msg_user_${randomUUID()}`,
+          role: 'user',
+          content: requestText,
+          request: requestText,
+          workflow_version: project.workflow.version,
+          created_at: createdAt,
+        },
+        {
+          id: `msg_agent_${randomUUID()}`,
+          role: 'agent',
+          intent: 'add_node',
+          status: 'needs_clarification',
+          content: clarification.content,
+          clarification_questions: clarification.questions,
+          missing_fields: clarification.missing_fields,
+          reason: clarification.reason,
+          request: effectiveRequestText,
+          created_at: createdAt,
+        },
+      ]);
+      storage.saveProject(ctx.workspace_id, project);
+      return ok(res, ctx, { clarification, ai_conversation: project.ai_conversation, model_status: getModelStatus() });
+    }
     const contextScope = body.context_scope || body.contextScope || null;
     const agentContextPolicy = 'infer_context_from_request_and_workflow_json';
     const workflowIndex = buildWorkflowIndex(project.workflow);
     const outputContract = workflowDiffOutputContract();
-    let contextPlan = generateWorkflowContextPlan(requestText, workflowIndex);
+    let contextPlan = generateWorkflowContextPlan(effectiveRequestText, workflowIndex);
     let focusedSubgraph = extractFocusedSubgraph(project.workflow, project.assets, contextPlan);
-    const job = createJob(ctx, project, 'generate_workflow_diff', { request: requestText, context_policy: agentContextPolicy, workflow_index: workflowIndex }, readIdempotencyKey(req));
+    const job = createJob(ctx, project, 'generate_workflow_diff', { request: effectiveRequestText, user_request: requestText, context_policy: agentContextPolicy, workflow_index: workflowIndex }, readIdempotencyKey(req));
     let planResult = null;
     let modelResult = null;
     try {
       planResult = await runModel('workflow_context_plan', {
-        request: requestText,
+        request: effectiveRequestText,
         context_policy: agentContextPolicy,
         workflow_index: workflowIndex,
         output_contract: {
@@ -746,13 +884,13 @@ const server = createServer(async (req, res) => {
         contextPlan = modelContextPlan;
         focusedSubgraph = extractFocusedSubgraph(project.workflow, project.assets, contextPlan);
       }
-      modelCalls.unshift({ id: `call_${Date.now()}_plan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: planResult.model, purpose: 'workflow_context_plan', status: planResult.status, summary: planResult.output?.summary || `context plan: ${requestText}` });
+      modelCalls.unshift({ id: `call_${Date.now()}_plan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: planResult.model, purpose: 'workflow_context_plan', status: planResult.status, summary: planResult.output?.summary || `context plan: ${effectiveRequestText}` });
     } catch (error) {
       modelCalls.unshift({ id: `call_${Date.now()}_plan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().planning_model, purpose: 'workflow_context_plan', status: 'failed', summary: error.message });
     }
     try {
       modelResult = await runModel('workflow_diff', {
-        request: requestText,
+        request: effectiveRequestText,
         context_policy: agentContextPolicy,
         ...(contextScope ? { context_scope: contextScope } : {}),
         context_plan: contextPlan,
@@ -760,17 +898,23 @@ const server = createServer(async (req, res) => {
         focused_subgraph: focusedSubgraph,
         output_contract: outputContract,
       });
-      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_diff', status: modelResult.status, summary: modelResult.output?.summary || `diff request: ${requestText}` });
+      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_diff', status: modelResult.status, summary: modelResult.output?.summary || `diff request: ${effectiveRequestText}` });
     } catch (error) {
       modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().diff_model, purpose: 'workflow_diff', status: 'failed', summary: error.message });
     }
     runJob(ctx, project, job, (progress) => {
       progress('calling_model', 'Generating workflow diff');
-      const candidate = normalizeAgentDiff(modelResult?.output, requestText, project.workflow, contextPlan);
+      const candidate = normalizeAgentDiff(modelResult?.output, effectiveRequestText, project.workflow, contextPlan);
       const candidateHasChanges = Array.isArray(candidate?.changes) && candidate.changes.length > 0;
-      project.last_diff = candidateHasChanges ? candidate : generateWorkflowDiff(requestText, project.workflow, project.assets);
+      const generationSource = candidateHasChanges && modelResult?.status !== 'mock'
+        ? 'llm'
+        : (modelResult?.status === 'mock' ? 'mock_fallback' : (modelResult ? 'model_empty_fallback' : 'model_failed_fallback'));
+      project.last_diff = candidateHasChanges ? candidate : generateWorkflowDiff(effectiveRequestText, project.workflow, project.assets);
       project.last_diff.context_policy = agentContextPolicy;
       project.last_diff.context_plan = contextPlan;
+      project.last_diff.generation_source = generationSource;
+      project.last_diff.model_diff_status = modelResult?.status || 'failed';
+      project.last_diff.context_plan_status = planResult?.status || 'fallback';
       project.last_diff.focused_subgraph_summary = {
         phases: focusedSubgraph.phases.length,
         nodes: focusedSubgraph.nodes.length,
@@ -778,10 +922,34 @@ const server = createServer(async (req, res) => {
       };
       if (contextScope) project.last_diff.context_scope = contextScope;
       project.last_diff.status = 'draft';
+      const changes = project.last_diff.changes || [];
+      const createdAt = new Date().toISOString();
+      appendAiConversation(project, [
+        {
+          id: `msg_user_${randomUUID()}`,
+          role: 'user',
+          content: requestText,
+          request: requestText,
+          workflow_version: project.workflow.version,
+          created_at: createdAt,
+        },
+        {
+          id: `msg_agent_${randomUUID()}`,
+          role: 'agent',
+          diff_id: project.last_diff.id,
+          content: project.last_diff.summary || `${changes.length} changes proposed`,
+          request: effectiveRequestText,
+          changes_count: changes.length,
+          selected_count: changes.filter((change) => change.selected !== false).length,
+          generation_source: generationSource,
+          status: 'draft',
+          created_at: createdAt,
+        },
+      ]);
       return { type: 'workflow_diff', diff_id: project.last_diff.id };
     });
     storage.saveProject(ctx.workspace_id, project);
-    return ok(res, ctx, { job_id: job.id, diff: project.last_diff, model_status: getModelStatus() });
+    return ok(res, ctx, { job_id: job.id, diff: project.last_diff, model_status: getModelStatus(), ai_conversation: project.ai_conversation });
   }
 
   const diffGet = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)$/);
@@ -805,15 +973,19 @@ const server = createServer(async (req, res) => {
     markKitsStaleIfNeeded(project, previousVersion);
     diff.previous_version = previousVersion;
     diff.status = 'applied';
+    updateAiConversationMessage(project, diff.id, { status: 'applied' });
     storage.saveProject(ctx.workspace_id, project);
-    return ok(res, ctx, { workflow: project.workflow, validation_results: project.validation });
+    return ok(res, ctx, { workflow: project.workflow, validation_results: project.validation, ai_conversation: project.ai_conversation });
   }
 
   const diffReject = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)\/reject$/);
   if (method === 'POST' && diffReject) {
     const project = getProject(ctx, diffReject[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     if (!project.last_diff || project.last_diff.id !== diffReject[2]) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
-    project.last_diff.status = 'rejected'; storage.saveProject(ctx.workspace_id, project); return ok(res, ctx, { diff_id: project.last_diff.id, status: 'rejected' });
+    project.last_diff.status = 'rejected';
+    updateAiConversationMessage(project, project.last_diff.id, { status: 'rejected' });
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { diff_id: project.last_diff.id, status: 'rejected', ai_conversation: project.ai_conversation });
   }
   const diffRevert = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)\/revert$/);
   if (method === 'POST' && diffRevert) {

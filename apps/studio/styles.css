@@ -312,9 +312,13 @@ textarea { min-height: 82px; resize: vertical; }
 }
 .ai-conversation-drawer > .panel {
   border-right: 1px solid rgba(66, 87, 255, 0.20);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 .ai-conversation-drawer .toolbar {
   align-items: start;
+  flex: 0 0 auto;
 }
 .ai-conversation-drawer .row {
   gap: 7px;
@@ -322,6 +326,65 @@ textarea { min-height: 82px; resize: vertical; }
 .ai-conversation-drawer .row button {
   font-size: 12px;
   padding: 7px 9px;
+}
+.ai-chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+.ai-chat-empty {
+  border: 1px dashed rgba(148, 163, 184, 0.7);
+  border-radius: 14px;
+  padding: 18px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.62);
+}
+.ai-chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 92%;
+}
+.ai-chat-message.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.ai-chat-message.agent {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+.ai-chat-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+.ai-chat-bubble {
+  border: 1px solid rgba(201, 213, 230, 0.85);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.82);
+  box-shadow: var(--shadow-sm);
+}
+.ai-chat-message.user .ai-chat-bubble {
+  background: linear-gradient(135deg, rgba(66, 87, 255, 0.10), rgba(6, 182, 212, 0.10));
+  border-color: rgba(66, 87, 255, 0.24);
+}
+.ai-chat-bubble p {
+  margin: 0;
+}
+.ai-agent-summary {
+  display: grid;
+  gap: 5px;
+}
+.ai-clarification-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: #334155;
+}
+.ai-clarification-list li + li {
+  margin-top: 4px;
 }
 .ai-composer {
   position: absolute;
@@ -393,6 +456,30 @@ textarea { min-height: 82px; resize: vertical; }
 .diff-review {
   display: grid;
   gap: 10px;
+}
+.diff-pending {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(66, 87, 255, 0.22);
+  border-radius: 12px;
+  background: rgba(239, 246, 255, 0.88);
+  color: #1e3a8a;
+  font-size: 13px;
+}
+.diff-pending-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 0 rgba(66, 87, 255, 0.35);
+  animation: pending-pulse 1.2s ease-in-out infinite;
+}
+@keyframes pending-pulse {
+  0%, 100% { transform: scale(0.82); box-shadow: 0 0 0 0 rgba(66, 87, 255, 0.32); }
+  50% { transform: scale(1); box-shadow: 0 0 0 8px rgba(66, 87, 255, 0); }
 }
 .diff-summary {
   display: flex;

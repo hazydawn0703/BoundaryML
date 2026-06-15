@@ -48,6 +48,16 @@ const EDITABLE_NODE_FIELDS = [
   'checklistStatus',
 ];
 
+const PHASE_NAME_ALIASES = [
+  ['Discovery', ['\u63a2\u7d22', '\u53d1\u73b0']],
+  ['Product Design', ['\u4ea7\u54c1\u8bbe\u8ba1']],
+  ['Technical Design', ['\u6280\u672f\u8bbe\u8ba1']],
+  ['Development', ['\u5f00\u53d1']],
+  ['Testing', ['\u6d4b\u8bd5']],
+  ['Launch', ['\u53d1\u5e03', '\u4e0a\u7ebf']],
+  ['Unassigned', ['\u672a\u5206\u914d']],
+];
+
 function normalizeNodeDiffField(field) {
   return NODE_FIELD_ALIASES[field] || field;
 }
@@ -159,8 +169,29 @@ function findMatchingPhases(request, workflow) {
   const normalizedRequest = lower(request);
   return (workflow.phases || []).filter((phase) => {
     const name = lower(phase.name);
-    return name && normalizedRequest.includes(name);
+    const aliases = PHASE_NAME_ALIASES.find(([source]) => lower(source) === name)?.[1] || [];
+    return name && (normalizedRequest.includes(name) || aliases.some((alias) => normalizedRequest.includes(lower(alias))));
   });
+}
+
+function phaseMatchesToken(phase, token) {
+  const normalizedToken = lower(token);
+  const name = lower(phase?.name);
+  const aliases = PHASE_NAME_ALIASES.find(([source]) => lower(source) === name)?.[1] || [];
+  return Boolean(name && (normalizedToken.includes(name) || name.includes(normalizedToken) || aliases.some((alias) => normalizedToken.includes(lower(alias)) || lower(alias).includes(normalizedToken))));
+}
+
+function findPhaseFromAddNodeRequest(request, workflow) {
+  const source = String(request || '');
+  const chineseScoped = source.match(/(?:\u5728|\u5230|\u5411)\s*([^\s\uff0c\u3002,.;\uff1b\u201c\u201d"']+?)(?:\u9636\u6bb5|\u4e2d|\u91cc|\u5185)/);
+  const englishScoped = source.match(/(?:in|inside|to|under)\s+([a-z0-9 _-]+?)(?:\s+phase|\s+lane|\s+stage|\s+add|\s+create|$)/i);
+  const scoped = chineseScoped || englishScoped;
+  const token = scoped?.[1]?.trim();
+  if (token) {
+    const phase = (workflow.phases || []).find((item) => phaseMatchesToken(item, token));
+    if (phase) return phase;
+  }
+  return findMatchingPhases(request, workflow)[0] || null;
 }
 
 function extractRequestedPhaseName(userRequest) {
@@ -171,6 +202,11 @@ function extractRequestedPhaseName(userRequest) {
   const english = String(userRequest || '').match(/add (?:a |new )?phase (?:called |named )?([a-z0-9 _-]+)/i);
   if (english?.[1]) return english[1].trim();
   return '';
+}
+
+function extractQuotedName(userRequest) {
+  const quoted = String(userRequest || '').match(/[\u201c\u201d"']([^"\u201c\u201d']+)[\u201c\u201d"']/);
+  return quoted?.[1]?.trim() || '';
 }
 
 function compactNode(node, workflow) {
@@ -550,6 +586,118 @@ function buildHumanConfirmationChanges(userRequest, workflow) {
   return changes;
 }
 
+function extractRequestedNodeName(userRequest) {
+  const quoted = extractQuotedName(userRequest);
+  if (quoted) return quoted;
+  const english = String(userRequest || '').match(/add (?:a |new )?node (?:called |named )?([a-z0-9 _-]+)/i);
+  if (english?.[1]) return english[1].trim();
+  const chinese = String(userRequest || '').match(/(?:\u65b0\u589e|\u6dfb\u52a0|\u589e\u52a0)(?:\u4e00\u4e2a|\u65b0\u7684)?\u8282\u70b9\s*([^\s\uff0c\u3002,.;\uff1b]+)/);
+  if (chinese?.[1]) return chinese[1].trim();
+  return '';
+}
+
+function extractNodeDetailText(userRequest, field) {
+  const patterns = {
+    goal: [
+      /(?:goal|objective|purpose)\s*(?:is|:|=)\s*([^;\n]+)/i,
+      /(?:\u76ee\u6807|目的)\s*(?:是|为|:|：)\s*([^；;\n]+)/,
+    ],
+    inputs: [
+      /inputs?\s*(?:are|is|:|=)\s*([^;\n]+)/i,
+      /(?:\u8f93\u5165|依赖)\s*(?:是|为|:|：)\s*([^；;\n]+)/,
+    ],
+    outputs: [
+      /outputs?\s*(?:are|is|:|=)\s*([^;\n]+)/i,
+      /(?:\u8f93\u51fa|产出|交付物)\s*(?:是|为|:|：)\s*([^；;\n]+)/,
+    ],
+    owner: [
+      /(?:owner|responsible role|responsible)\s*(?:is|:|=)\s*([^;\n]+)/i,
+      /(?:\u8d1f\u8d23\u4eba|负责人|角色)\s*(?:是|为|:|：)\s*([^；;\n]+)/,
+    ],
+  };
+  for (const pattern of patterns[field] || []) {
+    const match = String(userRequest || '').match(pattern);
+    if (match?.[1]) return match[1].trim();
+  }
+  return '';
+}
+
+function extractNodeDetailList(userRequest, field, fallback = []) {
+  const value = extractNodeDetailText(userRequest, field);
+  if (!value) return fallback;
+  return value.split(/[,;，；、]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function inferRequestedRisk(userRequest) {
+  const request = lower(userRequest);
+  if (includesAny(request, ['high risk', 'risk high', '\u9ad8\u98ce\u9669', '\u98ce\u9669\u9ad8'])) return 'high';
+  if (includesAny(request, ['low risk', 'risk low', '\u4f4e\u98ce\u9669', '\u98ce\u9669\u4f4e'])) return 'low';
+  if (includesAny(request, ['medium risk', 'risk medium', '\u4e2d\u98ce\u9669', '\u98ce\u9669\u4e2d'])) return 'medium';
+  return 'medium';
+}
+
+function inferRequestedExecutionMode(userRequest) {
+  const request = lower(userRequest);
+  if (includesAny(request, ['human only', '\u7eaf\u4eba\u5de5', '\u4eba\u5de5\u6267\u884c'])) return 'human_only';
+  if (includesAny(request, ['ai execution with human approval', 'ai execute', '\u0041\u0049 \u6267\u884c\u540e\u4eba\u5de5\u5ba1\u6279', '\u4eba\u5de5\u5ba1\u6279'])) return 'ai_execute_human_approval';
+  if (includesAny(request, ['ai draft', 'human review', '\u0041\u0049 \u8d77\u8349', '\u4eba\u5de5\u5ba1\u6838'])) return 'ai_draft_human_review';
+  if (includesAny(request, ['ai assist', '\u0041\u0049 \u8f85\u52a9'])) return 'human_lead_ai_assist';
+  return 'human_only';
+}
+
+function buildRequestedNodeAddChanges(userRequest, workflow) {
+  const request = String(userRequest || '');
+  const addNodeIntent = includesAny(request, ['add node', 'add step', '\u65b0\u589e\u8282\u70b9', '\u6dfb\u52a0\u8282\u70b9', '\u589e\u52a0\u8282\u70b9']);
+  if (!addNodeIntent) return [];
+  const nodeName = extractRequestedNodeName(request);
+  if (!nodeName) return [];
+  const phase = findPhaseFromAddNodeRequest(request, workflow) || (workflow.phases || [])[0];
+  if (!phase) return [];
+  const nodeId = safeDiffId(`node-${phase.id}-${nodeName}`, `node-${Date.now()}`);
+  if ((workflow.nodes || []).some((node) => node.id === nodeId || node.name === nodeName)) return [];
+  const isChinese = requestHasChinese(request);
+  const goal = extractNodeDetailText(request, 'goal') || (isChinese ? `\u5b8c\u6210 ${nodeName}` : `Complete ${nodeName}`);
+  const inputs = extractNodeDetailList(request, 'inputs', []);
+  const outputs = extractNodeDetailList(request, 'outputs', [nodeName]);
+  const owner = extractNodeDetailText(request, 'owner') || 'Project Owner';
+  const executionMode = inferRequestedExecutionMode(request);
+  const node = {
+    id: nodeId,
+    phase_id: phase.id,
+    name: nodeName,
+    goal,
+    execution_mode: executionMode,
+    risk_level: inferRequestedRisk(request),
+    status: 'draft',
+    human_owner_role: owner,
+    ai_role: executionMode === 'human_only' ? '' : 'Workflow Assistant',
+    inputs,
+    outputs,
+    artifact_contract: {
+      id: `artifact-${nodeId}`,
+      format: 'markdown',
+      output_format: isChinese ? `${nodeName} \u4ea4\u4ed8\u7269` : `${nodeName} deliverable`,
+      acceptance_criteria: [isChinese ? '\u4ea4\u4ed8\u7269\u5185\u5bb9\u5b8c\u6574' : 'Deliverable is complete'],
+    },
+    review_gate: null,
+    prompt_status: 'not_required',
+    checklist_status: 'draft',
+    history: [{ at: new Date().toISOString(), action: 'Added by workflow edit agent' }],
+  };
+  return [{
+    id: `change-add-${nodeId}`,
+    type: 'added',
+    targetType: 'node',
+    targetId: nodeId,
+    field: 'node',
+    before: null,
+    after: node,
+    reason: `Add ${nodeName} to ${phase.name}`,
+    impact: 'adds a node to the requested workflow phase',
+    selected: true,
+  }];
+}
+
 function extractValueAfterVerb(userRequest) {
   const value = String(userRequest || '').match(/(?:to|as|=|:|\u4e3a|\u6539\u4e3a|\u6539\u6210|\u8bbe\u4e3a|\u8bbe\u7f6e\u4e3a|\u66f4\u65b0\u4e3a)\s*[\u201c\u201d"']?(.+?)[\u201c\u201d"']?\s*$/i);
   return value?.[1]?.trim() || '';
@@ -638,6 +786,7 @@ export function generateWorkflowDiff(userRequest, workflow, assets) {
   }
 
   changes.push(...buildHumanConfirmationChanges(userRequest, workflow));
+  changes.push(...buildRequestedNodeAddChanges(userRequest, workflow));
   changes.push(...buildNodeFieldUpdateChanges(userRequest, workflow));
 
   if (request.includes('add review gates to all high-risk nodes')) {
