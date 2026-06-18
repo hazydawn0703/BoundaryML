@@ -15,7 +15,7 @@ const defaultConfig = {
   log_level: process.env.BOUNDARYML_LLM_LOG_LEVEL || 'summary',
 };
 
-const configPath = resolve(process.env.BOUNDARYML_MODEL_CONFIG_PATH || process.env.BOUNDARYML_LLM_CONFIG_PATH || `${process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || './data'}/model-config.json`);
+const configPath = resolve(process.env.BOUNDARYML_MODEL_CONFIG_PATH || process.env.BOUNDARYML_LLM_CONFIG_PATH || `${process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || './data'}/model-config.json`);
 const editableFields = new Set(['provider', 'api_base_url', 'api_key', 'default_model', 'planning_model', 'prompt_model', 'diff_model', 'timeout_ms', 'structured_output_enabled', 'allow_mock', 'log_level']);
 const config = { ...defaultConfig, ...loadPersistedConfig() };
 

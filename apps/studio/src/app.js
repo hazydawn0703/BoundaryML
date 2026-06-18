@@ -100,6 +100,21 @@ const ZH_HANS_REPLACEMENTS = [
   ['Context Management', '上下文管理'],
   ['Execution Assets', '执行资产'],
   ['Create First Project', '创建第一个项目'],
+  ['Create with Agent', '与 Agent 对话创建'],
+  ['Describe the project you want to create. Example: Create an AI SaaS onboarding project, goal: reduce manual setup, current stage: discovery, deliverables: PRD and workflow draft.', '描述你想创建的项目。例如：创建一个 AI SaaS 入门项目，目标是减少手动配置，当前阶段是探索，交付物是 PRD 和工作流草稿。'],
+  ['Create Project with Agent', '用 Agent 创建项目'],
+  ['Cancel Agent Session', '取消 Agent 会话'],
+  ['Cancel', '\u53d6\u6d88'],
+  ['Agent is thinking...', 'Agent 正在思考...'],
+  ['Agent task', 'Agent \u4efb\u52a1'],
+  ['Continue next batch', '\u7ee7\u7eed\u4e0b\u4e00\u6279'],
+  ['Missing:', '待补充：'],
+  ['Creating...', '创建中...'],
+  ['Describe the project first.', '请先描述项目。'],
+  ['Configure LLM', '配置 LLM'],
+  ['Workflow Agent requires a configured LLM in Local Server mode.', 'Local Server 模式下使用 Workflow Agent 前必须先配置 LLM。'],
+  ['Configure an LLM in Settings / Model Access before using Workflow Agent.', '请先在“设置 / 模型访问”中配置 LLM，再使用 Workflow Agent。'],
+  ['Configure an LLM to use Workflow Agent...', '配置 LLM 后即可使用 Workflow Agent...'],
   ['Start with a project goal.', '从项目目标开始。'],
   ['BoundaryML will generate a human-AI workflow boundary draft.', 'BoundaryML 会生成一份人机协作边界工作流草稿。'],
   ['Data-driven projects powered by BoundaryML domain model.', '由 BoundaryML 领域模型驱动的数据化项目。'],
@@ -571,8 +586,73 @@ function renderProjectGrid(state) {
   }).join('')}</div>`;
 }
 
+function hasConfiguredLlm(state = getState()) {
+  return Boolean(
+    state.modelStatus?.configured
+    || state.modelConfig?.api_key_configured
+    || state.modelConfig?.apiKeyConfigured,
+  );
+}
+
+function requiresLocalServerLlm(state = getState()) {
+  return state.runtimeMode === 'local_server' && state.serverAvailable && !hasConfiguredLlm(state);
+}
+
+function openModelSettingsForAgent() {
+  const language = getState().language || 'en';
+  setState((prev) => ({
+    ...prev,
+    currentPage: 'settings-model',
+    settingsNavOpen: true,
+    projectAgent: { ...prev.projectAgent, pending: false },
+    aiEdit: { ...prev.aiEdit, pending: false },
+    serverError: '',
+  }));
+  showToast(translateText('Configure an LLM in Settings / Model Access before using Workflow Agent.', language), 'error');
+}
+
+function ensureAgentLlmConfigured(state = getState()) {
+  if (!requiresLocalServerLlm(state)) return true;
+  openModelSettingsForAgent();
+  return false;
+}
+
+function handleAgentLlmError(error) {
+  if (error?.code !== 'LLM_CONFIGURATION_REQUIRED') return false;
+  openModelSettingsForAgent();
+  return true;
+}
+
+function renderProjectAgentMessage(message, language = 'en') {
+  const role = message.role === 'user' ? 'user' : 'agent';
+  const label = translateText(role === 'user' ? 'You' : 'Agent', language);
+  const questions = message.clarification_questions || message.clarificationQuestions || [];
+  return `<div class="project-agent-message ${role}">
+    <strong>${label}</strong>
+    ${message.content ? `<p>${escapeAttr(message.content)}</p>` : ''}
+    ${questions.length ? `<ul>${questions.map((question) => `<li>${escapeAttr(question)}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+
 function renderCreatePage() {
-  return `<section class="page"><form class="card form" data-form="create-project">
+  const state = getState();
+  const language = state.language || 'en';
+  const llmRequired = requiresLocalServerLlm(state);
+  const agent = state.projectAgent || {};
+  const session = agent.session || {};
+  const messages = [...(session.messages || [])];
+  if (agent.pending && agent.request) {
+    messages.push({ role: 'user', content: agent.request });
+    messages.push({ role: 'agent', content: translateText('Agent is thinking...', language) });
+  }
+  const missing = session.missing_slots || session.missingSlots || [];
+  return `<section class="page"><div class="card form project-agent-card">
+    <label>Create with Agent<textarea data-action="set-project-agent-request" rows="3" placeholder="${llmRequired ? 'Configure an LLM to use Workflow Agent...' : 'Describe the project you want to create. Example: Create an AI SaaS onboarding project, goal: reduce manual setup, current stage: discovery, deliverables: PRD and workflow draft.'}" ${llmRequired ? 'disabled' : ''}>${agent.request || ''}</textarea></label>
+    ${llmRequired ? '<p class="inline-warning">Workflow Agent requires a configured LLM in Local Server mode.</p>' : ''}
+    ${missing.length ? `<p class="inline-warning">${translateText('Missing:', language)} ${missing.join(', ')}</p>` : ''}
+    ${messages.length ? `<div class="project-agent-messages">${messages.slice(-8).map((message) => renderProjectAgentMessage(message, language)).join('')}</div>` : ''}
+    <div class="actions">${llmRequired ? '<button type="button" data-action="open-model-settings" class="primary">Configure LLM</button>' : `<button type="button" data-action="send-project-agent" class="primary" ${agent.pending ? 'disabled' : ''}>${translateText(agent.pending ? 'Creating...' : 'Create Project with Agent', language)}</button>`}${(agent.session || agent.request) ? `<button type="button" data-action="clear-project-agent">${translateText('Cancel Agent Session', language)}</button>` : ''}</div>
+  </div><form class="card form" data-form="create-project">
     <div class="grid-2">
       <label>Project Name<input name="name" required/></label>
       <label>Project Goal<input name="goal" required/></label>
@@ -584,7 +664,7 @@ function renderCreatePage() {
       <label>Risk Level<select name="riskLevel"><option>low</option><option>medium</option><option>high</option></select></label>
       <label>Setup Mode<select name="setupMode"><option value="quick_start">Quick Start</option><option value="org_aware">Organization-Aware Setup</option></select></label>
     </div>
-    <div class="actions"><button type="button" data-action="goto" data-page="projects">Cancel</button><button type="submit" class="primary">Generate Workflow Draft</button></div>
+    <div class="actions"><button type="button" data-action="goto" data-page="projects">Cancel</button><button type="submit" class="primary" ${llmRequired ? 'disabled title="Configure LLM first"' : ''}>Generate Workflow Draft</button></div>
   </form></section>`;
 }
 
@@ -799,7 +879,8 @@ function renderPhaseMenu(state, phase) {
 function renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap, previewMap) {
   const phaseNodes = nodes.filter((node) => node.phaseId === phase.id);
   const effectiveNodes = phase.id === '__unassigned__' ? nodes.filter((n) => !project.workflow.phases.find((p) => p.id === n.phaseId)) : phaseNodes;
-  const previewNodes = (state.aiEdit.diff?.changes || [])
+  const activeDiff = state.aiEdit.diff || getActiveSessionDiff(project);
+  const previewNodes = (activeDiff?.changes || [])
     .filter((change) => change.selected !== false && changeTargetType(change) === 'node' && changeField(change) === 'node' && change.after)
     .map((change) => change.after)
     .filter((node) => (phase.id === '__unassigned__' ? !nodePhaseId(node) : nodePhaseId(node) === phase.id));
@@ -814,8 +895,9 @@ function renderPhaseLane(state, project, nodes, selectedNode, phase, relationMap
 
 function renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport = getWorkflowViewport(state)) {
   const relationMap = buildWorkflowRelationMap(project, selectedNode);
-  const previewMap = buildWorkflowDiffPreviewMap(state.aiEdit.diff);
-  const previewPhases = (state.aiEdit.diff?.changes || [])
+  const activeDiff = state.aiEdit.diff || getActiveSessionDiff(project);
+  const previewMap = buildWorkflowDiffPreviewMap(activeDiff);
+  const previewPhases = (activeDiff?.changes || [])
     .filter((change) => change.selected !== false && changeTargetType(change) === 'phase' && changeField(change) === 'phase' && change.after)
     .map((change) => ({ ...change.after, __preview: true }));
   const phases = [...project.workflow.phases, ...previewPhases, { id: '__unassigned__', name: 'Unassigned' }];
@@ -851,10 +933,13 @@ function renderStudio(state) {
 }
 
 function renderAiComposer(state, project, selectedNode) {
+  const llmRequired = requiresLocalServerLlm(state);
   return `<div class="ai-composer">
     <button class="icon-button ai-drawer-open" data-action="open-ai-edit" aria-label="Open AI Assisted Edit" title="Open AI Assisted Edit" aria-expanded="${state.aiEdit.open ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.history}</span></button>
-    <textarea data-action="set-ai-request" rows="1" placeholder="Ask BoundaryML to modify this workflow...">${state.aiEdit.request || ''}</textarea>
-    <button class="primary ai-send" data-action="generate-diff" aria-label="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" title="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" ${state.aiEdit.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span></button>
+    <textarea data-action="set-ai-request" rows="1" placeholder="${llmRequired ? 'Configure an LLM to use Workflow Agent...' : 'Ask BoundaryML to modify this workflow...'}" ${llmRequired ? 'disabled' : ''}>${state.aiEdit.request || ''}</textarea>
+    ${llmRequired
+      ? '<button class="primary ai-send ai-configure" data-action="open-model-settings" aria-label="Configure LLM" title="Configure LLM">Configure LLM</button>'
+      : `<button class="primary ai-send" data-action="generate-diff" aria-label="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" title="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" ${state.aiEdit.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span></button>`}
   </div>`;
 }
 
@@ -868,6 +953,16 @@ function workflowDiffSourceLabel(diff) {
     mock_fallback: 'Deterministic fallback after mock model',
     model_empty_fallback: 'Deterministic fallback after empty model response',
     model_failed_fallback: 'Deterministic fallback after model failure',
+    llm_repair: 'LLM repaired changes',
+    deterministic_repair: 'Deterministic repaired changes',
+    mock_repair_fallback: 'Deterministic repair after mock model',
+    model_empty_repair_fallback: 'Deterministic repair after empty model response',
+    deterministic_replan: 'Deterministic replanned changes',
+    llm_replan: 'LLM replanned changes',
+    mock_replan_fallback: 'Deterministic replan after mock model',
+    model_empty_replan_fallback: 'Deterministic replan after empty model response',
+    model_failed_replan_fallback: 'Deterministic replan after model failure',
+    slot_structured_fallback: 'Structured slot fallback',
     local_mock: 'Local mock fallback',
   };
   const source = diff?.generation_source || diff?.generationSource || 'unknown';
@@ -889,9 +984,65 @@ function renderDiffReview(state, diff = state.aiEdit.diff, includeActions = true
   </section>`;
 }
 
+function getActiveEditSession(project) {
+  const sessions = project?.editSessions || project?.edit_sessions || [];
+  return Array.isArray(sessions) ? sessions.find((session) => ['collecting_info', 'planning', 'diff_ready', 'awaiting_next_batch'].includes(session.status)) : null;
+}
+
+function getProjectLastDiff(project) {
+  return project?.lastDiff || project?.last_diff || null;
+}
+
+function getActiveSessionDiff(project) {
+  const session = getActiveEditSession(project);
+  const diff = getProjectLastDiff(project);
+  const candidateId = session?.candidate_diff_id || session?.candidateDiffId;
+  if (!session || !diff) return null;
+  if (candidateId && diff.id !== candidateId) return null;
+  return diff;
+}
+
 function getAiConversation(project) {
+  const activeSession = getActiveEditSession(project);
+  const sessionMessages = activeSession?.messages || [];
+  if (Array.isArray(sessionMessages) && sessionMessages.length) {
+    return sessionMessages.slice(-AI_CONVERSATION_LIMIT).map((message, index) => ({
+      id: message.id || `session-${activeSession.id}-${index}`,
+      role: message.role,
+      content: message.content,
+      request: message.request,
+      status: message.status,
+      diff_id: message.diff_id || message.diffId,
+      changes_count: message.changes_count || message.changesCount,
+      selected_count: message.selected_count || message.selectedCount,
+      generation_source: message.generation_source || message.generationSource,
+      validation_score: message.validation_score || message.validationScore,
+      clarification_questions: message.clarification_questions || message.clarificationQuestions,
+      candidate_nodes: message.candidate_nodes || message.candidateNodes || [],
+      critic: message.critic,
+      created_at: message.created_at || message.createdAt || message.at,
+    }));
+  }
   const conversation = project?.aiConversation || project?.ai_conversation || [];
   return Array.isArray(conversation) ? conversation.slice(-AI_CONVERSATION_LIMIT) : [];
+}
+
+function renderEditSessionStatus(project) {
+  const session = getActiveEditSession(project);
+  if (!session) return '';
+  const missing = session.missing_slots || session.missingSlots || [];
+  const plan = session.plan || [];
+  const validation = session.validation || [];
+  const trace = session.agent_trace || session.agentTrace || [];
+  const pendingIds = session.pending_change_ids || session.pendingChangeIds || [];
+  return `<section class="edit-session-status">
+    <div><strong>Agent task</strong><span>${session.intent || 'workflow_edit'} &middot; ${session.status || 'active'}</span></div>
+    ${session.status === 'awaiting_next_batch' ? `<button class="secondary compact" data-action="continue-edit-session" data-session-id="${session.id}">Continue next batch${pendingIds.length ? ` (${pendingIds.length})` : ''}</button>` : ''}
+    ${missing.length ? `<p class="inline-warning">Missing: ${missing.join(', ')}</p>` : ''}
+    ${trace.length ? `<div class="agent-trace">${trace.map((item) => `<div><strong>${item.stage}</strong><span>${item.status || '-'}</span>${Number.isFinite(Number(item.score)) ? `<em>${item.score}</em>` : ''}</div>`).join('')}</div>` : ''}
+    ${plan.length ? `<ol>${plan.map((step) => `<li><span>${step.title || step.id}</span><strong>${step.status || 'pending'}</strong></li>`).join('')}</ol>` : ''}
+    ${validation.length ? `<p class="muted">Validation: ${validation.filter((item) => item.level === 'error').length} errors, ${validation.filter((item) => item.level === 'warning').length} warnings</p>` : ''}
+  </section>`;
 }
 
 function renderAgentConversationSummary(message) {
@@ -900,17 +1051,20 @@ function renderAgentConversationSummary(message) {
   const rawCount = message.changes_count ?? message.changesCount;
   const count = Number.isFinite(Number(rawCount)) ? `${rawCount} changes` : '';
   const questions = message.clarification_questions || message.clarificationQuestions || [];
+  const candidateNodes = message.candidate_nodes || message.candidateNodes || [];
   return `<div class="ai-agent-summary">
     ${count ? `<strong>${count}</strong>` : ''}
     ${source ? `<span>${workflowDiffSourceLabel({ generation_source: source })}${status}</span>` : (status ? `<span>${status.slice(3)}</span>` : '')}
     ${message.content ? `<p>${message.content}</p>` : ''}
+    ${candidateNodes.length ? `<ul class="ai-clarification-list candidate-node-list">${candidateNodes.map((node) => `<li><button data-action="select-ai-candidate-node" data-node-name="${escapeAttr(node.name || node.id || '')}" data-node-id="${escapeAttr(node.id || '')}">${node.name || node.id} <span class="muted">${node.id || ''}</span></button></li>`).join('')}</ul>` : ''}
     ${questions.length ? `<ul class="ai-clarification-list">${questions.map((question) => `<li>${question}</li>`).join('')}</ul>` : ''}
   </div>`;
 }
 
 function renderAiConversationMessages(state, project) {
   const messages = getAiConversation(project);
-  const activeDiffId = state.aiEdit.diff?.id;
+  const activeDiff = state.aiEdit.diff || getActiveSessionDiff(project);
+  const activeDiffId = activeDiff?.id;
   const pendingMessages = state.aiEdit.pending
     ? [
       { id: 'pending-user', role: 'user', content: state.aiEdit.request || '' },
@@ -925,7 +1079,7 @@ function renderAiConversationMessages(state, project) {
     const showActiveDiff = role === 'agent' && activeDiffId && diffId === activeDiffId;
     const body = message.pending
       ? renderDiffPending()
-      : (showActiveDiff ? renderDiffReview(state, state.aiEdit.diff, true) : (role === 'agent' ? renderAgentConversationSummary(message) : `<p>${message.content || message.request || ''}</p>`));
+      : (showActiveDiff ? renderDiffReview(state, activeDiff, true) : (role === 'agent' ? renderAgentConversationSummary(message) : `<p>${message.content || message.request || ''}</p>`));
     return `<div class="ai-chat-message ${role}">
       <div class="ai-chat-meta">${role === 'user' ? 'You' : 'Agent'}${message.created_at || message.createdAt ? ` · ${message.created_at || message.createdAt}` : ''}</div>
       <div class="ai-chat-bubble">${body}</div>
@@ -938,6 +1092,7 @@ function renderAiEdit(state, project, selectedNode) {
   return `<aside class="ai-conversation-drawer">
     <article class="card panel">
     <div class="toolbar"><h3>AI Assisted Edit</h3><button class="icon-button" data-action="toggle-ai-edit" aria-label="Close AI Assisted Edit" title="Close">${ICONS.close}</button></div>
+    ${renderEditSessionStatus(project)}
     <div class="ai-chat-list">${renderAiConversationMessages(state, project)}</div>
     </article>
   </aside>`;
@@ -950,6 +1105,20 @@ function setProjectAiConversation(projectId, conversation) {
     projects: prev.projects.map((project) => (
       project.id === projectId ? { ...project, aiConversation: normalized, ai_conversation: normalized } : project
     )),
+  }));
+}
+
+function upsertProjectEditSession(projectId, editSession) {
+  if (!editSession) return;
+  const normalized = withCamelAliases(editSession);
+  setState((prev) => ({
+    ...prev,
+    projects: prev.projects.map((project) => {
+      if (project.id !== projectId) return project;
+      const sessions = project.editSessions || project.edit_sessions || [];
+      const nextSessions = [normalized, ...sessions.filter((session) => session.id !== normalized.id)].slice(0, 10);
+      return { ...project, editSessions: nextSessions, edit_sessions: nextSessions };
+    }),
   }));
 }
 
@@ -1343,6 +1512,32 @@ function render() {
   app.innerHTML = `<div class="app-shell ${isStudioPage ? 'studio-shell' : ''}" data-theme="open-source">${isStudioPage ? '' : renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
   localizeDom(state.language || 'en');
   autoResizeAiComposer();
+  ensureFieldSaveIndicators();
+}
+
+function fieldSaveKeyForElement(element) {
+  if (!element?.dataset?.action) return '';
+  return [element.dataset.action, element.dataset.nodeId || '', element.dataset.field || 'content'].join(':');
+}
+
+function ensureFieldSaveIndicators(root = app) {
+  root.querySelectorAll('[data-action="update-node-field"], [data-action="update-artifact-contract-field"], [data-action="update-gate-field"], [data-action="update-prompt-content"]').forEach((element) => {
+    const label = element.closest('label');
+    if (!label || label.querySelector(':scope > .field-save-status')) return;
+    const status = document.createElement('span');
+    status.className = 'field-save-status';
+    status.dataset.saveKey = fieldSaveKeyForElement(element);
+    label.appendChild(status);
+  });
+}
+
+function setFieldSaveStatus(element, status) {
+  const key = fieldSaveKeyForElement(element);
+  const label = element?.closest?.('label');
+  const target = label?.querySelector(':scope > .field-save-status') || app.querySelector(`.field-save-status[data-save-key="${CSS.escape(key)}"]`);
+  if (!target) return;
+  target.className = `field-save-status ${status}`;
+  target.textContent = status === 'saving' ? 'Saving...' : (status === 'saved' ? 'Saved' : (status === 'failed' ? 'Failed' : ''));
 }
 
 function refreshSidebar() {
@@ -1372,6 +1567,7 @@ function refreshWorkflowDetail() {
   }
   target.innerHTML = renderNodeDetail(state, project, selectedNode);
   localizeDom(state.language || 'en');
+  ensureFieldSaveIndicators(target);
 }
 
 function syncAiComposerButton() {
@@ -1644,6 +1840,8 @@ async function loadProjectRuntime(projectId, { navigate = true, projectSummaries
   const workflow = withCamelAliases(workflowPayload.workflow || rawProject.workflow || workflowPayload);
   const assets = withCamelAliases(workflowPayload.assets || assetsResult.data?.assets || assetsResult.data || rawProject.assets || { prompts: [], checklists: [], artifactTemplates: [] });
   const merged = { ...rawProject, workflow, assets };
+  const restoredSession = getActiveEditSession(merged);
+  const restoredDiff = getActiveSessionDiff(merged);
   setState((prev) => ({
     ...prev,
     projects: projectSummaries
@@ -1657,6 +1855,7 @@ async function loadProjectRuntime(projectId, { navigate = true, projectSummaries
     workflowHistory: withCamelAliases(historyResult.data || []),
     validationResults: withCamelAliases(workflowPayload.validation || workflowPayload.validation_results || prev.validationResults),
     selectedNodeId: merged.workflow?.nodes?.some((node) => node.id === prev.selectedNodeId) ? prev.selectedNodeId : null,
+    aiEdit: restoredSession ? { ...prev.aiEdit, open: true, pending: false, diff: restoredDiff ? withCamelAliases(restoredDiff) : null } : prev.aiEdit,
     serverError: '',
   }));
   return merged;
@@ -1699,6 +1898,10 @@ function handleAction(event) {
       state.settingsNavOpen = !state.settingsNavOpen;
     });
     refreshSidebar();
+    return;
+  }
+  if (action === 'open-model-settings') {
+    openModelSettingsForAgent();
     return;
   }
   if (action === 'goto') setState((prev) => ({ ...prev, currentPage: target.dataset.page, settingsNavOpen: target.dataset.page?.startsWith('settings') ? true : prev.settingsNavOpen }));
@@ -2336,8 +2539,71 @@ function handleAction(event) {
     return;
   }
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, request: target.dataset.suggestion } }));
+  if (action === 'send-project-agent') {
+    const st = getState();
+    if (!ensureAgentLlmConfigured(st)) return;
+    const request = (st.projectAgent?.request || '').trim();
+    if (!request) {
+      showToast(translateText('Describe the project first.', st.language || 'en'), 'error');
+      return;
+    }
+    setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, pending: true } }));
+    apiClient.projectAgentApi.message({ request, session_id: st.projectAgent?.session?.id, setup_mode: 'quick_start', output_language: st.language || 'en' })
+      .then(async ({ data }) => {
+        const session = withCamelAliases(data.project_creation_session || data.projectCreationSession || null);
+        if (data.project) {
+          const createdProject = withCamelAliases(data.project);
+          const generateResult = await apiClient.workflowApi.generate(createdProject.id);
+          setState((prev) => ({ ...prev, jobs: [generateResult.data, ...prev.jobs].slice(0, 10) }));
+          const projectsResult = await apiClient.projectsApi.list();
+          const projects = projectsResult.data?.projects || projectsResult.data || [];
+          await loadProjectRuntime(createdProject.id, { navigate: false, projectSummaries: projects });
+          setState((prev) => ({ ...prev, activeProjectId: createdProject.id, currentPage: 'studio', projectAgent: { request: '', session: null, pending: false } }));
+          return;
+        }
+        setState((prev) => ({ ...prev, projectAgent: { request: '', session, pending: false }, modelStatus: data.model_status || prev.modelStatus }));
+      })
+      .catch((error) => {
+        if (handleAgentLlmError(error)) return;
+        setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, pending: false }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` }));
+      });
+    return;
+  }
+  if (action === 'clear-project-agent') {
+    const st = getState();
+    const sessionId = st.projectAgent?.session?.id;
+    if (st.serverAvailable && sessionId) {
+      apiClient.projectAgentApi.message({ request: 'cancel project creation', session_id: sessionId, output_language: st.language || 'en' })
+        .finally(() => setState((prev) => ({ ...prev, projectAgent: { request: '', session: null, pending: false } })));
+    } else {
+      setState((prev) => ({ ...prev, projectAgent: { request: '', session: null, pending: false } }));
+    }
+    return;
+  }
+  if (action === 'select-ai-candidate-node') {
+    const st = getState();
+    if (!ensureAgentLlmConfigured(st)) return;
+    const project = getActiveProject(st);
+    const request = target.dataset.nodeName || target.dataset.nodeId || '';
+    if (!request) return;
+    setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, request, pending: true } }));
+    if (st.serverAvailable && project?.id) {
+      apiClient.editSessionsApi.message(project.id, { request, workflow_version: project.workflow.version })
+        .then(({ data }) => {
+          if (data.ai_conversation || data.aiConversation) setProjectAiConversation(project.id, data.ai_conversation || data.aiConversation);
+          if (data.edit_session || data.editSession) upsertProjectEditSession(project.id, data.edit_session || data.editSession);
+          setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, request: data.clarification ? request : '', diff: data.clarification ? null : withCamelAliases(data.diff) }, modelStatus: data.model_status || prev.modelStatus }));
+        })
+        .catch((error) => {
+          if (handleAgentLlmError(error)) return;
+          setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, pending: false }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` }));
+        });
+    }
+    return;
+  }
   if (action === 'generate-diff') {
     const st = getState();
+    if (!ensureAgentLlmConfigured(st)) return;
     const project = getActiveProject(st);
     const request = (st.aiEdit.request || '').trim();
     if (!request) {
@@ -2346,12 +2612,16 @@ function handleAction(event) {
     }
     setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: true } }));
     if (st.serverAvailable && project?.id) {
-      apiClient.diffsApi.generate(project.id, { request, workflow_version: project.workflow.version })
+      apiClient.editSessionsApi.message(project.id, { request, workflow_version: project.workflow.version })
         .then(({ data }) => {
           if (data.ai_conversation || data.aiConversation) setProjectAiConversation(project.id, data.ai_conversation || data.aiConversation);
+          if (data.edit_session || data.editSession) upsertProjectEditSession(project.id, data.edit_session || data.editSession);
           setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, request: data.clarification ? '' : prev.aiEdit.request, diff: data.clarification ? null : withCamelAliases(data.diff) }, jobs: data.job_id ? prev.jobs : prev.jobs, modelStatus: data.model_status || prev.modelStatus }));
         })
-        .catch((error) => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, pending: false }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+        .catch((error) => {
+          if (handleAgentLlmError(error)) return;
+          setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, pending: false }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` }));
+        });
     } else {
       const effectiveRequest = resolveLocalAiRequest(project, request);
       const clarification = buildLocalNodeClarification(project, effectiveRequest);
@@ -2371,27 +2641,61 @@ function handleAction(event) {
     setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: { ...prev.aiEdit.diff, changes: prev.aiEdit.diff.changes.map((c) => (c.id === target.dataset.changeId ? { ...c, selected: !c.selected } : c)) } } }));
   }
 
+  if (action === 'continue-edit-session') {
+    const st = getState();
+    if (!ensureAgentLlmConfigured(st)) return;
+    const project = getActiveProject(st);
+    const sessionId = target.dataset.sessionId || getActiveEditSession(project)?.id;
+    if (!st.serverAvailable || !project?.id || !sessionId) {
+      showToast('No active edit session to continue.', 'error');
+      return;
+    }
+    setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: true } }));
+    apiClient.editSessionsApi.next(project.id, sessionId)
+      .then(({ data }) => {
+        if (data.ai_conversation || data.aiConversation) setProjectAiConversation(project.id, data.ai_conversation || data.aiConversation);
+        if (data.edit_session || data.editSession) upsertProjectEditSession(project.id, data.edit_session || data.editSession);
+        setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, pending: false, diff: withCamelAliases(data.diff) }, modelStatus: data.model_status || prev.modelStatus }));
+      })
+      .catch((error) => {
+        if (handleAgentLlmError(error)) return;
+        setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, pending: false }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` }));
+      });
+    return;
+  }
+
   if (action === 'apply-diff-all' || action === 'apply-diff-selected') {
     const st = getState();
     const project = getActiveProject(st);
-    if (st.serverAvailable && project?.id && st.aiEdit.diff?.id) {
-      const selectedIds = action === 'apply-diff-selected' ? (st.aiEdit.diff.changes || []).filter((change) => change.selected !== false).map((change) => change.id) : [];
+    const activeDiff = st.aiEdit.diff || getActiveSessionDiff(project);
+    if (st.serverAvailable && project?.id && activeDiff?.id) {
+      const selectedIds = action === 'apply-diff-selected' ? (activeDiff.changes || []).filter((change) => change.selected !== false).map((change) => change.id) : [];
       if (action === 'apply-diff-selected' && !selectedIds.length) {
         showToast('Select at least one diff change to apply.', 'error');
         return;
       }
-      apiClient.diffsApi.apply(project.id, st.aiEdit.diff.id, { workflow_version: project.workflow.version, selected_change_ids: selectedIds })
+      const activeSession = getActiveEditSession(project);
+      const applyRequest = activeSession?.id
+        ? apiClient.editSessionsApi.apply(project.id, activeSession.id, { workflow_version: project.workflow.version, selected_change_ids: selectedIds })
+        : apiClient.diffsApi.apply(project.id, activeDiff.id, { workflow_version: project.workflow.version, selected_change_ids: selectedIds });
+      applyRequest
         .then(({ data }) => {
           if (data.ai_conversation || data.aiConversation) setProjectAiConversation(project.id, data.ai_conversation || data.aiConversation);
+          if (data.edit_session || data.editSession) upsertProjectEditSession(project.id, data.edit_session || data.editSession);
           return refreshProjectRuntime(project.id);
         })
-        .then(() => setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: false, request: '', diff: null, pending: false } })))
+        .then(() => {
+          const latestProject = getActiveProject(getState());
+          const latestSession = getActiveEditSession(latestProject);
+          const hasNextBatch = latestSession?.status === 'awaiting_next_batch';
+          setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: hasNextBatch, request: hasNextBatch ? prev.aiEdit.request : '', diff: null, pending: false } }));
+        })
         .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
-      const updated = applyWorkflowDiff(project, st.aiEdit.diff, action === 'apply-diff-selected');
-      markProjectWorkflowChanged(updated, 'Diff applied', st.aiEdit.diff.changes.filter((change) => change.selected !== false || action === 'apply-diff-all').map((change) => changeTargetId(change)).filter(Boolean));
+      const updated = applyWorkflowDiff(project, activeDiff, action === 'apply-diff-selected');
+      markProjectWorkflowChanged(updated, 'Diff applied', activeDiff.changes.filter((change) => change.selected !== false || action === 'apply-diff-all').map((change) => changeTargetId(change)).filter(Boolean));
       replaceActiveProject(updated);
-      updateLocalAiConversationStatus(project.id, st.aiEdit.diff.id, 'applied');
+      updateLocalAiConversationStatus(project.id, activeDiff.id, 'applied');
       setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: false, request: '', diff: null, pending: false } }));
     }
   }
@@ -2399,15 +2703,21 @@ function handleAction(event) {
   if (action === 'reject-diff') {
     const st = getState();
     const project = getActiveProject(st);
-    if (st.serverAvailable && project?.id && st.aiEdit.diff?.id) {
-      apiClient.diffsApi.reject(project.id, st.aiEdit.diff.id)
+    const activeDiff = st.aiEdit.diff || getActiveSessionDiff(project);
+    if (st.serverAvailable && project?.id && activeDiff?.id) {
+      const activeSession = getActiveEditSession(project);
+      const rejectRequest = activeSession?.id
+        ? apiClient.editSessionsApi.reject(project.id, activeSession.id)
+        : apiClient.diffsApi.reject(project.id, activeDiff.id);
+      rejectRequest
         .then(({ data }) => {
           if (data.ai_conversation || data.aiConversation) setProjectAiConversation(project.id, data.ai_conversation || data.aiConversation);
+          if (data.edit_session || data.editSession) upsertProjectEditSession(project.id, data.edit_session || data.editSession);
           setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: null } }));
         })
         .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
     } else {
-      if (project?.id && st.aiEdit.diff?.id) updateLocalAiConversationStatus(project.id, st.aiEdit.diff.id, 'rejected');
+      if (project?.id && activeDiff?.id) updateLocalAiConversationStatus(project.id, activeDiff.id, 'rejected');
       setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, diff: null } }));
     }
   }
@@ -2825,6 +3135,12 @@ function handleInput(event) {
     autoResizeAiComposer();
     return;
   }
+  if (target.dataset.action === 'set-project-agent-request') {
+    updateUiStateSilently((state) => {
+      state.projectAgent.request = target.value;
+    });
+    return;
+  }
 
   if (target.dataset.action === 'edit-asset-field') {
     const st = getState();
@@ -2859,9 +3175,10 @@ function handleInput(event) {
     const field = target.dataset.field;
     const value = (field === 'inputs' || field === 'outputs') ? target.value.split('\n').map((x) => x.trim()).filter(Boolean) : target.value;
     if (st.serverAvailable && project?.id) {
+      setFieldSaveStatus(target, 'saving');
       apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, [field]: value })
-        .then(() => refreshProjectRuntime(project.id))
-        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+        .then(() => { setFieldSaveStatus(target, 'saved'); return refreshProjectRuntime(project.id); })
+        .catch((error) => { setFieldSaveStatus(target, 'failed'); setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })); });
     } else {
       updateActiveProject((draft) => {
         const node = draft.workflow.nodes.find((n) => n.id === nodeId);
@@ -2900,9 +3217,10 @@ function handleInput(event) {
     artifactContract[field] = (field === 'required_sections' || field === 'completion_criteria') ? target.value.split('\n').map((x) => x.trim()).filter(Boolean) : target.value;
     if (field === 'format') artifactContract.outputFormat = artifactContract.format;
     if (st.serverAvailable && project?.id) {
+      setFieldSaveStatus(target, 'saving');
       apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, artifactContract })
-        .then(() => refreshProjectRuntime(project.id))
-        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+        .then(() => { setFieldSaveStatus(target, 'saved'); return refreshProjectRuntime(project.id); })
+        .catch((error) => { setFieldSaveStatus(target, 'failed'); setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })); });
     }
   }
   if (target.dataset.action === 'edge-edit-field') {
@@ -2921,9 +3239,10 @@ function handleInput(event) {
       const nextGate = structuredClone(activeNode.reviewGate);
       if (target.dataset.field === 'criteria') nextGate.criteria = target.value.split('\n').filter(Boolean);
       else nextGate[target.dataset.field] = target.value;
+      setFieldSaveStatus(target, 'saving');
       apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, reviewGate: nextGate })
-        .then(() => refreshProjectRuntime(project.id))
-        .catch((error) => setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })));
+        .then(() => { setFieldSaveStatus(target, 'saved'); return refreshProjectRuntime(project.id); })
+        .catch((error) => { setFieldSaveStatus(target, 'failed'); setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })); });
     } else {
       updateActiveProject((draft) => {
         const node = draft.workflow.nodes.find((n) => n.id === nodeId);
@@ -2942,12 +3261,14 @@ function handleInput(event) {
     if (st.serverAvailable && project?.id) {
       const prompt = project.assets.prompts.find((p) => p.nodeId === nodeId || p.node_id === nodeId);
       if (!prompt?.id) return;
+      setFieldSaveStatus(target, 'saving');
       apiClient.assetsApi.update(project.id, prompt.id, { content: target.value, status: 'draft' })
         .then(() => apiClient.assetsApi.list(project.id))
         .then(({ data }) => updateActiveProject((draft) => {
           draft.assets = data.assets || data || draft.assets;
         }, 'Prompt edited', [nodeId]))
-        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update prompt content' })));
+        .then(() => setFieldSaveStatus(target, 'saved'))
+        .catch((error) => { setFieldSaveStatus(target, 'failed'); setState((prev) => ({ ...prev, serverError: error.message || 'Failed to update prompt content' })); });
     } else {
       updateActiveProject((draft) => {
         const prompt = draft.assets.prompts.find((p) => p.nodeId === nodeId);
@@ -2986,6 +3307,7 @@ function handleInput(event) {
 function handleSubmit(event) {
   if (event.target.dataset.form === 'create-project') {
     event.preventDefault();
+    if (!ensureAgentLlmConfigured(getState())) return;
     const data = Object.fromEntries(new FormData(event.target));
     const projectInput = {
       ...data,
@@ -3015,12 +3337,14 @@ function handleSubmit(event) {
       await loadProjectRuntime(createdProject.id, { navigate: false, projectSummaries: projects });
       setState((prev) => ({ ...prev, activeProjectId: createdProject.id, currentPage: data.setupMode === 'org_aware' ? 'context' : 'studio' }));
     }).catch((error) => {
+      if (handleAgentLlmError(error)) return;
       setState((prev) => ({ ...prev, serverError: error.message || 'Failed to create project' }));
     });
   }
 
   if (event.target.dataset.form === 'context-pack') {
     event.preventDefault();
+    if (!ensureAgentLlmConfigured(getState())) return;
     const raw = Object.fromEntries(new FormData(event.target));
     const state = getState();
     const active = getActiveProject(state);
@@ -3037,6 +3361,7 @@ function handleSubmit(event) {
       replaceActiveProject(updatedProject);
       setState((prev) => ({ ...prev, currentPage: 'studio' }));
     }).catch((error) => {
+      if (handleAgentLlmError(error)) return;
       setState((prev) => ({ ...prev, serverError: error.message || 'Failed to save context pack' }));
     });
   }

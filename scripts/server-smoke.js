@@ -54,6 +54,7 @@ async function main() {
   const tmpDataDir = `.tmp-server-smoke-${Date.now()}`;
   const env = { ...process.env, BOUNDARYML_SERVER_PORT: port, BOUNDARYML_STORAGE_ADAPTER: 'file', BOUNDARYML_DATA_DIR: tmpDataDir };
   let server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
+  server.stderr.on('data', (chunk) => process.stderr.write(chunk));
   try {
     await waitForServer(baseUrl);
     const health = await apiFetch(baseUrl, '/api/health'); assert(health.status === 200, 'health should return 200');
@@ -118,6 +119,74 @@ async function main() {
     const preview = await apiFetch(baseUrl, `/api/projects/${projectId}/execution-kits/preview`, { method: 'POST', body: JSON.stringify({ kit_type: 'draft' }) });
     assert(preview.body.data.preview?.files?.['workflow_spec.yaml'], 'execution kit preview should include workflow_spec.yaml');
     await apiFetch(baseUrl, `/api/projects/${projectId}/jobs`);
+
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ clear_api_key: true, allow_mock: true }) });
+    const blockedProjectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', { method: 'POST', body: JSON.stringify({ request: 'create a project' }) });
+    assert(blockedProjectAgent.status === 428 && blockedProjectAgent.body.error.code === 'LLM_CONFIGURATION_REQUIRED', 'project creation Agent should require a configured LLM in Local Server mode');
+    const blockedWorkflowGeneration = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/generate`, { method: 'POST' });
+    assert(blockedWorkflowGeneration.status === 428 && blockedWorkflowGeneration.body.error.code === 'LLM_CONFIGURATION_REQUIRED', 'workflow generation should require a configured LLM in Local Server mode');
+    const blockedWorkflowEdit = await apiFetch(baseUrl, `/api/projects/${projectId}/edit-sessions/messages`, { method: 'POST', body: JSON.stringify({ request: 'make this workflow more conservative' }) });
+    assert(blockedWorkflowEdit.status === 428 && blockedWorkflowEdit.body.error.code === 'LLM_CONFIGURATION_REQUIRED', 'Workflow Edit Agent should require a configured LLM in Local Server mode');
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ api_base_url: 'http://127.0.0.1:1/v1', api_key: 'sk-agent-smoke', timeout_ms: 1000, allow_mock: true }) });
+    const projectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        output_language: 'zh-Hans',
+        request: '\u9879\u76ee\u540d\u79f0\u662f\u5ba2\u6237\u5165\u95e8\u52a9\u624b\uff0c\u76ee\u6807\u662f\u7f29\u77ed\u5ba2\u6237\u4e0a\u7ebf\u65f6\u95f4\uff0c\u5f53\u524d\u9636\u6bb5\u662f\u63a2\u7d22\uff0c\u76ee\u6807\u4ea4\u4ed8\u7269\u662f PRD\u3001\u5de5\u4f5c\u6d41\u8349\u7a3f\u548c\u53d1\u5e03\u6e05\u5355\uff0c\u9884\u671f AI \u8303\u56f4\u662f\u751f\u6210\u63d0\u793a\u8bcd\u548c\u68c0\u67e5\u6e05\u5355\uff0c\u654f\u611f\u533a\u57df\u662f\u5ba2\u6237\u9690\u79c1\uff0c\u56e2\u961f\u89d2\u8272\u6709 PM\u3001\u8bbe\u8ba1\u5e08\uff0c\u5ba1\u6279\u6d41\u7a0b\u662f PM Review\uff0c\u5de5\u5177\u6808\u662f GitHub\uff0c\u98ce\u9669\u7ea6\u675f\u662f\u4e0d\u80fd\u66b4\u9732\u5ba2\u6237\u6570\u636e\u3002',
+      }),
+    });
+    const agentProject = projectAgent.body.data.project;
+    assert(agentProject?.name === '\u5ba2\u6237\u5165\u95e8\u52a9\u624b', 'project agent should isolate the project name from a multi-field request');
+    assert(agentProject.target_deliverables.length > 0 && !agentProject.target_deliverables.join(' ').includes('AI \u8303\u56f4'), `project agent should stop deliverables at the next labeled field: ${JSON.stringify(agentProject.target_deliverables)}`);
+    assert(agentProject.expected_ai_scope.length === 1 && !agentProject.expected_ai_scope[0].includes('\u654f\u611f\u533a\u57df'), 'project agent should isolate AI scope from sensitive areas');
+    assert(agentProject.context_pack.team_roles[0] === 'PM', 'project agent should remove Chinese linking words from Context Pack values');
+    assert(agentProject.context_pack.tool_stack[0] === 'GitHub', 'project agent should isolate tool stack from following constraints');
+
+    const agentEditProject = await apiFetch(baseUrl, '/api/projects', { method: 'POST', body: JSON.stringify({ name: 'agent-replan-project', goal: 'exercise multi-batch replanning' }) });
+    const agentEditProjectId = agentEditProject.body.data.id;
+    const agentGenerated = await apiFetch(baseUrl, `/api/projects/${agentEditProjectId}/workflow/generate`, { method: 'POST' });
+    const agentWorkflow = structuredClone(agentGenerated.body.data.workflow);
+    agentWorkflow.nodes = agentWorkflow.nodes.map((node, index) => index < 3
+      ? { ...node, risk_level: 'high', review_gate: null, reviewGate: null }
+      : node);
+    const agentPrepared = await apiFetch(baseUrl, `/api/projects/${agentEditProjectId}/workflow`, {
+      method: 'PATCH',
+      body: JSON.stringify({ workflow_version: agentWorkflow.version, nodes: agentWorkflow.nodes }),
+    });
+    const firstBatch = await apiFetch(baseUrl, `/api/projects/${agentEditProjectId}/edit-sessions/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ request: 'add review gates to all high-risk nodes', batch_size: 1 }),
+    });
+    const firstBatchDiff = firstBatch.body.data.diff;
+    const firstBatchSession = firstBatch.body.data.edit_session;
+    assert(firstBatchDiff?.changes?.length === 1, 'workflow agent should expose only the first planned batch for review');
+    assert(firstBatchSession.all_changes.length >= 3, 'workflow agent should retain the complete multi-step plan behind the first batch');
+    const firstBatchApplied = await apiFetch(baseUrl, `/api/projects/${agentEditProjectId}/diffs/${firstBatchDiff.id}/apply`, {
+      method: 'POST',
+      body: JSON.stringify({ workflow_version: agentPrepared.body.data.workflow.version }),
+    });
+    assert(firstBatchApplied.body.data.edit_session.status === 'awaiting_next_batch', 'applying the first batch should preserve remaining planned work');
+    const previousPendingIds = firstBatchApplied.body.data.edit_session.pending_change_ids;
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ clear_api_key: true }) });
+    const blockedNextBatch = await apiFetch(baseUrl, `/api/projects/${agentEditProjectId}/edit-sessions/${firstBatchSession.id}/next`, { method: 'POST' });
+    assert(blockedNextBatch.status === 428 && blockedNextBatch.body.error.code === 'LLM_CONFIGURATION_REQUIRED', 'continuing Workflow Agent batches should require the LLM configuration to remain available');
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ api_key: 'sk-agent-smoke' }) });
+    const replanned = await apiFetch(baseUrl, `/api/projects/${agentEditProjectId}/edit-sessions/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ request: 'add testing nodes before launch', batch_size: 1 }),
+    });
+    assert(replanned.body.data.edit_session.id === firstBatchSession.id, 'replanning should continue the active edit session');
+    assert(replanned.body.data.edit_session.status === 'diff_ready', 'a replacement plan should return to diff review');
+    assert(replanned.body.data.diff?.changes?.[0]?.targetId === 'node-regression-check', 'replanning should replace pending work with the newly requested workflow change');
+    assert(previousPendingIds.every((id) => replanned.body.data.edit_session.skipped_change_ids.includes(id)), 'replanning should mark the superseded pending changes as skipped');
+    assert(replanned.body.data.edit_session.agent_trace.some((item) => item.stage === 'replanner'), 'replanning should record a traceable planner transition');
+    const replannedApplied = await apiFetch(baseUrl, `/api/projects/${agentEditProjectId}/diffs/${replanned.body.data.diff.id}/apply`, {
+      method: 'POST',
+      body: JSON.stringify({ workflow_version: firstBatchApplied.body.data.workflow.version }),
+    });
+    assert(replannedApplied.body.data.workflow.nodes.some((node) => node.id === 'node-regression-check'), 'the replacement workflow batch should remain applicable');
+    assert(replannedApplied.body.data.edit_session.status === 'applied', 'the replanned session should finish after its replacement work is applied');
+
     server.kill('SIGTERM'); await sleep(400);
     server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
     await waitForServer(baseUrl);
