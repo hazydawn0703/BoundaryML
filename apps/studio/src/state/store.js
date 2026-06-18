@@ -16,6 +16,7 @@ function initialState() {
     validationResults: validateWorkflow(exampleProject.workflow, exampleProject.assets),
     activeNodeDetailTab: 'overview',
     aiEdit: { open: false, request: '', diff: null, pending: false },
+    projectAgent: { request: '', session: null, pending: false },
     exportPreviewType: 'workflow_spec.yaml',
     settingsNavOpen: false,
     projectSearch: '',
@@ -30,6 +31,7 @@ function initialState() {
     modelStatus: null,
     modelConfig: null,
     toasts: [],
+    fieldSaveStatus: {},
     modelTestPending: false,
     serverError: '',
   };
@@ -60,6 +62,11 @@ function persistUiState() {
     runtimeMode: state.runtimeMode,
     serverAvailable: state.serverAvailable,
     language: state.language || 'en',
+    projectAgent: {
+      request: state.projectAgent?.request || '',
+      session: state.projectAgent?.session || null,
+      pending: false,
+    },
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 }

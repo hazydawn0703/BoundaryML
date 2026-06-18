@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createWorkflowFromTemplate, applyWorkflowPatch, applyDiff, createWorkflowSnapshot, markAffectedAssetsOutdated, normalizeWorkflowSpec } from '../../../packages/core/src/engine.js';
 import { getTemplateById, listPublicTemplates, selectTemplateForProject } from '../../../packages/core/src/templates.js';
 import { generateWorkflowDraft } from '../../../packages/generators/src/workflowGenerator.js';
@@ -20,12 +20,18 @@ import { detectSchemaVersion, migrateObjectIfNeeded } from '../../../packages/sc
 const port = Number(process.env.BOUNDARYML_SERVER_PORT || process.env.PORT || 8787);
 const runtimeMode = 'local_server';
 const storageAdapter = process.env.BOUNDARYML_STORAGE_ADAPTER || process.env.STORAGE_MODE || 'file';
-const dataDir = process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || './data';
+const dataDir = process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || './data';
 if (storageAdapter === 'file') mkdirSync(dataDir, { recursive: true });
 const storage = storageAdapter === 'file' ? new FileStorage(dataDir) : new MemoryStorage();
 const ACTIVE_JOB_STATUS = new Set(['queued', 'running', 'succeeded']);
 const modelCalls = [];
 const AI_CONVERSATION_LIMIT = 20;
+const EDIT_SESSION_LIMIT = 10;
+const DEFAULT_EDIT_SESSION_BATCH_SIZE = 4;
+const ACTIVE_EDIT_SESSION_STATUS = new Set(['collecting_info', 'planning', 'diff_ready', 'awaiting_next_batch']);
+const PROJECT_CREATION_SESSION_LIMIT = 20;
+const projectCreationSessions = new Map();
+const projectCreationSessionsPath = `${dataDir}/project-creation-sessions.json`;
 
 function makeContext() {
   return {
@@ -45,6 +51,20 @@ function ok(res, ctx, data, statusCode = 200) {
 
 function fail(res, ctx, statusCode, code, message, details = []) {
   respond(res, statusCode, { ok: false, error: { code, message, details }, meta: { requestId: ctx.request_id } });
+}
+
+function requireConfiguredLlm(res, ctx, capability) {
+  const status = getModelStatus();
+  if (status.configured) return true;
+  fail(
+    res,
+    ctx,
+    428,
+    'LLM_CONFIGURATION_REQUIRED',
+    `Configure an LLM in Settings / Model Access before using ${capability}.`,
+    [{ field: 'api_key', settings_page: 'settings-model' }],
+  );
+  return false;
 }
 
 function ensureAiConversation(project) {
@@ -73,6 +93,646 @@ function updateAiConversationMessage(project, diffId, patch) {
   return project.ai_conversation;
 }
 
+function ensureEditSessions(project) {
+  const sessions = project.edit_sessions || project.editSessions || [];
+  project.edit_sessions = Array.isArray(sessions) ? sessions : [];
+  project.editSessions = project.edit_sessions;
+  return project.edit_sessions;
+}
+
+function getActiveEditSession(project) {
+  return ensureEditSessions(project).find((session) => ACTIVE_EDIT_SESSION_STATUS.has(session.status)) || null;
+}
+
+function saveEditSession(project, session) {
+  const sessions = ensureEditSessions(project).filter((item) => item.id !== session.id);
+  project.edit_sessions = [session, ...sessions].slice(0, EDIT_SESSION_LIMIT);
+  project.editSessions = project.edit_sessions;
+  return session;
+}
+
+function appendEditSessionMessage(session, message) {
+  if (!session) return session;
+  const now = new Date().toISOString();
+  session.messages = [...(Array.isArray(session.messages) ? session.messages : []), { at: now, ...message }].slice(-AI_CONVERSATION_LIMIT);
+  session.updated_at = now;
+  return session;
+}
+
+function findWorkflowPhase(project, text) {
+  const value = String(text || '').toLowerCase();
+  const aliases = [
+    ['launch', '\u53d1\u5e03', '\u4e0a\u7ebf', 'release'],
+    ['testing', '\u6d4b\u8bd5', 'qa', '\u9a8c\u6536'],
+    ['development', '\u5f00\u53d1', '\u5b9e\u73b0', '\u7f16\u7801'],
+    ['technical design', '\u6280\u672f\u8bbe\u8ba1', '\u67b6\u6784\u8bbe\u8ba1'],
+    ['product design', '\u4ea7\u54c1\u8bbe\u8ba1', 'prd', '\u9700\u6c42\u8bbe\u8ba1'],
+    ['discovery', '\u63a2\u7d22', '\u8c03\u7814', '\u53d1\u73b0'],
+  ];
+  return (project.workflow?.phases || []).find((phase) => {
+    const phaseName = String(phase.name || '').toLowerCase();
+    const aliasGroup = aliases.find((group) => group.includes(phaseName)) || [];
+    return [phase.name, phase.id, ...aliasGroup].some((name) => name && value.includes(String(name).toLowerCase()));
+  }) || null;
+}
+
+function firstQuotedText(text) {
+  const match = String(text || '').match(/[\u201c\u201d"']([^"\u201c\u201d']+)[\u201c\u201d"']/);
+  return match?.[1]?.trim() || '';
+}
+
+function extractAgentSlotText(text, field) {
+  const patterns = {
+    goal: [/(?:goal|objective|purpose)\s*(?:is|:|=)\s*([^;\n]+)/i, /(?:\u76ee\u6807|\u76ee\u7684|\u7528\u4e8e|\u7528\u6765)\s*(?:\u662f|\u4e3a|:|\uff1a)?\s*([^\uff0c\u3002\uff1b;\n]+)/],
+    inputs: [/(?:inputs?|depends? on)\s*(?:are|is|:|=)\s*([^;\n]+)/i, /(?:\u8f93\u5165|\u4f9d\u8d56|\u57fa\u4e8e)\s*(?:\u662f|\u4e3a|:|\uff1a)?\s*([^\uff0c\u3002\uff1b;\n]+)/],
+    outputs: [/(?:outputs?|deliverables?)\s*(?:are|is|:|=)\s*([^;\n]+)/i, /(?:\u8f93\u51fa|\u4ea7\u51fa|\u4ea4\u4ed8\u7269)\s*(?:\u662f|\u4e3a|:|\uff1a)?\s*([^\uff0c\u3002\uff1b;\n]+)/],
+    owner: [/(?:owner|responsible role|responsible)\s*(?:is|:|=)\s*([^;\n]+)/i, /(?:\u8d1f\u8d23\u4eba|\u8d1f\u8d23\u89d2\u8272|\u8d23\u4efb\u4eba|owner)\s*(?:\u662f|\u4e3a|:|\uff1a)?\s*([^\uff0c\u3002\uff1b;\n]+)/i],
+  };
+  for (const pattern of patterns[field] || []) {
+    const match = String(text || '').match(pattern);
+    if (match?.[1]) return match[1].trim();
+  }
+  return '';
+}
+
+function splitAgentSlotList(value) {
+  return String(value || '').split(/[,;\uff0c\uff1b\u3001/]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function inferEditIntent(text, contextPlan = null) {
+  const operations = contextPlan?.operation_scope || contextPlan?.operationScope || [];
+  if (operations.includes('add_node') || isAddNodeRequest(text)) return 'add_node';
+  if (operations.includes('add_phase') || textIncludesAny(text, ['add phase', '\u65b0\u589e\u9636\u6bb5', '\u6dfb\u52a0\u9636\u6bb5', '\u589e\u52a0\u9636\u6bb5'])) return 'add_phase';
+  if (operations.includes('delete_node') || textIncludesAny(text, ['delete node', 'remove node', '\u5220\u9664\u8282\u70b9', '\u79fb\u9664\u8282\u70b9'])) return 'delete_node';
+  if (operations.includes('update_node') || textIncludesAny(text, ['update node', 'change node', '\u4fee\u6539\u8282\u70b9', '\u66f4\u65b0\u8282\u70b9'])) return 'update_node';
+  return 'workflow_edit';
+}
+
+function mergeEditSlots(previous = {}, next = {}) {
+  const merged = { ...previous };
+  for (const [key, value] of Object.entries(next || {})) {
+    if ((key === 'target_phase_id' || key === 'target_phase_name') && merged[key]) continue;
+    if (Array.isArray(value)) {
+      if (value.length) merged[key] = value;
+    } else if (value !== null && value !== undefined && value !== '') {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function buildEditSlots(project, intent, text) {
+  if (intent === 'add_node') {
+    const phase = findWorkflowPhase(project, text);
+    return {
+      node_name: firstQuotedText(text) || '',
+      target_phase_id: phase?.id || null,
+      target_phase_name: phase?.name || null,
+      goal: extractAgentSlotText(text, 'goal') || null,
+      inputs: splitAgentSlotList(extractAgentSlotText(text, 'inputs')),
+      outputs: splitAgentSlotList(extractAgentSlotText(text, 'outputs')),
+      owner: extractAgentSlotText(text, 'owner') || null,
+      risk: textIncludesAny(text, ['high risk', '\u9ad8\u98ce\u9669', '\u98ce\u9669\u9ad8']) ? 'high'
+        : (textIncludesAny(text, ['low risk', '\u4f4e\u98ce\u9669', '\u98ce\u9669\u4f4e']) ? 'low'
+          : (textIncludesAny(text, ['risk', '\u98ce\u9669']) ? 'medium' : null)),
+      execution: textIncludesAny(text, ['human only', '\u4eba\u5de5\u6267\u884c', '\u7eaf\u4eba\u5de5']) ? 'human_only'
+        : (textIncludesAny(text, ['ai execute', 'AI \u6267\u884c', '\u4eba\u5de5\u5ba1\u6279']) ? 'ai_execute_human_approval'
+          : (textIncludesAny(text, ['ai draft', 'AI \u8d77\u8349', '\u4eba\u5de5\u5ba1\u6838']) ? 'ai_draft_human_review' : null)),
+    };
+  }
+  if (intent === 'update_node') {
+    const matches = matchingWorkflowNodes(project, text);
+    const target = matches.length === 1 ? matches[0] : null;
+    const field = inferServerNodeEditField(text);
+    const value = extractServerEditValue(text);
+    return {
+      target_node_id: target?.id || target?.node_id || null,
+      target_node_name: target?.name || null,
+      field: field || null,
+      value: value || null,
+    };
+  }
+  return {};
+}
+
+function findMissingEditSlots(intent, slots) {
+  if (intent === 'update_node') {
+    return [
+      !slots.target_node_id ? 'target_node' : null,
+      !slots.field ? 'field' : null,
+      slots.value === null || slots.value === undefined || slots.value === '' ? 'value' : null,
+    ].filter(Boolean);
+  }
+  if (intent !== 'add_node') return [];
+  return [
+    !slots.node_name ? 'node_name' : null,
+    !slots.goal ? 'goal' : null,
+    !slots.inputs?.length ? 'inputs' : null,
+    !slots.outputs?.length ? 'outputs' : null,
+    !slots.owner ? 'owner' : null,
+    !slots.risk ? 'risk' : null,
+    !slots.execution ? 'execution' : null,
+  ].filter(Boolean);
+}
+
+function createEditPlan(intent, slots, contextPlan = {}) {
+  if (intent === 'add_node') {
+    return [
+      { id: 'slot-check', title: 'Confirm required node details', status: findMissingEditSlots(intent, slots).length ? 'needs_input' : 'done' },
+      { id: 'context-select', title: `Select target phase ${slots.target_phase_name || slots.target_phase_id || 'from request'}`, status: slots.target_phase_id ? 'done' : 'pending' },
+      { id: 'node-diff', title: `Create reviewable node diff for ${slots.node_name || 'new node'}`, status: 'pending' },
+      { id: 'validate', title: 'Validate workflow diff before user review', status: 'pending' },
+    ];
+  }
+  if (intent === 'update_node') {
+    return [
+      { id: 'slot-check', title: 'Confirm target node, field, and value', status: findMissingEditSlots(intent, slots).length ? 'needs_input' : 'done' },
+      { id: 'context-select', title: `Select node ${slots.target_node_name || slots.target_node_id || 'from request'}`, status: slots.target_node_id ? 'done' : 'pending' },
+      { id: 'node-diff', title: `Create reviewable field diff for ${slots.field || 'node field'}`, status: 'pending' },
+      { id: 'validate', title: 'Validate workflow diff before user review', status: 'pending' },
+    ];
+  }
+  return [
+    { id: 'context-select', title: 'Infer workflow edit context', status: contextPlan?.targets?.length ? 'done' : 'pending' },
+    { id: 'diff', title: 'Generate reviewable workflow diff', status: 'pending' },
+    { id: 'validate', title: 'Validate workflow diff before user review', status: 'pending' },
+  ];
+}
+
+function buildAddNodeDiffFromSlots(project, requestText, slots = {}) {
+  if (!slots.node_name || !slots.goal || !slots.inputs?.length || !slots.outputs?.length || !slots.owner || !slots.risk || !slots.execution) return null;
+  const phases = project.workflow?.phases || [];
+  const phase = phases.find((item) => item.id === slots.target_phase_id || item.name === slots.target_phase_name)
+    || findWorkflowPhase(project, `${slots.target_phase_name || ''} ${requestText || ''}`)
+    || phases[0];
+  if (!phase) return null;
+  const baseId = safeId(`node-${phase.id}-${slots.node_name}`, `node-${Date.now()}`);
+  const existingIds = new Set((project.workflow?.nodes || []).map((node) => node.id || node.node_id));
+  let nodeId = baseId;
+  let suffix = 2;
+  while (existingIds.has(nodeId)) {
+    nodeId = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+  const isChinese = textHasChinese(`${requestText || ''} ${slots.node_name || ''}`);
+  const node = {
+    id: nodeId,
+    phase_id: phase.id,
+    name: slots.node_name,
+    goal: slots.goal,
+    execution_mode: slots.execution,
+    risk_level: normalizeProjectRisk(slots.risk) || slots.risk || 'medium',
+    status: 'draft',
+    human_owner_role: slots.owner,
+    ai_role: slots.execution === 'human_only' ? '' : 'Workflow Assistant',
+    inputs: slots.inputs,
+    outputs: slots.outputs,
+    artifact_contract: {
+      id: `artifact-${nodeId}`,
+      format: 'markdown',
+      output_format: isChinese ? `${slots.node_name} \u4ea4\u4ed8\u7269` : `${slots.node_name} deliverable`,
+      acceptance_criteria: [isChinese ? '\u4ea4\u4ed8\u7269\u5185\u5bb9\u5b8c\u6574' : 'Deliverable is complete'],
+    },
+    review_gate: slots.risk === 'high'
+      ? { id: `gate-${nodeId}`, required: true, approver_role: slots.owner, description: isChinese ? '\u9ad8\u98ce\u9669\u8282\u70b9\u9700\u8981\u4eba\u5de5\u5ba1\u6838' : 'High-risk node requires human review' }
+      : null,
+    prompt_status: slots.execution === 'human_only' ? 'not_required' : 'draft',
+    checklist_status: 'draft',
+    history: [{ at: new Date().toISOString(), action: 'Added by workflow edit agent slots' }],
+  };
+  return {
+    id: `diff-${Date.now()}-slot-add-node`,
+    request: requestText,
+    summary: isChinese ? `\u65b0\u589e\u8282\u70b9 ${slots.node_name}` : `Add node ${slots.node_name}`,
+    changes: [{
+      id: `change-add-${nodeId}`,
+      type: 'added',
+      targetType: 'node',
+      targetId: nodeId,
+      field: 'node',
+      before: null,
+      after: node,
+      reason: isChinese ? `\u6839\u636e\u8865\u5145\u4fe1\u606f\u5c06 ${slots.node_name} \u52a0\u5230 ${phase.name}` : `Add ${slots.node_name} to ${phase.name} from clarified details`,
+      impact: isChinese ? '\u65b0\u589e\u4e00\u4e2a\u5df2\u8865\u5168\u5173\u952e\u5b57\u6bb5\u7684\u5de5\u4f5c\u6d41\u8282\u70b9' : 'adds a workflow node with clarified goal, IO, owner, risk, and execution mode',
+      selected: true,
+    }],
+    warnings: [],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function readServerNodeField(node, field) {
+  const readers = {
+    name: () => node?.name || '',
+    goal: () => node?.goal || '',
+    riskLevel: () => node?.risk_level || node?.riskLevel || 'medium',
+    executionMode: () => node?.execution_mode || node?.executionMode || 'human_lead_ai_assist',
+    humanOwnerRole: () => node?.human_owner_role || node?.humanOwnerRole || '',
+    aiRole: () => node?.ai_role || node?.aiRole || '',
+    inputs: () => node?.inputs || [],
+    outputs: () => node?.outputs || [],
+    status: () => node?.status || 'draft',
+  };
+  return (readers[field] || (() => node?.[field]))();
+}
+
+function normalizeServerNodeEditValue(field, value) {
+  const raw = String(value || '').trim();
+  const lowered = raw.toLowerCase();
+  if (field === 'riskLevel') {
+    if (textIncludesAny(raw, ['high', '\u9ad8'])) return 'high';
+    if (textIncludesAny(raw, ['low', '\u4f4e'])) return 'low';
+    if (textIncludesAny(raw, ['medium', 'mid', '\u4e2d'])) return 'medium';
+    return raw;
+  }
+  if (field === 'executionMode') {
+    if (textIncludesAny(lowered, ['human only', 'human_only', '\u7eaf\u4eba\u5de5', '\u4eba\u5de5\u6267\u884c'])) return 'human_only';
+    if (textIncludesAny(lowered, ['approval', 'ai_execute_human_approval', '\u4eba\u5de5\u5ba1\u6279'])) return 'ai_execute_human_approval';
+    if (textIncludesAny(lowered, ['review', 'ai_draft_human_review', '\u4eba\u5de5\u5ba1\u6838', '\u590d\u6838'])) return 'ai_draft_human_review';
+    if (textIncludesAny(lowered, ['autonomous', 'ai_autonomous', '\u81ea\u4e3b'])) return 'ai_autonomous';
+    if (textIncludesAny(lowered, ['assist', 'human_lead_ai_assist', '\u8f85\u52a9'])) return 'human_lead_ai_assist';
+    return raw;
+  }
+  if (field === 'inputs' || field === 'outputs') return splitAgentSlotList(raw);
+  return raw;
+}
+
+function buildUpdateNodeDiffFromSlots(project, requestText, slots = {}) {
+  if (!slots.target_node_id || !slots.field || slots.value === null || slots.value === undefined || slots.value === '') return null;
+  const node = (project.workflow?.nodes || []).find((item) => (item.id || item.node_id) === slots.target_node_id);
+  if (!node) return null;
+  const before = readServerNodeField(node, slots.field);
+  const after = normalizeServerNodeEditValue(slots.field, slots.value);
+  if (Array.isArray(after) && after.length === 0) return null;
+  if (JSON.stringify(before ?? null) === JSON.stringify(after)) return null;
+  const isChinese = textHasChinese(`${requestText || ''} ${slots.value || ''}`);
+  return {
+    id: `diff-${Date.now()}-slot-update-node`,
+    request: requestText,
+    summary: isChinese
+      ? `\u4fee\u6539\u8282\u70b9 ${node.name || slots.target_node_id} \u7684 ${slots.field}`
+      : `Update ${node.name || slots.target_node_id} ${slots.field}`,
+    changes: [{
+      id: `change-node-${safeId(`${slots.target_node_id}-${slots.field}`, `${Date.now()}`)}`,
+      type: 'updated',
+      targetType: 'node',
+      targetId: slots.target_node_id,
+      field: slots.field,
+      before,
+      after,
+      reason: isChinese
+        ? `\u6839\u636e\u5bf9\u8bdd\u8865\u5145\u4fe1\u606f\u4fee\u6539 ${node.name || slots.target_node_id} \u7684 ${slots.field}`
+        : `Update ${node.name || slots.target_node_id} ${slots.field} from clarified details`,
+      impact: isChinese ? '\u53ea\u4fee\u6539\u8282\u70b9\u5b57\u6bb5\uff0c\u4e0d\u6539\u53d8\u5de5\u4f5c\u6d41\u62d3\u6251' : 'updates node detail data without changing workflow topology',
+      selected: true,
+    }],
+    warnings: [],
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function workflowEditRequestWithSlots(requestText, slots) {
+  if (slots?.target_node_id && slots?.field && slots?.value) {
+    return [
+      requestText,
+      `update node ${slots.target_node_name || slots.target_node_id}`,
+      `field: ${slots.field}`,
+      `value: ${slots.value}`,
+    ].filter(Boolean).join('\n');
+  }
+  if (!slots?.node_name) return requestText;
+  return [
+    requestText,
+    `add node named ${slots.node_name}`,
+    slots.target_phase_name ? `target phase: ${slots.target_phase_name}` : '',
+    slots.goal ? `goal: ${slots.goal}` : '',
+    slots.inputs?.length ? `inputs: ${slots.inputs.join(', ')}` : '',
+    slots.outputs?.length ? `outputs: ${slots.outputs.join(', ')}` : '',
+    slots.owner ? `owner: ${slots.owner}` : '',
+    slots.risk ? `${slots.risk} risk` : '',
+    slots.execution ? `execution mode: ${slots.execution}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function buildAgentTrace({ stage, intent, slots, contextPlan = null, diff = null, evaluation = null, generationSource = null, repairAttempt = null }) {
+  const trace = [{
+    stage: 'planner',
+    status: stage === 'collecting_info' ? 'needs_input' : 'completed',
+    intent,
+    missing_slots: findMissingEditSlots(intent, slots),
+    context_targets: (contextPlan?.targets || []).map((target) => ({ type: target.type, id: target.id, name: target.name })),
+    operation_scope: contextPlan?.operation_scope || contextPlan?.operationScope || [],
+  }];
+  if (diff) trace.push({ stage: 'patcher', status: 'completed', generation_source: generationSource || diff.generation_source || 'unknown', diff_id: diff.id, changes_count: (diff.changes || []).length, selected_count: (diff.changes || []).filter((change) => change.selected !== false).length });
+  if (repairAttempt) trace.push({ stage: 'repair', status: repairAttempt.error ? 'failed' : 'completed', source: repairAttempt.source, model_status: repairAttempt.result?.status || null, error: repairAttempt.error?.message || null });
+  if (evaluation) trace.push({ stage: 'critic', status: evaluation.ok ? 'passed' : 'needs_attention', score: evaluation.score, errors: evaluation.errors, warnings: evaluation.warnings, issues: evaluation.issues || [] });
+  return trace;
+}
+
+function createExecutionPlanFromChanges(changes = [], options = {}) {
+  const currentIds = new Set(options.currentIds || changes.map((change) => change.id));
+  const appliedIds = new Set(options.appliedIds || []);
+  const skippedIds = new Set(options.skippedIds || []);
+  const rejectedIds = new Set(options.rejectedIds || []);
+  const pendingIds = new Set(options.pendingIds || []);
+  const evaluation = options.evaluation || null;
+  return [
+    { id: 'planner', title: 'Infer workflow edit intent and context', status: 'done' },
+    ...changes.map((change, index) => ({
+      id: `change-${index + 1}`,
+      title: `${change.type || 'update'} ${change.targetType || 'target'} ${change.targetId || change.after?.id || ''}`.trim(),
+      status: appliedIds.has(change.id) ? 'applied'
+        : (skippedIds.has(change.id) ? 'skipped'
+          : (rejectedIds.has(change.id) ? 'rejected'
+            : (pendingIds.has(change.id) || !currentIds.has(change.id) ? 'pending' : (change.selected === false ? 'skipped' : 'ready')))),
+      change_id: change.id,
+      target_type: change.targetType || change.target_type,
+      target_id: change.targetId || change.target_id,
+    })),
+    { id: 'critic', title: 'Validate proposed workflow diff', status: evaluation?.ok ? 'done' : 'needs_attention' },
+  ];
+}
+
+function createExecutionPlanFromDiff(diff, evaluation) {
+  return createExecutionPlanFromChanges(diff?.changes || [], { evaluation });
+}
+
+function boundedEditSessionBatchSize(rawSize) {
+  const size = Number(rawSize || DEFAULT_EDIT_SESSION_BATCH_SIZE);
+  if (!Number.isFinite(size) || size <= 0) return DEFAULT_EDIT_SESSION_BATCH_SIZE;
+  return Math.max(1, Math.min(10, Math.floor(size)));
+}
+
+function buildBatchedWorkflowDiff(diff, batchSize, completedIds = [], batchIndex = 1) {
+  const allChanges = diff?.changes || [];
+  const completed = new Set(completedIds || []);
+  const remaining = allChanges.filter((change) => !completed.has(change.id));
+  const currentChanges = remaining.slice(0, batchSize);
+  const pendingChanges = remaining.slice(currentChanges.length);
+  const batchDiff = {
+    ...diff,
+    id: `${diff.id}-batch-${batchIndex}`,
+    parent_diff_id: diff.parent_diff_id || diff.id,
+    parentDiffId: diff.parentDiffId || diff.id,
+    changes: currentChanges,
+    batch: {
+      index: batchIndex,
+      size: batchSize,
+      total_changes: allChanges.length,
+      current_change_ids: currentChanges.map((change) => change.id),
+      pending_change_ids: pendingChanges.map((change) => change.id),
+    },
+  };
+  return { batchDiff, currentChanges, pendingChanges, remainingChanges: remaining };
+}
+
+function selectedDiffChangeIds(diff, rawSelectedIds) {
+  if (Array.isArray(rawSelectedIds) && rawSelectedIds.length > 0) return rawSelectedIds;
+  return (diff?.changes || []).filter((change) => change.selected !== false).map((change) => change.id);
+}
+
+function closeEditSessionAfterApply(session, diff, selectedChangeIds) {
+  if (!session) return null;
+  const selected = new Set(selectedChangeIds);
+  const diffChangeIds = new Set((diff?.changes || []).map((change) => change.id));
+  const previousApplied = session.applied_change_ids || session.appliedChangeIds || [];
+  const previousSkipped = session.skipped_change_ids || session.skippedChangeIds || [];
+  const allChanges = session.all_changes || session.allChanges || diff?.changes || [];
+  const applied = [...new Set([...previousApplied, ...selected])];
+  const skipped = [...new Set([...previousSkipped, ...[...diffChangeIds].filter((id) => !selected.has(id))])];
+  const completed = new Set([...applied, ...skipped, ...(session.rejected_change_ids || session.rejectedChangeIds || [])]);
+  const pending = allChanges.filter((change) => !completed.has(change.id));
+  const hasMore = pending.length > 0;
+  const plan = createExecutionPlanFromChanges(allChanges, {
+    currentIds: (diff?.changes || []).map((change) => change.id),
+    appliedIds: applied,
+    skippedIds: skipped,
+    rejectedIds: session.rejected_change_ids || session.rejectedChangeIds || [],
+    pendingIds: pending.map((change) => change.id),
+    evaluation: { ok: true },
+  });
+  return appendEditSessionMessage({
+    ...session,
+    status: hasMore ? 'awaiting_next_batch' : 'applied',
+    plan,
+    candidate_diff_id: hasMore ? null : session.candidate_diff_id,
+    candidateDiffId: hasMore ? null : (session.candidateDiffId || session.candidate_diff_id),
+    applied_change_ids: applied,
+    skipped_change_ids: skipped,
+    pending_change_ids: pending.map((change) => change.id),
+    appliedChangeIds: applied,
+    skippedChangeIds: skipped,
+    pendingChangeIds: pending.map((change) => change.id),
+  }, {
+    role: 'agent',
+    status: hasMore ? 'awaiting_next_batch' : 'applied',
+    content: `Applied ${selected.size} workflow change${selected.size === 1 ? '' : 's'}.${skipped.length ? ` Skipped ${skipped.length}.` : ''}${hasMore ? ` ${pending.length} change${pending.length === 1 ? '' : 's'} remain for the next batch.` : ''}`,
+  });
+}
+
+function closeEditSessionAfterReject(session) {
+  if (!session) return null;
+  const plan = (session.plan || []).map((step) => (step.change_id ? { ...step, status: 'rejected' } : step));
+  return appendEditSessionMessage({ ...session, status: 'rejected', plan }, {
+    role: 'agent',
+    status: 'rejected',
+    content: 'Rejected workflow changes.',
+  });
+}
+
+function isCancelEditSessionRequest(text) {
+  return textIncludesAny(text, [
+    'cancel',
+    'cancel this edit',
+    'cancel current edit',
+    'stop this edit',
+    'discard this edit',
+    'nevermind',
+    'never mind',
+    'start over',
+    '\u53d6\u6d88',
+    '\u53d6\u6d88\u8fd9\u6b21',
+    '\u505c\u6b62\u8fd9\u6b21',
+    '\u4e0d\u505a\u4e86',
+    '\u91cd\u65b0\u6765',
+  ]);
+}
+
+function cancelActiveEditSession(session, requestText) {
+  if (!session) return null;
+  const plan = (session.plan || []).map((step) => (
+    ['done', 'applied', 'skipped', 'rejected'].includes(step.status)
+      ? step
+      : { ...step, status: 'cancelled' }
+  ));
+  appendEditSessionMessage(session, { role: 'user', content: requestText });
+  return appendEditSessionMessage({
+    ...session,
+    status: 'cancelled',
+    candidate_diff_id: null,
+    candidateDiffId: null,
+    pending_change_ids: [],
+    pendingChangeIds: [],
+    plan,
+  }, {
+    role: 'agent',
+    status: 'cancelled',
+    content: textHasChinese(requestText) ? '\u5df2\u53d6\u6d88\u5f53\u524d\u5de5\u4f5c\u6d41\u4fee\u6539\u4efb\u52a1\u3002' : 'Cancelled the current workflow edit task.',
+  });
+}
+
+function buildEditSession(project, requestText, effectiveRequest, contextPlan = null, patch = {}) {
+  const existing = getActiveEditSession(project);
+  const intent = patch.intent || existing?.intent || inferEditIntent(effectiveRequest, contextPlan);
+  const slots = mergeEditSlots(mergeEditSlots(existing?.slots || {}, buildEditSlots(project, intent, effectiveRequest)), patch.slots || {});
+  const missingSlots = patch.missing_slots || findMissingEditSlots(intent, slots);
+  const now = new Date().toISOString();
+  const trace = patch.agent_trace || patch.agentTrace || existing?.agent_trace || existing?.agentTrace || [];
+  return {
+    id: existing?.id || `edit_session_${randomUUID()}`,
+    project_id: project.id,
+    status: patch.status || (missingSlots.length ? 'collecting_info' : 'planning'),
+    intent,
+    original_request: existing?.original_request || requestText,
+    effective_request: effectiveRequest,
+    slots,
+    missing_slots: missingSlots,
+    plan: patch.plan || existing?.plan || createEditPlan(intent, slots, contextPlan),
+    context_plan: contextPlan || existing?.context_plan || null,
+    context_scope: patch.context_scope || existing?.context_scope || null,
+    candidate_diff_id: patch.candidate_diff_id || existing?.candidate_diff_id || null,
+    root_diff_id: patch.root_diff_id || existing?.root_diff_id || existing?.rootDiffId || null,
+    rootDiffId: patch.rootDiffId || patch.root_diff_id || existing?.rootDiffId || existing?.root_diff_id || null,
+    generation_source: patch.generation_source || existing?.generation_source || existing?.generationSource || null,
+    generationSource: patch.generationSource || patch.generation_source || existing?.generationSource || existing?.generation_source || null,
+    summary: patch.summary || existing?.summary || null,
+    all_changes: patch.all_changes || existing?.all_changes || existing?.allChanges || [],
+    allChanges: patch.allChanges || patch.all_changes || existing?.allChanges || existing?.all_changes || [],
+    batch_size: patch.batch_size || existing?.batch_size || existing?.batchSize || DEFAULT_EDIT_SESSION_BATCH_SIZE,
+    batchSize: patch.batchSize || patch.batch_size || existing?.batchSize || existing?.batch_size || DEFAULT_EDIT_SESSION_BATCH_SIZE,
+    batch_index: patch.batch_index || existing?.batch_index || existing?.batchIndex || 0,
+    batchIndex: patch.batchIndex || patch.batch_index || existing?.batchIndex || existing?.batch_index || 0,
+    total_changes: patch.total_changes || existing?.total_changes || existing?.totalChanges || 0,
+    totalChanges: patch.totalChanges || patch.total_changes || existing?.totalChanges || existing?.total_changes || 0,
+    pending_change_ids: patch.pending_change_ids || existing?.pending_change_ids || existing?.pendingChangeIds || [],
+    pendingChangeIds: patch.pendingChangeIds || patch.pending_change_ids || existing?.pendingChangeIds || existing?.pending_change_ids || [],
+    applied_change_ids: patch.applied_change_ids || existing?.applied_change_ids || existing?.appliedChangeIds || [],
+    appliedChangeIds: patch.appliedChangeIds || patch.applied_change_ids || existing?.appliedChangeIds || existing?.applied_change_ids || [],
+    skipped_change_ids: patch.skipped_change_ids || existing?.skipped_change_ids || existing?.skippedChangeIds || [],
+    skippedChangeIds: patch.skippedChangeIds || patch.skipped_change_ids || existing?.skippedChangeIds || existing?.skipped_change_ids || [],
+    rejected_change_ids: patch.rejected_change_ids || existing?.rejected_change_ids || existing?.rejectedChangeIds || [],
+    rejectedChangeIds: patch.rejectedChangeIds || patch.rejected_change_ids || existing?.rejectedChangeIds || existing?.rejected_change_ids || [],
+    validation: patch.validation || existing?.validation || [],
+    agent_trace: trace,
+    agentTrace: trace,
+    messages: [...(existing?.messages || []), { role: 'user', content: requestText, at: now }].slice(-AI_CONVERSATION_LIMIT),
+    created_at: existing?.created_at || now,
+    updated_at: now,
+  };
+}
+
+function evaluateDiffCandidate(project, diff) {
+  const changes = diff?.changes || [];
+  const issues = [];
+  if (!changes.length) issues.push({ level: 'error', code: 'empty_diff', message: 'No changes were produced.' });
+  for (const change of changes) {
+    if (!change.targetType || !change.type) issues.push({ level: 'error', code: 'invalid_change', message: `Change ${change.id || 'unknown'} is missing type or targetType.` });
+    if (change.type === 'added' && change.targetType === 'node' && (!change.after?.name || !change.after?.goal)) issues.push({ level: 'warning', code: 'underspecified_node', message: `Added node ${change.targetId || change.after?.id || 'unknown'} is missing name or goal.` });
+  }
+  try {
+    const previewWorkflow = applyDiff(structuredClone(project.workflow), diff, changes.filter((change) => change.selected !== false).map((change) => change.id));
+    issues.push(...validateRulesWorkflow(previewWorkflow, project.assets, { forGeneration: false, modelConfig: getModelStatus() }).map((item) => ({ level: item.level || 'warning', code: item.ruleId || item.id || 'validation', message: item.message || item.title || 'Workflow validation issue' })));
+  } catch (error) {
+    issues.push({ level: 'error', code: 'diff_apply_failed', message: error.message || 'Diff cannot be applied.' });
+  }
+  const errors = issues.filter((item) => item.level === 'error').length;
+  const warnings = issues.filter((item) => item.level === 'warning').length;
+  return { ok: errors === 0, score: Math.max(0, 100 - errors * 35 - warnings * 10), errors, warnings, issues };
+}
+
+function repairWorkflowDiffCandidate(diff, evaluation) {
+  const repaired = structuredClone(diff);
+  repaired.repair_strategy = 'workflow_diff_repair';
+  repaired.repair_issues = evaluation?.issues || [];
+  return repaired;
+}
+
+async function repairWorkflowDiffWithModel(ctx, project, requestText, diff, evaluation, contextPlan, workflowIndex, focusedSubgraph, outputContract) {
+  const fallback = {
+    diff: repairWorkflowDiffCandidate(diff, evaluation),
+    result: null,
+    source: 'deterministic_repair',
+    error: null,
+  };
+  try {
+    const result = await runModel('workflow_diff_repair', {
+      request: requestText,
+      invalid_diff: diff,
+      validation: evaluation,
+      context_plan: contextPlan,
+      workflow_index: workflowIndex,
+      focused_subgraph: focusedSubgraph,
+      output_contract: outputContract,
+    });
+    modelCalls.unshift({
+      id: `call_${Date.now()}_repair`,
+      workspace_id: ctx.workspace_id,
+      created_by: ctx.user_id,
+      created_at: new Date().toISOString(),
+      model: result.model,
+      purpose: 'workflow_diff_repair',
+      status: result.status,
+      summary: result.output?.summary || `repair diff request: ${requestText}`,
+    });
+    const repaired = normalizeAgentDiff(result?.output, requestText, project.workflow, contextPlan);
+    if (Array.isArray(repaired?.changes) && repaired.changes.length > 0 && result.status !== 'mock') {
+      return { diff: repaired, result, source: 'llm_repair', error: null };
+    }
+    return { ...fallback, result, source: result.status === 'mock' ? 'mock_repair_fallback' : 'model_empty_repair_fallback' };
+  } catch (error) {
+    modelCalls.unshift({
+      id: `call_${Date.now()}_repair`,
+      workspace_id: ctx.workspace_id,
+      created_by: ctx.user_id,
+      created_at: new Date().toISOString(),
+      model: getModelStatus().diff_model,
+      purpose: 'workflow_diff_repair',
+      status: 'failed',
+      summary: error.message,
+    });
+    return { ...fallback, error };
+  }
+}
+
+function assetCollectionForTargetType(assets, targetType) {
+  if (targetType === 'prompt') return 'prompts';
+  if (targetType === 'checklist') return 'checklists';
+  if (targetType === 'artifact_template') return assets.artifact_templates ? 'artifact_templates' : 'artifactTemplates';
+  return null;
+}
+
+function applyAssetDiffChanges(assets, diff, selectedChangeIds = []) {
+  const next = structuredClone(assets || { prompts: [], checklists: [], artifact_templates: [], artifactTemplates: [] });
+  const selected = (diff.changes || []).filter((change) => selectedChangeIds.length === 0 || selectedChangeIds.includes(change.id));
+  for (const change of selected) {
+    const targetType = change.targetType || change.target_type;
+    const collectionName = assetCollectionForTargetType(next, targetType);
+    if (!collectionName) continue;
+    const collection = Array.isArray(next[collectionName]) ? next[collectionName] : [];
+    const targetId = change.targetId || change.target_id || change.after?.id;
+    if (change.type === 'deleted') {
+      next[collectionName] = collection.filter((item) => item.id !== targetId);
+    } else if (change.type === 'added') {
+      if (change.after && !collection.some((item) => item.id === (change.after.id || targetId))) next[collectionName] = [...collection, change.after];
+    } else {
+      next[collectionName] = collection.map((item) => (item.id === targetId ? { ...item, ...(change.field && change.field !== targetType ? { [change.field]: change.after } : change.after) } : item));
+    }
+  }
+  next.artifactTemplates = next.artifactTemplates || next.artifact_templates || [];
+  next.artifact_templates = next.artifact_templates || next.artifactTemplates || [];
+  return next;
+}
+
 function textHasChinese(text) {
   return /[\u4e00-\u9fff]/.test(String(text || ''));
 }
@@ -86,8 +746,75 @@ function isAddNodeRequest(text) {
   return textIncludesAny(text, ['add node', 'add step', 'new node', '\u65b0\u589e\u8282\u70b9', '\u6dfb\u52a0\u8282\u70b9', '\u589e\u52a0\u8282\u70b9']);
 }
 
+function isDeleteNodeRequest(text) {
+  return textIncludesAny(text, ['delete node', 'remove node', 'delete step', 'remove step', '\u5220\u9664\u8282\u70b9', '\u79fb\u9664\u8282\u70b9', '\u5220\u6389\u8282\u70b9'])
+    || (textIncludesAny(text, ['delete ', 'remove ', '\u5220\u9664', '\u79fb\u9664']) && !textIncludesAny(text, ['phase', '\u9636\u6bb5', 'edge', '\u8fde\u7ebf']));
+}
+
+function isUpdateNodeRequest(text) {
+  return textIncludesAny(text, ['update node', 'change node', 'modify node', 'set node', 'rename node', '\u4fee\u6539\u8282\u70b9', '\u66f4\u65b0\u8282\u70b9', '\u8bbe\u7f6e\u8282\u70b9', '\u91cd\u547d\u540d\u8282\u70b9'])
+    || (textIncludesAny(text, ['\u6539\u6210', '\u6539\u4e3a', '\u8bbe\u4e3a', '\u8bbe\u7f6e\u4e3a']) && Boolean(inferServerNodeEditField(text)));
+}
+
 function hasNodeDetailSignal(text, needles) {
   return textIncludesAny(text, needles);
+}
+
+function matchingWorkflowNodes(project, text) {
+  const value = String(text || '').toLowerCase();
+  const nodes = project.workflow?.nodes || [];
+  const exactMatches = nodes.filter((node) => {
+    const id = String(node.id || node.node_id || '').toLowerCase();
+    const name = String(node.name || '').toLowerCase();
+    return (id && value.includes(id)) || (name && value.includes(name));
+  });
+  if (exactMatches.length) return exactMatches;
+  const stopWords = new Set([
+    'delete', 'remove', 'node', 'step', 'update', 'change', 'modify', 'set', 'rename', 'the', 'a', 'an',
+    '\u5220\u9664', '\u79fb\u9664', '\u8282\u70b9', '\u4fee\u6539', '\u66f4\u65b0', '\u8bbe\u7f6e', '\u91cd\u547d\u540d',
+  ]);
+  const tokens = value
+    .split(/[^a-z0-9\u4e00-\u9fff]+/i)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && !stopWords.has(token));
+  const scored = nodes.map((node) => {
+    const id = String(node.id || node.node_id || '').toLowerCase();
+    const name = String(node.name || '').toLowerCase();
+    const nameTokens = name.split(/[^a-z0-9\u4e00-\u9fff]+/i).filter(Boolean);
+    const score = tokens.reduce((sum, token) => (
+      sum + (nameTokens.includes(token) || name.includes(token) || token.includes(name) ? 10 : 0)
+    ), 0);
+    return { node, score };
+  }).filter((item) => item.score > 0);
+  return scored.sort((a, b) => b.score - a.score).map((item) => item.node);
+}
+
+function inferServerNodeEditField(text) {
+  const fields = [
+    ['executionMode', ['execution mode', 'mode', '\u6267\u884c\u6a21\u5f0f', '\u6a21\u5f0f']],
+    ['riskLevel', ['risk level', 'risk', '\u98ce\u9669\u7b49\u7ea7', '\u98ce\u9669']],
+    ['humanOwnerRole', ['owner', 'human owner', '\u8d1f\u8d23\u4eba', '\u4eba\u5de5\u8d1f\u8d23\u4eba']],
+    ['inputs', ['input', 'inputs', '\u8f93\u5165']],
+    ['outputs', ['output', 'outputs', '\u8f93\u51fa']],
+    ['status', ['status', '\u72b6\u6001']],
+    ['goal', ['goal', 'objective', '\u76ee\u6807']],
+    ['name', ['name', 'rename', '\u540d\u79f0', '\u540d\u5b57', '\u91cd\u547d\u540d']],
+  ];
+  return fields.find(([, needles]) => textIncludesAny(text, needles))?.[0] || '';
+}
+
+function hasServerEditValue(text) {
+  return Boolean(extractServerEditValue(text));
+}
+
+function extractServerEditValue(text) {
+  const value = String(text || '');
+  const verbMatches = [...value.matchAll(/(?:\u66f4\u65b0\u4e3a|\u8bbe\u7f6e\u4e3a|\u6539\u4e3a|\u6539\u6210|\u8bbe\u4e3a|to|as|\u4e3a)\s*[\u201c\u201d"']?(.+?)[\u201c\u201d"']?(?=$|\n)/gi)];
+  if (verbMatches.length) return verbMatches.at(-1)?.[1]?.trim() || '';
+  const valueMatches = [...value.matchAll(/(?:^|\n)\s*(?:value|new value|after)\s*(?:=|:)\s*[\u201c\u201d"']?(.+?)[\u201c\u201d"']?(?=$|\n)/gi)];
+  if (valueMatches.length) return valueMatches.at(-1)?.[1]?.trim() || '';
+  const assignmentMatches = [...value.matchAll(/(?:=)\s*[\u201c\u201d"']?(.+?)[\u201c\u201d"']?(?=$|\n)/gi)];
+  return assignmentMatches.at(-1)?.[1]?.trim() || '';
 }
 
 function buildNodeClarification(project, requestText) {
@@ -128,6 +855,54 @@ function buildNodeClarification(project, requestText) {
   };
 }
 
+function buildWorkflowEditClarification(project, requestText) {
+  const nodeClarification = buildNodeClarification(project, requestText);
+  if (nodeClarification) return { ...nodeClarification, intent: 'add_node' };
+  const request = String(requestText || '');
+  const isChinese = textHasChinese(request);
+  const matches = matchingWorkflowNodes(project, request);
+  const candidateNodes = matches.map((node) => ({ id: node.id || node.node_id, name: node.name, phase_id: node.phase_id || node.phaseId })).slice(0, 8);
+  const candidateText = candidateNodes.map((node) => `${node.name} (${node.id})`).join(isChinese ? '\u3001' : ', ');
+  if (isDeleteNodeRequest(request) && matches.length !== 1) {
+    const nodeNames = (project.workflow?.nodes || []).map((node) => node.name).filter(Boolean).slice(0, 12);
+    return {
+      status: 'needs_clarification',
+      intent: 'delete_node',
+      reason: isChinese ? '\u5220\u9664\u8282\u70b9\u524d\u9700\u8981\u660e\u786e\u552f\u4e00\u76ee\u6807\u8282\u70b9\u3002' : 'Deleting a node requires one clear target node.',
+      content: isChinese
+        ? `\u4f60\u60f3\u5220\u9664\u54ea\u4e2a\u8282\u70b9\uff1f${candidateText ? `\u6211\u627e\u5230\u7684\u5019\u9009\u8282\u70b9\uff1a${candidateText}\u3002` : (nodeNames.length ? `\u53ef\u9009\u8282\u70b9\uff1a${nodeNames.join('\u3001')}\u3002` : '')}`
+        : `Which node should I delete?${candidateText ? ` Candidate nodes: ${candidateText}.` : (nodeNames.length ? ` Available nodes: ${nodeNames.join(', ')}.` : '')}`,
+      questions: [isChinese ? '\u8bf7\u63d0\u4f9b\u8981\u5220\u9664\u7684\u8282\u70b9\u540d\u79f0\u6216 ID\u3002' : 'Provide the exact node name or id to delete.'],
+      missing_fields: ['target_node'],
+      candidate_nodes: candidateNodes,
+    };
+  }
+  if (isUpdateNodeRequest(request)) {
+    const missing = [];
+    if (matches.length !== 1) missing.push('target_node');
+    if (!inferServerNodeEditField(request)) missing.push('field');
+    if (!hasServerEditValue(request)) missing.push('value');
+    if (missing.length) {
+      return {
+        status: 'needs_clarification',
+        intent: 'update_node',
+        reason: isChinese ? '\u4fee\u6539\u8282\u70b9\u9700\u8981\u76ee\u6807\u8282\u70b9\u3001\u5b57\u6bb5\u548c\u65b0\u503c\u3002' : 'Updating a node requires the target node, field, and new value.',
+        content: isChinese
+          ? '\u6211\u53ef\u4ee5\u4fee\u6539\u8282\u70b9\uff0c\u4f46\u9700\u8981\u5148\u786e\u8ba4\u8981\u6539\u54ea\u4e2a\u8282\u70b9\u3001\u54ea\u4e2a\u5b57\u6bb5\u4ee5\u53ca\u6539\u6210\u4ec0\u4e48\u3002'
+          : 'I can update the node, but I need the target node, the field to update, and the new value.',
+        questions: [
+          isChinese ? '\u8981\u4fee\u6539\u54ea\u4e2a\u8282\u70b9\uff1f' : 'Which node should be updated?',
+          isChinese ? '\u8981\u4fee\u6539\u54ea\u4e2a\u5b57\u6bb5\uff08\u540d\u79f0\u3001\u76ee\u6807\u3001\u98ce\u9669\u3001\u8d1f\u8d23\u4eba\u3001\u8f93\u5165\u6216\u8f93\u51fa\uff09\uff1f' : 'Which field should change: name, goal, risk, owner, inputs, or outputs?',
+          isChinese ? '\u65b0\u503c\u662f\u4ec0\u4e48\uff1f' : 'What is the new value?',
+        ],
+        missing_fields: missing,
+        candidate_nodes: candidateNodes,
+      };
+    }
+  }
+  return null;
+}
+
 function getPendingNodeClarification(project) {
   const conversation = ensureAiConversation(project);
   for (let index = conversation.length - 1; index >= 0; index -= 1) {
@@ -142,6 +917,20 @@ function getPendingNodeClarification(project) {
 }
 
 function resolveWorkflowEditRequest(project, requestText) {
+  const active = getActiveEditSession(project);
+  if (active?.status === 'collecting_info') {
+    const intent = active.intent || inferEditIntent(active.original_request || active.effective_request || '');
+    if (intent === 'delete_node') {
+      return {
+        effectiveRequest: `delete node ${requestText}`,
+        pending: { session: active },
+      };
+    }
+    return {
+      effectiveRequest: `${active.original_request || active.effective_request || ''}\nAdditional edit details: ${requestText}`,
+      pending: { session: active },
+    };
+  }
   const pending = getPendingNodeClarification(project);
   if (!pending) return { effectiveRequest: requestText, pending: null };
   const original = pending.previousUser?.content || pending.previousUser?.request || '';
@@ -149,6 +938,236 @@ function resolveWorkflowEditRequest(project, requestText) {
     effectiveRequest: `${original}\nAdditional node details: ${requestText}`,
     pending,
   };
+}
+
+function isCancelRemainingEditRequest(text) {
+  return textIncludesAny(text, [
+    'cancel remaining',
+    'skip remaining',
+    'stop remaining',
+    'discard remaining',
+    'do not continue',
+    '\u53d6\u6d88\u5269\u4f59',
+    '\u8df3\u8fc7\u5269\u4f59',
+    '\u4e0d\u8981\u7ee7\u7eed',
+    '\u5269\u4e0b\u7684\u4e0d\u505a',
+    '\u540e\u7eed\u4e0d\u505a',
+  ]);
+}
+
+function closeRemainingEditSession(session, requestText) {
+  const allChanges = session.all_changes || session.allChanges || [];
+  const applied = session.applied_change_ids || session.appliedChangeIds || [];
+  const previousSkipped = session.skipped_change_ids || session.skippedChangeIds || [];
+  const rejected = session.rejected_change_ids || session.rejectedChangeIds || [];
+  const completed = new Set([...applied, ...previousSkipped, ...rejected]);
+  const remainingIds = allChanges.filter((change) => !completed.has(change.id)).map((change) => change.id);
+  const skipped = [...new Set([...previousSkipped, ...remainingIds])];
+  const plan = createExecutionPlanFromChanges(allChanges, {
+    currentIds: [],
+    appliedIds: applied,
+    skippedIds: skipped,
+    rejectedIds: rejected,
+    pendingIds: [],
+    evaluation: { ok: true },
+  });
+  appendEditSessionMessage(session, { role: 'user', content: requestText });
+  return appendEditSessionMessage({
+    ...session,
+    status: 'applied',
+    candidate_diff_id: null,
+    candidateDiffId: null,
+    plan,
+    pending_change_ids: [],
+    pendingChangeIds: [],
+    skipped_change_ids: skipped,
+    skippedChangeIds: skipped,
+  }, {
+    role: 'agent',
+    status: 'applied',
+    content: `Stopped the remaining workflow edit plan. ${remainingIds.length} pending change${remainingIds.length === 1 ? '' : 's'} marked as skipped.`,
+  });
+}
+
+function makeSessionChangeIdsUnique(changes, reservedIds = []) {
+  const used = new Set(reservedIds);
+  const stamp = Date.now();
+  return (changes || []).map((change, index) => {
+    const baseId = change.id || `change-${index + 1}`;
+    if (!used.has(baseId)) {
+      used.add(baseId);
+      return change;
+    }
+    const nextId = `${String(baseId).replace(/[^a-zA-Z0-9_-]/g, '-')}-replan-${stamp}-${index + 1}`;
+    used.add(nextId);
+    return { ...change, id: nextId };
+  });
+}
+
+async function replanRemainingEditSession(ctx, project, session, requestText, batchSize) {
+  const oldChanges = session.all_changes || session.allChanges || [];
+  const appliedIds = session.applied_change_ids || session.appliedChangeIds || [];
+  const skippedIds = session.skipped_change_ids || session.skippedChangeIds || [];
+  const rejectedIds = session.rejected_change_ids || session.rejectedChangeIds || [];
+  const completed = new Set([...appliedIds, ...skippedIds, ...rejectedIds]);
+  const remainingIds = oldChanges.filter((change) => !completed.has(change.id)).map((change) => change.id);
+  const nextSkippedIds = [...new Set([...skippedIds, ...remainingIds])];
+  const agentContextPolicy = 'replan_remaining_work_from_session_state';
+  const workflowIndex = buildWorkflowIndex(project.workflow);
+  const outputContract = workflowDiffOutputContract();
+  let contextPlan = generateWorkflowContextPlan(requestText, workflowIndex);
+  let focusedSubgraph = extractFocusedSubgraph(project.workflow, project.assets, contextPlan);
+  let planResult = null;
+  let modelResult = null;
+  try {
+    planResult = await runModel('workflow_context_plan', {
+      request: requestText,
+      context_policy: agentContextPolicy,
+      existing_session: {
+        id: session.id,
+        status: session.status,
+        applied_change_ids: appliedIds,
+        skipped_change_ids: nextSkippedIds,
+        remaining_change_ids: remainingIds,
+      },
+      workflow_index: workflowIndex,
+      output_contract: {
+        intent: 'workflow_replan_remaining',
+        targets: [{ type: 'node|phase', id: 'existing id', required_context: 'node_with_neighbors|phase|workflow' }],
+        graph_expansion: { upstream_depth: 0, downstream_depth: 2 },
+        operation_scope: ['add_phase', 'rename_phase', 'add_node', 'update_node', 'delete_node', 'add_edge', 'delete_edge', 'add_review_gate', 'generate_prompt'],
+      },
+    });
+    const modelContextPlan = normalizeContextPlan(planResult.output, workflowIndex);
+    if (modelContextPlan && (modelContextPlan.targets.length > 0 || modelContextPlan.operation_scope.length > 0)) {
+      contextPlan = modelContextPlan;
+      focusedSubgraph = extractFocusedSubgraph(project.workflow, project.assets, contextPlan);
+    }
+    modelCalls.unshift({ id: `call_${Date.now()}_replan_plan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: planResult.model, purpose: 'workflow_replan_context_plan', status: planResult.status, summary: planResult.output?.summary || `replan context: ${requestText}` });
+  } catch (error) {
+    modelCalls.unshift({ id: `call_${Date.now()}_replan_plan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().planning_model, purpose: 'workflow_replan_context_plan', status: 'failed', summary: error.message });
+  }
+  try {
+    modelResult = await runModel('workflow_diff', {
+      request: requestText,
+      context_policy: agentContextPolicy,
+      existing_session: {
+        id: session.id,
+        applied_changes: oldChanges.filter((change) => appliedIds.includes(change.id)),
+        skipped_pending_changes: oldChanges.filter((change) => remainingIds.includes(change.id)),
+      },
+      context_plan: contextPlan,
+      workflow_index: workflowIndex,
+      focused_subgraph: focusedSubgraph,
+      output_contract: outputContract,
+    });
+    modelCalls.unshift({ id: `call_${Date.now()}_replan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_replan_diff', status: modelResult.status, summary: modelResult.output?.summary || `replan diff: ${requestText}` });
+  } catch (error) {
+    modelCalls.unshift({ id: `call_${Date.now()}_replan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().diff_model, purpose: 'workflow_replan_diff', status: 'failed', summary: error.message });
+  }
+  const modelCandidate = normalizeAgentDiff(modelResult?.output, requestText, project.workflow, contextPlan);
+  const modelHasChanges = Array.isArray(modelCandidate?.changes) && modelCandidate.changes.length > 0;
+  const generationSource = modelHasChanges && modelResult?.status !== 'mock'
+    ? 'llm_replan'
+    : (modelResult?.status === 'mock' ? 'mock_replan_fallback' : (modelResult ? 'model_empty_replan_fallback' : 'model_failed_replan_fallback'));
+  const candidate = modelHasChanges ? modelCandidate : generateWorkflowDiff(requestText, project.workflow, project.assets);
+  let replacementChanges = makeSessionChangeIdsUnique(candidate.changes || [], oldChanges.map((change) => change.id));
+  const replacementDiff = {
+    ...candidate,
+    id: `diff-replan-${randomUUID()}`,
+    request: requestText,
+    changes: replacementChanges,
+    context_policy: agentContextPolicy,
+    context_plan: contextPlan,
+    focused_subgraph_summary: {
+      phases: focusedSubgraph.phases.length,
+      nodes: focusedSubgraph.nodes.length,
+      edges: focusedSubgraph.edges.length,
+    },
+    model_diff_status: modelResult?.status || 'failed',
+    context_plan_status: planResult?.status || 'fallback',
+    generation_source: candidate.generation_source || generationSource,
+    status: 'draft',
+  };
+  let evaluation = evaluateDiffCandidate(project, replacementDiff);
+  let repairAttempt = null;
+  if (!evaluation.ok && replacementChanges.length) {
+    repairAttempt = await repairWorkflowDiffWithModel(ctx, project, requestText, replacementDiff, evaluation, contextPlan, workflowIndex, focusedSubgraph, outputContract);
+    const repairedEvaluation = evaluateDiffCandidate(project, repairAttempt.diff);
+    if (repairedEvaluation.score >= evaluation.score) {
+      replacementChanges = makeSessionChangeIdsUnique(repairAttempt.diff.changes || [], oldChanges.map((change) => change.id));
+      replacementDiff.changes = replacementChanges;
+      replacementDiff.generation_source = repairAttempt.source;
+      replacementDiff.repair_attempt = {
+        source: repairAttempt.source,
+        status: repairAttempt.result?.status || (repairAttempt.error ? 'failed' : 'fallback'),
+        error: repairAttempt.error?.message || null,
+      };
+      evaluation = repairedEvaluation;
+    }
+  }
+  const { batchDiff, currentChanges, pendingChanges } = buildBatchedWorkflowDiff(replacementDiff, batchSize, [], Number(session.batch_index || session.batchIndex || 1) + 1);
+  const allChanges = [...oldChanges, ...replacementChanges];
+  const plan = createExecutionPlanFromChanges(allChanges, {
+    currentIds: currentChanges.map((change) => change.id),
+    appliedIds,
+    skippedIds: nextSkippedIds,
+    rejectedIds,
+    pendingIds: pendingChanges.map((change) => change.id),
+    evaluation,
+  });
+  const trace = [
+    ...(session.agent_trace || session.agentTrace || []),
+    {
+      stage: 'replanner',
+      status: replacementChanges.length ? 'completed' : 'needs_input',
+      skipped_previous_pending: remainingIds.length,
+      replacement_changes: replacementChanges.length,
+      request: requestText,
+      context_plan_status: planResult?.status || 'fallback',
+    },
+    ...buildAgentTrace({ stage: 'diff_ready', intent: inferEditIntent(requestText), slots: {}, contextPlan, diff: batchDiff, evaluation, generationSource: replacementDiff.generation_source, repairAttempt }).slice(1),
+  ];
+  appendEditSessionMessage(session, { role: 'user', content: requestText });
+  const updatedSession = appendEditSessionMessage({
+    ...session,
+    status: replacementChanges.length ? 'diff_ready' : 'collecting_info',
+    effective_request: requestText,
+    candidate_diff_id: replacementChanges.length ? batchDiff.id : null,
+    candidateDiffId: replacementChanges.length ? batchDiff.id : null,
+    all_changes: allChanges,
+    allChanges,
+    context_plan: contextPlan,
+    contextPlan,
+    context_scope: replacementDiff.focused_subgraph_summary,
+    contextScope: replacementDiff.focused_subgraph_summary,
+    batch_index: batchDiff.batch.index,
+    batchIndex: batchDiff.batch.index,
+    total_changes: allChanges.length,
+    totalChanges: allChanges.length,
+    pending_change_ids: pendingChanges.map((change) => change.id),
+    pendingChangeIds: pendingChanges.map((change) => change.id),
+    skipped_change_ids: nextSkippedIds,
+    skippedChangeIds: nextSkippedIds,
+    plan,
+    validation: evaluation.issues,
+    agent_trace: trace,
+    agentTrace: trace,
+  }, {
+    role: 'agent',
+    status: replacementChanges.length ? 'diff_ready' : 'needs_clarification',
+    content: replacementChanges.length
+      ? `Replanned the remaining workflow edit work. ${remainingIds.length} previous pending change${remainingIds.length === 1 ? '' : 's'} skipped; ${currentChanges.length} replacement change${currentChanges.length === 1 ? '' : 's'} ready for review.`
+      : 'I could not produce replacement workflow changes from that instruction. Please describe the desired remaining changes more specifically.',
+    diff_id: replacementChanges.length ? batchDiff.id : null,
+    changes_count: currentChanges.length,
+    selected_count: currentChanges.filter((change) => change.selected !== false).length,
+    total_changes: allChanges.length,
+    pending_changes: pendingChanges.length,
+    validation_score: evaluation.score,
+    generation_source: replacementDiff.generation_source,
+  });
+  return { session: updatedSession, diff: replacementChanges.length ? { ...batchDiff, validation: evaluation } : null, evaluation };
 }
 
 function validateSchemaCompatibility(obj) {
@@ -264,6 +1283,8 @@ function createProjectShell(ctx, body, selectedTemplate) {
     model_call_logs: [],
     ai_conversation: [],
     aiConversation: [],
+    edit_sessions: [],
+    editSessions: [],
     deleted_at: null,
   }, true);
   project.workflow = createEmptyWorkflow(ctx, project, selectedTemplate);
@@ -271,6 +1292,526 @@ function createProjectShell(ctx, body, selectedTemplate) {
   project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
   return project;
 }
+
+function normalizeProjectAgentList(value) {
+  return asList(value).map((item) => String(item || '').trim()).filter(Boolean);
+}
+
+function normalizeProjectContextList(value) {
+  if (Array.isArray(value)) return normalizeProjectAgentList(value);
+  return String(value || '')
+    .split(/[,;\n\uff0c\uff1b\u3001]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+const PROJECT_CONTEXT_FIELD_ALIASES = {
+  team_roles: ['team roles', 'roles', '\u56e2\u961f\u89d2\u8272', '\u56e2\u961f\u6210\u5458', '\u53c2\u4e0e\u89d2\u8272'],
+  approval_process: ['approval process', 'approval flow', 'review process', '\u5ba1\u6279\u6d41\u7a0b', '\u5ba1\u6838\u6d41\u7a0b', '\u95e8\u7981'],
+  tool_stack: ['tool stack', 'tools', '\u5de5\u5177\u6808', '\u5de5\u5177'],
+  risk_constraints: ['risk constraints', 'constraints', '\u98ce\u9669\u7ea6\u675f', '\u98ce\u9669\u9650\u5236', '\u7ea6\u675f'],
+  historical_process_materials: ['historical process materials', 'historical materials', 'process materials', '\u5386\u53f2\u6d41\u7a0b\u6750\u6599', '\u5386\u53f2\u6750\u6599', '\u6d41\u7a0b\u6750\u6599'],
+};
+
+const PROJECT_CONTEXT_ALIASES = Object.values(PROJECT_CONTEXT_FIELD_ALIASES).flat();
+
+const PROJECT_AGENT_FIELD_ALIASES = {
+  name: ['project name', 'name', '\u9879\u76ee\u540d\u79f0', '\u9879\u76ee\u540d', '\u540d\u79f0'],
+  goal: ['project goal', 'goal', 'objective', 'purpose', '\u9879\u76ee\u76ee\u6807', '\u76ee\u6807', '\u76ee\u7684'],
+  current_stage: ['current stage', 'stage', '\u5f53\u524d\u9636\u6bb5', '\u6240\u5904\u9636\u6bb5', '\u9636\u6bb5'],
+  project_type: ['project type', 'type', '\u9879\u76ee\u7c7b\u578b', '\u7c7b\u578b'],
+  risk_level: ['risk level', 'risk', '\u98ce\u9669\u7b49\u7ea7', '\u98ce\u9669'],
+  target_deliverables: ['target deliverables', 'deliverables', 'deliverable', 'delivery scope', '\u76ee\u6807\u4ea4\u4ed8\u7269', '\u76ee\u6807\u4ea4\u4ed8', '\u4ea4\u4ed8\u7269'],
+  expected_ai_scope: ['expected ai scope', 'ai scope', '\u9884\u671f AI \u8303\u56f4', '\u9884\u671fAI\u8303\u56f4', 'AI \u8303\u56f4', 'AI\u8303\u56f4'],
+  sensitive_areas: ['sensitive areas', 'sensitive scope', '\u654f\u611f\u533a\u57df', '\u654f\u611f\u8303\u56f4'],
+};
+
+const PROJECT_AGENT_ALL_ALIASES = [
+  ...Object.values(PROJECT_AGENT_FIELD_ALIASES).flat(),
+  ...PROJECT_CONTEXT_ALIASES,
+].sort((left, right) => String(right).length - String(left).length);
+
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function projectAgentLabelPattern(alias) {
+  const escaped = escapeRegex(alias).replace(/\s+/g, '\\s*');
+  const startsWithWord = /^[a-z0-9]/i.test(alias);
+  const endsWithWord = /[a-z0-9]$/i.test(alias);
+  return `${startsWithWord ? '\\b' : ''}${escaped}${endsWithWord ? '\\b' : ''}`;
+}
+
+function findProjectAgentLabels(text) {
+  const source = String(text || '');
+  const labels = [];
+  for (const alias of PROJECT_AGENT_ALL_ALIASES) {
+    const pattern = new RegExp(projectAgentLabelPattern(alias), 'gi');
+    for (const match of source.matchAll(pattern)) {
+      labels.push({ alias, index: match.index, end: match.index + match[0].length });
+    }
+  }
+  return labels
+    .sort((left, right) => left.index - right.index || right.end - left.end)
+    .filter((label, index, all) => index === 0 || label.index !== all[index - 1].index);
+}
+
+function cleanProjectAgentFieldValue(value) {
+  return String(value || '')
+    .replace(/^\s*(?:is|are|include|includes|including|as|uses?|using|has|have|with|\u662f|\u4e3a|\u53eb|\u6709|\u5305\u62ec|\u4f7f\u7528|\u91c7\u7528|[:=\uff1a])\s*/i, '')
+    .replace(/^[\s,\uff0c:;\uff1b]+|[\s,\uff0c:;\uff1b]+$/g, '')
+    .replace(/["']$/g, '')
+    .trim();
+}
+
+function extractLabeledProjectAgentValue(text, aliases = []) {
+  const source = String(text || '');
+  const labels = findProjectAgentLabels(source);
+  const accepted = new Set(aliases.map((alias) => String(alias).toLowerCase()));
+  const label = labels.find((item) => accepted.has(String(item.alias).toLowerCase()));
+  if (!label) return '';
+  const nextLabel = labels.find((item) => item.index >= label.end);
+  let end = nextLabel?.index ?? source.length;
+  const sentenceEnd = source.slice(label.end, end).search(/[.\n\u3002;\uff1b]/);
+  if (sentenceEnd >= 0) end = label.end + sentenceEnd;
+  return cleanProjectAgentFieldValue(source.slice(label.end, end));
+}
+
+function extractLabeledProjectContextValue(text, aliases = []) {
+  const boundedValue = extractLabeledProjectAgentValue(text, aliases);
+  if (boundedValue) return boundedValue;
+  const source = String(text || '');
+  const lower = source.toLowerCase();
+  for (const alias of aliases) {
+    const index = lower.indexOf(String(alias).toLowerCase());
+    if (index < 0) continue;
+    let start = index + String(alias).length;
+    const afterLabel = source.slice(start);
+    const prefix = afterLabel.match(/^\s*(?:is|are|include|includes|as|[:=\uff1a])\s*/i);
+    if (prefix) start += prefix[0].length;
+    let end = source.length;
+    for (const otherAlias of PROJECT_CONTEXT_ALIASES) {
+      if (aliases.includes(otherAlias)) continue;
+      const nextIndex = lower.indexOf(String(otherAlias).toLowerCase(), start + 1);
+      if (nextIndex >= 0 && nextIndex < end) end = nextIndex;
+    }
+    const sentenceEnd = source.slice(start, end).search(/[.\n\u3002]/);
+    if (sentenceEnd >= 0) end = start + sentenceEnd;
+    const value = source.slice(start, end).replace(/^[\s:：=,，;；]+|[\s,，;；]+$/g, '').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+function normalizeProjectCreationContextPack(input = {}) {
+  const source = input?.context_pack || input?.contextPack || input?.context || input;
+  if (!source || typeof source !== 'object') return {};
+  return {
+    team_roles: normalizeProjectContextList(source.team_roles || source.teamRoles || source.roles),
+    approval_process: normalizeProjectContextList(source.approval_process || source.approvalProcess || source.review_process || source.reviewProcess),
+    tool_stack: normalizeProjectContextList(source.tool_stack || source.toolStack || source.tools),
+    risk_constraints: normalizeProjectContextList(source.risk_constraints || source.riskConstraints || source.constraints),
+    historical_process_materials: source.historical_process_materials || source.historicalProcessMaterials || source.process_materials || source.processMaterials || '',
+  };
+}
+
+function extractProjectCreationContextPack(text, previous = {}) {
+  const source = String(text || '');
+  const extracted = {
+    team_roles: normalizeProjectContextList(extractLabeledProjectContextValue(source, PROJECT_CONTEXT_FIELD_ALIASES.team_roles)),
+    approval_process: normalizeProjectContextList(extractLabeledProjectContextValue(source, PROJECT_CONTEXT_FIELD_ALIASES.approval_process)),
+    tool_stack: normalizeProjectContextList(extractLabeledProjectContextValue(source, PROJECT_CONTEXT_FIELD_ALIASES.tool_stack)),
+    risk_constraints: normalizeProjectContextList(extractLabeledProjectContextValue(source, PROJECT_CONTEXT_FIELD_ALIASES.risk_constraints)),
+    historical_process_materials: extractLabeledProjectContextValue(source, PROJECT_CONTEXT_FIELD_ALIASES.historical_process_materials),
+  };
+  return mergeProjectCreationContextPack(previous, extracted);
+}
+
+function mergeProjectCreationContextPack(previous = {}, next = {}) {
+  const merged = normalizeProjectCreationContextPack(previous);
+  const incoming = normalizeProjectCreationContextPack(next);
+  for (const key of ['team_roles', 'approval_process', 'tool_stack', 'risk_constraints']) {
+    const values = [...(merged[key] || []), ...(incoming[key] || [])].map((item) => String(item || '').trim()).filter(Boolean);
+    merged[key] = [...new Set(values)];
+  }
+  merged.historical_process_materials = incoming.historical_process_materials || merged.historical_process_materials || '';
+  return merged;
+}
+
+function extractProjectAgentField(text, field) {
+  const source = String(text || '');
+  const boundedValue = extractLabeledProjectAgentValue(source, PROJECT_AGENT_FIELD_ALIASES[field] || []);
+  if (boundedValue) return boundedValue;
+  const cleanPatterns = {
+    name: [
+      /(?:\u9879\u76ee\u540d\u79f0|\u9879\u76ee\u540d|\u540d\u79f0)\s*(?:\u662f|\u4e3a|\u53eb|[:\uff1a=])?\s*["']?([^"'\n\uff0c\u3002\uff1b;,]+)/,
+    ],
+    goal: [
+      /(?:\u76ee\u6807|\u76ee\u7684)\s*(?:\u662f|\u4e3a|[:\uff1a=])?\s*([^。\u3002\n\uff1b;]*?)(?=[\uff0c,]\s*(?:\u5f53\u524d\u9636\u6bb5|\u6240\u5904\u9636\u6bb5|\u9636\u6bb5)|[。\u3002\n\uff1b;]|$)/,
+    ],
+    current_stage: [
+      /(?:\u5f53\u524d\u9636\u6bb5|\u6240\u5904\u9636\u6bb5|\u9636\u6bb5)\s*(?:\u662f|\u4e3a|[:\uff1a=])?\s*([^。\u3002\n\uff0c\uff1b,;]+)/,
+    ],
+    project_type: [
+      /(?:\u9879\u76ee\u7c7b\u578b|\u7c7b\u578b)\s*(?:\u662f|\u4e3a|[:\uff1a=])?\s*([^。\u3002\n\uff0c\uff1b,;]+)/,
+    ],
+    risk_level: [
+      /(?:\u98ce\u9669\u7b49\u7ea7|\u98ce\u9669)\s*(?:\u662f|\u4e3a|[:\uff1a=])?\s*(\u4f4e|\u4e2d|\u9ad8|low|medium|high)/i,
+    ],
+    target_deliverables: [
+      /(?:\u76ee\u6807\u4ea4\u4ed8|\u4ea4\u4ed8\u7269)\s*(?:\u662f|\u4e3a|[:\uff1a=])?\s*([^。\u3002\n\uff1b;]+)/,
+    ],
+    expected_ai_scope: [
+      /(?:\u9884\u671f\s*AI\s*\u8303\u56f4|AI\s*\u8303\u56f4)\s*(?:\u662f|\u4e3a|[:\uff1a=])?\s*([^。\u3002\n\uff1b;]+)/i,
+    ],
+    sensitive_areas: [
+      /(?:\u654f\u611f\u533a\u57df|\u654f\u611f\u8303\u56f4)\s*(?:\u662f|\u4e3a|[:\uff1a=])?\s*([^。\u3002\n\uff1b;]+)/,
+    ],
+  };
+  for (const pattern of cleanPatterns[field] || []) {
+    const match = source.match(pattern);
+    if (match?.[1]) return match[1].trim().replace(/["']$/, '');
+  }
+  const patterns = {
+    name: [
+      /(?:project\s*name|name|called|named)\s*(?:is|:|=)?\s*["']?([^"'\n;,.]+)/i,
+      /(?:\u9879\u76ee\u540d|\u540d\u79f0|叫|命名为)\s*(?:是|为|:|：)?\s*[“”"']?([^“”"'\n，。；;]+)/,
+    ],
+    goal: [
+      /(?:goal|objective|purpose|for)\s*(?:is|:|=)?\s*([^;\n]+)/i,
+      /(?:\u76ee\u6807|\u76ee\u7684|\u7528\u4e8e|\u7528\u6765)\s*(?:是|为|:|：)?\s*([^。\n；;]+)/,
+    ],
+    current_stage: [
+      /(?:current stage|stage)\s*(?:is|:|=)?\s*([^;\n,.]+)/i,
+      /(?:\u5f53\u524d\u9636\u6bb5|\u9636\u6bb5)\s*(?:是|为|:|：)?\s*([^，。；;\n]+)/,
+    ],
+    project_type: [
+      /(?:project type|type)\s*(?:is|:|=)?\s*([^;\n,.]+)/i,
+      /(?:\u9879\u76ee\u7c7b\u578b|\u7c7b\u578b)\s*(?:是|为|:|：)?\s*([^，。；;\n]+)/,
+    ],
+    risk_level: [
+      /(?:risk|risk level)\s*(?:is|:|=)?\s*(low|medium|high)/i,
+      /(?:\u98ce\u9669|\u98ce\u9669\u7b49\u7ea7)\s*(?:是|为|:|：)?\s*(低|中|高|low|medium|high)/i,
+    ],
+    target_deliverables: [
+      /(?:deliverables?|delivery scope)\s*(?:are|is|:|=)?\s*([^;\n]+)/i,
+      /(?:\u4ea4\u4ed8\u7269|\u76ee\u6807\u4ea4\u4ed8)\s*(?:是|为|:|：)?\s*([^。\n；;]+)/,
+    ],
+    expected_ai_scope: [
+      /(?:ai scope|expected ai scope)\s*(?:is|:|=)?\s*([^;\n]+)/i,
+      /(?:AI范围|AI \u8303\u56f4|\u9884\u671fAI\u8303\u56f4|\u9884\u671f AI \u8303\u56f4)\s*(?:是|为|:|：)?\s*([^。\n；;]+)/i,
+    ],
+    sensitive_areas: [
+      /(?:sensitive areas?|sensitive scope)\s*(?:are|is|:|=)?\s*([^;\n]+)/i,
+      /(?:\u654f\u611f\u533a\u57df|\u654f\u611f\u8303\u56f4)\s*(?:是|为|:|：)?\s*([^。\n；;]+)/,
+    ],
+  };
+  for (const pattern of patterns[field] || []) {
+    const match = source.match(pattern);
+    if (match?.[1]) return match[1].trim().replace(/[”"']$/, '');
+  }
+  return '';
+}
+
+function normalizeProjectRisk(value) {
+  const text = String(value || '').toLowerCase();
+  if (textIncludesAny(text, ['high', '\u9ad8'])) return 'high';
+  if (textIncludesAny(text, ['low', '\u4f4e'])) return 'low';
+  if (textIncludesAny(text, ['medium', 'middle', '\u4e2d'])) return 'medium';
+  return '';
+}
+
+function inferProjectNameFromRequest(text) {
+  const quoted = firstQuotedText(text);
+  if (quoted) return quoted;
+  const cleanChinese = String(text || '').match(/(?:\u521b\u5efa|\u65b0\u5efa|\u505a)(?:\u4e00\u4e2a)?\s*(?:\u9879\u76ee)?\s*[:\uff1a]?\s*([\u4e00-\u9fa5A-Za-z0-9 _-]{2,40}?)(?:\u9879\u76ee)?(?:[.\u3002\uff0c,;\uff1b\n]|$)/);
+  if (cleanChinese?.[1]) return cleanChinese[1].trim();
+  const chinese = String(text || '').match(/(?:\u521b\u5efa|\u65b0\u5efa|\u505a)(?:\u4e00\u4e2a)?\s*([^，。；;\n]{2,40}?)(?:\u9879\u76ee|project)/i);
+  if (chinese?.[1]) return chinese[1].trim();
+  const english = String(text || '').match(/(?:create|new|build)\s+(?:a\s+)?(?:project\s+)?(?:for\s+)?([a-z0-9 _-]{3,60})/i);
+  if (english?.[1]) return english[1].trim();
+  return '';
+}
+
+function extractProjectCreationSlots(text, previous = {}) {
+  const rawRisk = extractProjectAgentField(text, 'risk_level');
+  const previousContextPack = previous.context_pack || previous.contextPack || {};
+  const explicitName = extractProjectAgentField(text, 'name');
+  const inferredName = inferProjectNameFromRequest(text);
+  const explicitGoal = extractProjectAgentField(text, 'goal');
+  const explicitType = extractProjectAgentField(text, 'project_type');
+  const explicitStage = extractProjectAgentField(text, 'current_stage');
+  const explicitRisk = normalizeProjectRisk(rawRisk);
+  const explicitDeliverables = normalizeProjectAgentList(extractProjectAgentField(text, 'target_deliverables'));
+  const explicitAiScope = normalizeProjectAgentList(extractProjectAgentField(text, 'expected_ai_scope'));
+  const explicitSensitiveAreas = normalizeProjectAgentList(extractProjectAgentField(text, 'sensitive_areas'));
+  const next = {
+    ...previous,
+    name: explicitName || previous.name || inferredName,
+    goal: explicitGoal || previous.goal,
+    project_type: explicitType || previous.project_type || (textIncludesAny(text, ['internal tool', '\u5185\u90e8\u5de5\u5177']) ? 'Internal Tool' : ''),
+    current_stage: explicitStage || previous.current_stage,
+    risk_level: explicitRisk || previous.risk_level || (textIncludesAny(text, ['\u9ad8\u98ce\u9669', 'high risk']) ? 'high' : ''),
+    target_deliverables: explicitDeliverables.length ? explicitDeliverables : (previous.target_deliverables || []),
+    expected_ai_scope: explicitAiScope.length ? explicitAiScope : (previous.expected_ai_scope || []),
+    sensitive_areas: explicitSensitiveAreas.length ? explicitSensitiveAreas : (previous.sensitive_areas || []),
+    context_pack: extractProjectCreationContextPack(text, previousContextPack),
+  };
+  if (!next.project_type) next.project_type = 'AI Feature';
+  if (!next.risk_level) next.risk_level = 'medium';
+  if (!next.current_stage && textIncludesAny(text, ['discovery', '\u63a2\u7d22', '\u8c03\u7814'])) next.current_stage = 'Discovery';
+  return next;
+}
+
+function extractExplicitProjectCreationSlots(text) {
+  const raw = {
+    name: extractProjectAgentField(text, 'name'),
+    goal: extractProjectAgentField(text, 'goal'),
+    project_type: extractProjectAgentField(text, 'project_type'),
+    current_stage: extractProjectAgentField(text, 'current_stage'),
+    risk_level: normalizeProjectRisk(extractProjectAgentField(text, 'risk_level')),
+    target_deliverables: normalizeProjectAgentList(extractProjectAgentField(text, 'target_deliverables')),
+    expected_ai_scope: normalizeProjectAgentList(extractProjectAgentField(text, 'expected_ai_scope')),
+    sensitive_areas: normalizeProjectAgentList(extractProjectAgentField(text, 'sensitive_areas')),
+    context_pack: extractProjectCreationContextPack(text, {}),
+  };
+  return Object.fromEntries(Object.entries(raw).filter(([key, value]) => {
+    if (key === 'context_pack') return Object.values(value || {}).some((item) => Array.isArray(item) ? item.length : Boolean(item));
+    return Array.isArray(value) ? value.length : Boolean(value);
+  }));
+}
+
+function mergeProjectCreationSlots(previous = {}, next = {}) {
+  const merged = { ...previous };
+  for (const [key, value] of Object.entries(next || {})) {
+    if (key === 'context_pack' || key === 'contextPack') {
+      merged.context_pack = mergeProjectCreationContextPack(merged.context_pack || merged.contextPack || {}, value);
+      continue;
+    }
+    if (Array.isArray(value)) {
+      if (value.length) merged[key] = value.map((item) => String(item || '').trim()).filter(Boolean);
+      continue;
+    }
+    if (value !== null && value !== undefined && String(value).trim() !== '') merged[key] = String(value).trim();
+  }
+  if (merged.risk_level) merged.risk_level = normalizeProjectRisk(merged.risk_level) || merged.risk_level;
+  return merged;
+}
+
+function normalizeProjectCreationModelSlots(output) {
+  const source = output?.project || output?.slots || output?.project_creation || output?.projectCreation || output;
+  if (!source || typeof source !== 'object') return {};
+  return {
+    name: source.name || source.project_name || source.projectName,
+    goal: source.goal || source.project_goal || source.projectGoal,
+    project_type: source.project_type || source.projectType || source.type,
+    current_stage: source.current_stage || source.currentStage || source.stage,
+    risk_level: source.risk_level || source.riskLevel || source.risk,
+    target_deliverables: normalizeProjectAgentList(source.target_deliverables || source.targetDeliverables || source.delivery_scope || source.deliveryScope || source.deliverables),
+    expected_ai_scope: normalizeProjectAgentList(source.expected_ai_scope || source.expectedAiScope || source.ai_scope || source.aiScope),
+    sensitive_areas: normalizeProjectAgentList(source.sensitive_areas || source.sensitiveAreas || source.sensitive_scope || source.sensitiveScope),
+    context_pack: normalizeProjectCreationContextPack(source.context_pack || source.contextPack || output?.context_pack || output?.contextPack),
+  };
+}
+
+async function enrichProjectCreationSessionWithModel(ctx, session, requestText) {
+  const previousSlots = session.slots || {};
+  let modelResult = null;
+  let modelError = null;
+  try {
+    modelResult = await runModel('project_creation_plan', {
+      request: requestText,
+      existing_slots: previousSlots,
+      output_language: session.output_language || session.outputLanguage || 'en',
+      required_fields: ['name', 'goal', 'current_stage'],
+      optional_fields: ['project_type', 'risk_level', 'target_deliverables', 'expected_ai_scope', 'sensitive_areas'],
+      output_contract: {
+        project: {
+          name: 'short project name',
+          goal: 'project goal',
+          project_type: 'AI Feature | Internal Tool | Legacy Modernization',
+          current_stage: 'Discovery | Design | Development | Testing | Launch',
+          risk_level: 'low | medium | high',
+          target_deliverables: ['deliverable'],
+          expected_ai_scope: ['AI responsibility'],
+          sensitive_areas: ['sensitive area'],
+          context_pack: {
+            team_roles: ['project role or accountable owner'],
+            approval_process: ['approval or review gate'],
+            tool_stack: ['tool, system, repository, design app, deployment target'],
+            risk_constraints: ['privacy, safety, compliance, release or data constraint'],
+            historical_process_materials: 'short note about known existing docs or prior process',
+          },
+        },
+        confidence: 'low | medium | high',
+        missing_fields: ['name | goal | current_stage'],
+      },
+    });
+    modelCalls.unshift({ id: `call_${Date.now()}_project_agent`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'project_creation_plan', status: modelResult.status, summary: modelResult.output?.summary || `project creation: ${requestText}` });
+  } catch (error) {
+    modelError = error;
+    modelCalls.unshift({ id: `call_${Date.now()}_project_agent`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().planning_model, purpose: 'project_creation_plan', status: 'failed', summary: error.message });
+  }
+  const modelSlots = modelResult?.status && modelResult.status !== 'mock'
+    ? normalizeProjectCreationModelSlots(modelResult.output)
+    : {};
+  const fallbackSlots = extractProjectCreationSlots(requestText, previousSlots);
+  const modelEnrichedSlots = mergeProjectCreationSlots(fallbackSlots, modelSlots);
+  const explicitCurrentTurnSlots = extractExplicitProjectCreationSlots(requestText);
+  const slots = mergeProjectCreationSlots(modelEnrichedSlots, explicitCurrentTurnSlots);
+  const missing = missingProjectCreationSlots(slots);
+  const trace = [
+    ...(session.agent_trace || session.agentTrace || []),
+    {
+      stage: 'project_planner',
+      status: modelError ? 'failed' : (modelResult?.status || 'fallback'),
+      generation_source: modelSlots && Object.keys(modelSlots).some((key) => {
+        const value = modelSlots[key];
+        if (key === 'context_pack') return Object.values(value || {}).some((item) => Array.isArray(item) ? item.length : Boolean(item));
+        return Array.isArray(value) ? value.length : Boolean(value);
+      }) ? 'llm' : (modelResult?.status === 'mock' ? 'mock_fallback' : 'deterministic_fallback'),
+      missing_slots: missing,
+      context_pack_fields: Object.entries(slots.context_pack || {}).filter(([, value]) => Array.isArray(value) ? value.length : Boolean(value)).map(([key]) => key),
+      error: modelError?.message || null,
+    },
+  ];
+  return {
+    ...session,
+    slots,
+    missing_slots: missing,
+    status: missing.length ? 'collecting_info' : 'ready_to_create',
+    agent_trace: trace,
+    agentTrace: trace,
+    model_status: modelResult?.status || (modelError ? 'failed' : 'fallback'),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function missingProjectCreationSlots(slots) {
+  return [
+    !slots.name ? 'name' : null,
+    !slots.goal ? 'goal' : null,
+    !slots.current_stage ? 'current_stage' : null,
+  ].filter(Boolean);
+}
+
+function normalizeProjectAgentLanguage(value, fallback = 'en') {
+  const language = String(value || fallback || 'en');
+  return language === 'zh-Hans' ? 'zh-Hans' : 'en';
+}
+
+function isCancelProjectCreationRequest(text) {
+  return textIncludesAny(text, [
+    'cancel',
+    'cancel project',
+    'cancel creation',
+    'stop creating',
+    'discard project',
+    'start over',
+    'nevermind',
+    'never mind',
+    '\u53d6\u6d88',
+    '\u53d6\u6d88\u521b\u5efa',
+    '\u4e0d\u521b\u5efa\u4e86',
+    '\u4e0d\u505a\u4e86',
+    '\u91cd\u65b0\u6765',
+  ]);
+}
+
+function cancelProjectCreationSession(session, requestText) {
+  const isChinese = normalizeProjectAgentLanguage(session.output_language || session.outputLanguage, textHasChinese(requestText) ? 'zh-Hans' : 'en') === 'zh-Hans';
+  const now = new Date().toISOString();
+  return {
+    ...session,
+    status: 'cancelled',
+    missing_slots: [],
+    missingSlots: [],
+    messages: [
+      ...(session.messages || []),
+      { role: 'user', content: requestText, at: now },
+      {
+        role: 'agent',
+        status: 'cancelled',
+        content: isChinese ? '\u5df2\u53d6\u6d88\u5f53\u524d\u9879\u76ee\u521b\u5efa\u4f1a\u8bdd\u3002' : 'Cancelled the current project creation session.',
+        at: now,
+      },
+    ].slice(-AI_CONVERSATION_LIMIT),
+    updated_at: now,
+  };
+}
+
+function buildProjectCreationSession(ctx, requestText, patch = {}) {
+  const existingSession = patch.session_id ? projectCreationSessions.get(patch.session_id) : null;
+  const existing = existingSession && !['created', 'cancelled'].includes(existingSession.status) ? existingSession : null;
+  const slots = extractProjectCreationSlots(requestText, existing?.slots || {});
+  const missing = missingProjectCreationSlots(slots);
+  const now = new Date().toISOString();
+  const outputLanguage = normalizeProjectAgentLanguage(patch.output_language || patch.outputLanguage, existing?.output_language || existing?.outputLanguage || 'en');
+  const session = {
+    id: existing?.id || `project_session_${randomUUID()}`,
+    workspace_id: ctx.workspace_id,
+    status: patch.status || (missing.length ? 'collecting_info' : 'ready_to_create'),
+    output_language: outputLanguage,
+    outputLanguage,
+    slots,
+    missing_slots: missing,
+    messages: [
+      ...(existing?.messages || []),
+      { role: 'user', content: requestText, at: now },
+    ].slice(-AI_CONVERSATION_LIMIT),
+    created_at: existing?.created_at || now,
+    updated_at: now,
+  };
+  return session;
+}
+
+function loadProjectCreationSessions() {
+  if (storageAdapter !== 'file' || !existsSync(projectCreationSessionsPath)) return;
+  try {
+    const raw = JSON.parse(readFileSync(projectCreationSessionsPath, 'utf-8'));
+    const sessions = Array.isArray(raw?.sessions) ? raw.sessions : [];
+    projectCreationSessions.clear();
+    sessions
+      .filter((session) => session?.id)
+      .slice(0, PROJECT_CREATION_SESSION_LIMIT)
+      .forEach((session) => projectCreationSessions.set(session.id, session));
+  } catch {
+    projectCreationSessions.clear();
+  }
+}
+
+function persistProjectCreationSessions() {
+  if (storageAdapter !== 'file') return;
+  const sessions = [...projectCreationSessions.values()]
+    .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))
+    .slice(0, PROJECT_CREATION_SESSION_LIMIT);
+  writeFileSync(projectCreationSessionsPath, JSON.stringify({ sessions }, null, 2));
+}
+
+function saveProjectCreationSession(session) {
+  projectCreationSessions.set(session.id, session);
+  const entries = [...projectCreationSessions.values()].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+  entries.slice(PROJECT_CREATION_SESSION_LIMIT).forEach((item) => projectCreationSessions.delete(item.id));
+  persistProjectCreationSessions();
+  return session;
+}
+
+function projectCreationClarification(session) {
+  const isChinese = normalizeProjectAgentLanguage(session.output_language || session.outputLanguage, textHasChinese(session.messages.at(-1)?.content || '') ? 'zh-Hans' : 'en') === 'zh-Hans';
+  const questions = {
+    name: isChinese ? '\u9879\u76ee\u540d\u79f0\u662f\u4ec0\u4e48\uff1f' : 'What should the project be called?',
+    goal: isChinese ? '\u8fd9\u4e2a\u9879\u76ee\u7684\u76ee\u6807\u662f\u4ec0\u4e48\uff1f' : 'What is the project goal?',
+    current_stage: isChinese ? '\u5f53\u524d\u5904\u4e8e\u54ea\u4e2a\u9636\u6bb5\uff1f' : 'What stage is the project currently in?',
+  };
+  return {
+    status: 'needs_clarification',
+    content: isChinese ? '\u6211\u53ef\u4ee5\u5e2e\u4f60\u521b\u5efa\u9879\u76ee\uff0c\u4f46\u9700\u8981\u5148\u8865\u5168\u51e0\u4e2a\u5173\u952e\u4fe1\u606f\u3002' : 'I can create the project, but I need a few key details first.',
+    questions: session.missing_slots.map((slot) => questions[slot] || slot),
+    missing_fields: session.missing_slots,
+  };
+}
+
+loadProjectCreationSessions();
 
 function normalizeGeneratedWorkflow(project, selectedTemplate, modelOutput) {
   const rawEnvelope = modelOutput?.workflow_draft || modelOutput?.draft || modelOutput?.workflow || modelOutput;
@@ -586,6 +2127,88 @@ const server = createServer(async (req, res) => {
   }
 
   if (method === 'GET' && path === '/api/projects') return ok(res, ctx, listScopedProjects(ctx).map((p) => ({ id: p.id, name: p.name, workspace_id: p.workspace_id, updated_at: p.updated_at })));
+
+  if (method === 'POST' && path === '/api/project-agent/messages') {
+    const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
+    const requestText = body.request || '';
+    if (!requestText.trim()) return fail(res, ctx, 400, 'PROJECT_AGENT_EMPTY_REQUEST', 'Describe the project you want to create.');
+    const existingProjectSession = body.session_id || body.sessionId ? projectCreationSessions.get(body.session_id || body.sessionId) : null;
+    if (existingProjectSession && !['created', 'cancelled'].includes(existingProjectSession.status) && isCancelProjectCreationRequest(requestText)) {
+      const cancelledSession = cancelProjectCreationSession(existingProjectSession, requestText);
+      saveProjectCreationSession(cancelledSession);
+      return ok(res, ctx, { project_creation_session: cancelledSession, model_status: getModelStatus() });
+    }
+    if (!requireConfiguredLlm(res, ctx, 'the project creation Agent')) return;
+    let session = buildProjectCreationSession(ctx, requestText, { session_id: body.session_id || body.sessionId, output_language: body.output_language || body.outputLanguage });
+    session = await enrichProjectCreationSessionWithModel(ctx, session, requestText);
+    if (session.missing_slots.length) {
+      const clarification = projectCreationClarification(session);
+      session.status = 'collecting_info';
+      session.messages.push({ role: 'agent', status: 'needs_clarification', content: clarification.content, clarification_questions: clarification.questions, missing_fields: clarification.missing_fields, at: new Date().toISOString() });
+      saveProjectCreationSession(session);
+      return ok(res, ctx, { project_creation_session: session, clarification, model_status: getModelStatus() });
+    }
+    session.status = 'creating_project';
+    saveProjectCreationSession(session);
+    const selectedTemplate = selectTemplateForProject(session.slots);
+    const contextPack = createContextPack(session.slots.context_pack || {});
+    const selectedTemplateTrace = {
+      stage: 'template_selector',
+      status: 'selected',
+      template_id: selectedTemplate.id,
+      template_name: selectedTemplate.name,
+      matched_project_type: session.slots.project_type || '',
+      context_pack_fields: Object.entries(contextPack)
+        .filter(([key, value]) => !['summary', 'version'].includes(key) && (Array.isArray(value) ? value.length : Boolean(value)))
+        .map(([key]) => key),
+    };
+    const project = createProjectShell(ctx, {
+      name: session.slots.name,
+      goal: session.slots.goal,
+      project_type: session.slots.project_type,
+      current_stage: session.slots.current_stage,
+      risk_level: session.slots.risk_level,
+      target_deliverables: session.slots.target_deliverables,
+      expected_ai_scope: session.slots.expected_ai_scope,
+      sensitive_areas: session.slots.sensitive_areas,
+      setup_mode: body.setup_mode || body.setupMode || 'quick_start',
+      output_language: body.output_language || body.outputLanguage || 'en',
+      context_pack: contextPack,
+    }, selectedTemplate);
+    const v = validateProject(project); if (!v.ok) return fail(res, ctx, 400, 'SCHEMA_INVALID', 'Project invalid', v.errors);
+    ensureWorkflowHistory(project);
+    session = {
+      ...session,
+      status: 'created',
+      project_id: project.id,
+      projectId: project.id,
+      selected_template_id: selectedTemplate.id,
+      selectedTemplateId: selectedTemplate.id,
+      context_pack: project.context_pack,
+      contextPack: project.context_pack,
+      agent_trace: [...(session.agent_trace || []), selectedTemplateTrace],
+      agentTrace: [...(session.agent_trace || []), selectedTemplateTrace],
+      messages: [...session.messages, { role: 'agent', status: 'created', content: normalizeProjectAgentLanguage(session.output_language || session.outputLanguage) === 'zh-Hans' ? `\u5df2\u521b\u5efa\u9879\u76ee ${project.name}\u3002` : `Created project ${project.name}.`, project_id: project.id, at: new Date().toISOString() }].slice(-AI_CONVERSATION_LIMIT),
+      updated_at: new Date().toISOString(),
+    };
+    project.project_creation_session = session;
+    project.projectCreationSession = session;
+    project.creation_agent_trace = session.agent_trace || [];
+    project.creationAgentTrace = session.agent_trace || [];
+    project.ai_conversation = (session.messages || []).map((message, index) => ({
+      id: `project_agent_${session.id}_${index}`,
+      role: message.role,
+      content: message.content,
+      status: message.status,
+      created_at: message.at || message.created_at || new Date().toISOString(),
+      source: 'project_creation_agent',
+    })).slice(-AI_CONVERSATION_LIMIT);
+    project.aiConversation = project.ai_conversation;
+    saveProjectCreationSession(session);
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { project, project_creation_session: session, model_status: getModelStatus() }, 201);
+  }
+
   if (method === 'POST' && path === '/api/projects') {
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
     const selectedTemplate = selectTemplateForProject(body);
@@ -659,6 +2282,7 @@ const server = createServer(async (req, res) => {
   const wfGen = path.match(/^\/api\/projects\/([^/]+)\/workflow\/generate$/);
   if (method === 'POST' && wfGen) {
     const project = getProject(ctx, wfGen[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    if (!requireConfiguredLlm(res, ctx, 'Workflow Agent generation')) return;
     const job = createJob(ctx, project, 'generate_workflow_draft', { context_pack: structuredClone(project.context_pack || {}), workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
     const selectedTemplate = getTemplateById(project.created_from_template) || selectTemplateForProject(project);
     let modelResult = null;
@@ -823,15 +2447,113 @@ const server = createServer(async (req, res) => {
     return ok(res, ctx, { job_id: job.id, status: job.status });
   }
 
-  const diffGenerate = path.match(/^\/api\/projects\/([^/]+)\/diffs\/generate$/);
+  const diffGenerate = path.match(/^\/api\/projects\/([^/]+)\/(?:diffs\/generate|edit-sessions\/messages)$/);
   if (method === 'POST' && diffGenerate) {
     const project = getProject(ctx, diffGenerate[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
-    const requestText = body.request || 'default';
+    const requestText = body.request || body.message || body.content || 'default';
+    const batchSize = boundedEditSessionBatchSize(body.batch_size || body.batchSize);
+    const activeSession = getActiveEditSession(project);
+    if (activeSession?.status === 'awaiting_next_batch' && isCancelRemainingEditRequest(requestText)) {
+      const closedSession = saveEditSession(project, closeRemainingEditSession(activeSession, requestText));
+      appendAiConversation(project, [
+        {
+          id: `msg_user_${randomUUID()}`,
+          role: 'user',
+          content: requestText,
+          request: requestText,
+          workflow_version: project.workflow.version,
+          edit_session_id: closedSession.id,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: `msg_agent_${randomUUID()}`,
+          role: 'agent',
+          status: 'applied',
+          content: closedSession.messages.at(-1)?.content || 'Stopped remaining workflow edit plan.',
+          edit_session_id: closedSession.id,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      storage.saveProject(ctx.workspace_id, project);
+      return ok(res, ctx, { edit_session: closedSession, ai_conversation: project.ai_conversation, model_status: getModelStatus() });
+    }
+    if (activeSession && isCancelEditSessionRequest(requestText)) {
+      const closedSession = saveEditSession(project, cancelActiveEditSession(activeSession, requestText));
+      if (project.last_diff && (project.last_diff.id === activeSession.candidate_diff_id || project.last_diff.id === activeSession.candidateDiffId)) {
+        project.last_diff.status = 'cancelled';
+      }
+      appendAiConversation(project, [
+        {
+          id: `msg_user_${randomUUID()}`,
+          role: 'user',
+          content: requestText,
+          request: requestText,
+          workflow_version: project.workflow.version,
+          edit_session_id: closedSession.id,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: `msg_agent_${randomUUID()}`,
+          role: 'agent',
+          status: 'cancelled',
+          content: closedSession.messages.at(-1)?.content || 'Cancelled the current workflow edit task.',
+          edit_session_id: closedSession.id,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      storage.saveProject(ctx.workspace_id, project);
+      return ok(res, ctx, { edit_session: closedSession, ai_conversation: project.ai_conversation, model_status: getModelStatus() });
+    }
+    if (!requireConfiguredLlm(res, ctx, 'the Workflow Edit Agent')) return;
+    if (activeSession?.status === 'awaiting_next_batch') {
+      const replan = await replanRemainingEditSession(ctx, project, activeSession, requestText, batchSize);
+      if (replan.diff) {
+        project.last_diff = replan.diff;
+        project.last_diff.context_policy = 'session_replan_remaining';
+        project.last_diff.status = 'draft';
+      }
+      const updatedSession = saveEditSession(project, replan.session);
+      appendAiConversation(project, [
+        {
+          id: `msg_user_${randomUUID()}`,
+          role: 'user',
+          content: requestText,
+          request: requestText,
+          workflow_version: project.workflow.version,
+          edit_session_id: updatedSession.id,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: `msg_agent_${randomUUID()}`,
+          role: 'agent',
+          status: updatedSession.status,
+          content: updatedSession.messages.at(-1)?.content || 'Replanned remaining workflow edit work.',
+          diff_id: replan.diff?.id || null,
+          changes_count: replan.diff?.changes?.length || 0,
+          selected_count: (replan.diff?.changes || []).filter((change) => change.selected !== false).length,
+          generation_source: replan.diff?.generation_source || 'deterministic_replan',
+          edit_session_id: updatedSession.id,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      storage.saveProject(ctx.workspace_id, project);
+      return ok(res, ctx, { diff: replan.diff, edit_session: updatedSession, ai_conversation: project.ai_conversation, model_status: getModelStatus() });
+    }
     const resolvedRequest = resolveWorkflowEditRequest(project, requestText);
-    const effectiveRequestText = resolvedRequest.effectiveRequest;
-    const clarification = buildNodeClarification(project, effectiveRequestText);
+    let effectiveRequestText = resolvedRequest.effectiveRequest;
+    const clarification = buildWorkflowEditClarification(project, effectiveRequestText);
     if (clarification) {
+      const session = buildEditSession(project, requestText, effectiveRequestText, null, {
+        intent: clarification.intent || 'workflow_edit',
+        status: 'collecting_info',
+        missing_slots: clarification.missing_fields,
+        validation: [{ level: 'info', code: 'needs_clarification', message: clarification.reason }],
+      });
+      session.agent_trace = buildAgentTrace({ stage: 'collecting_info', intent: session.intent, slots: session.slots });
+      session.agentTrace = session.agent_trace;
+      appendEditSessionMessage(session, { role: 'agent', status: 'needs_clarification', content: clarification.content, clarification_questions: clarification.questions, missing_fields: clarification.missing_fields, candidate_nodes: clarification.candidate_nodes || [] });
+      saveEditSession(project, session);
       const createdAt = new Date().toISOString();
       appendAiConversation(project, [
         {
@@ -845,18 +2567,23 @@ const server = createServer(async (req, res) => {
         {
           id: `msg_agent_${randomUUID()}`,
           role: 'agent',
-          intent: 'add_node',
+          intent: clarification.intent || 'workflow_edit',
           status: 'needs_clarification',
           content: clarification.content,
           clarification_questions: clarification.questions,
           missing_fields: clarification.missing_fields,
+          candidate_nodes: clarification.candidate_nodes || [],
           reason: clarification.reason,
           request: effectiveRequestText,
           created_at: createdAt,
         },
       ]);
       storage.saveProject(ctx.workspace_id, project);
-      return ok(res, ctx, { clarification, ai_conversation: project.ai_conversation, model_status: getModelStatus() });
+      return ok(res, ctx, { clarification, edit_session: session, ai_conversation: project.ai_conversation, model_status: getModelStatus() });
+    }
+    const slotSession = buildEditSession(project, requestText, effectiveRequestText, null, { status: 'planning' });
+    if ((slotSession.intent === 'add_node' || slotSession.intent === 'update_node') && !slotSession.missing_slots.length) {
+      effectiveRequestText = workflowEditRequestWithSlots(effectiveRequestText, slotSession.slots);
     }
     const contextScope = body.context_scope || body.contextScope || null;
     const agentContextPolicy = 'infer_context_from_request_and_workflow_json';
@@ -884,6 +2611,11 @@ const server = createServer(async (req, res) => {
         contextPlan = modelContextPlan;
         focusedSubgraph = extractFocusedSubgraph(project.workflow, project.assets, contextPlan);
       }
+      saveEditSession(project, buildEditSession(project, requestText, effectiveRequestText, contextPlan, {
+        status: 'planning',
+        context_scope: { phases: focusedSubgraph.phases.length, nodes: focusedSubgraph.nodes.length, edges: focusedSubgraph.edges.length },
+        agent_trace: buildAgentTrace({ stage: 'planning', intent: slotSession.intent, slots: slotSession.slots, contextPlan }),
+      }));
       modelCalls.unshift({ id: `call_${Date.now()}_plan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: planResult.model, purpose: 'workflow_context_plan', status: planResult.status, summary: planResult.output?.summary || `context plan: ${effectiveRequestText}` });
     } catch (error) {
       modelCalls.unshift({ id: `call_${Date.now()}_plan`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().planning_model, purpose: 'workflow_context_plan', status: 'failed', summary: error.message });
@@ -902,27 +2634,184 @@ const server = createServer(async (req, res) => {
     } catch (error) {
       modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().diff_model, purpose: 'workflow_diff', status: 'failed', summary: error.message });
     }
+    const candidate = normalizeAgentDiff(modelResult?.output, effectiveRequestText, project.workflow, contextPlan);
+    const candidateHasChanges = Array.isArray(candidate?.changes) && candidate.changes.length > 0;
+    let generationSource = candidateHasChanges && modelResult?.status !== 'mock'
+      ? 'llm'
+      : (modelResult?.status === 'mock' ? 'mock_fallback' : (modelResult ? 'model_empty_fallback' : 'model_failed_fallback'));
+    let selectedDiff = candidateHasChanges ? candidate : generateWorkflowDiff(effectiveRequestText, project.workflow, project.assets);
+    if (slotSession.intent === 'add_node') {
+      selectedDiff = { ...selectedDiff, changes: (selectedDiff.changes || []).filter((change) => !(change.type === 'added' && change.targetType === 'phase')) };
+      const slotDiff = buildAddNodeDiffFromSlots(project, effectiveRequestText, slotSession.slots);
+      const hasAddedNode = (selectedDiff.changes || []).some((change) => change.type === 'added' && change.targetType === 'node');
+      if (slotDiff && (!hasAddedNode || generationSource !== 'llm')) {
+        selectedDiff = slotDiff;
+        generationSource = generationSource === 'llm' && hasAddedNode ? generationSource : 'slot_structured_fallback';
+      }
+    }
+    if (slotSession.intent === 'update_node') {
+      const slotDiff = buildUpdateNodeDiffFromSlots(project, effectiveRequestText, slotSession.slots);
+      const hasUpdatedNodeField = (selectedDiff.changes || []).some((change) => (
+        change.type === 'updated'
+        && change.targetType === 'node'
+        && change.targetId === slotSession.slots.target_node_id
+        && change.field === slotSession.slots.field
+      ));
+      if (slotDiff && (!hasUpdatedNodeField || generationSource !== 'llm')) {
+        selectedDiff = slotDiff;
+        generationSource = generationSource === 'llm' && hasUpdatedNodeField ? generationSource : 'slot_structured_fallback';
+      }
+    }
+    let diffEvaluation = evaluateDiffCandidate(project, selectedDiff);
+    let repairAttempt = null;
+    if (!diffEvaluation.ok) {
+      repairAttempt = await repairWorkflowDiffWithModel(ctx, project, effectiveRequestText, selectedDiff, diffEvaluation, contextPlan, workflowIndex, focusedSubgraph, outputContract);
+      const repairedDiff = slotSession.intent === 'add_node'
+        ? { ...repairAttempt.diff, changes: (repairAttempt.diff.changes || []).filter((change) => !(change.type === 'added' && change.targetType === 'phase')) }
+        : repairAttempt.diff;
+      const repairedEvaluation = evaluateDiffCandidate(project, repairedDiff);
+      if (repairedEvaluation.score >= diffEvaluation.score) {
+        selectedDiff = repairedDiff;
+        diffEvaluation = repairedEvaluation;
+        generationSource = repairAttempt.source;
+      }
+    }
+    if (!(selectedDiff.changes || []).length) {
+      runJob(ctx, project, job, (progress) => {
+        progress('completed', 'No workflow changes were produced.');
+        return { type: 'workflow_diff_no_changes' };
+      });
+      const session = buildEditSession(project, requestText, effectiveRequestText, contextPlan, {
+        status: 'no_changes',
+        context_scope: { phases: focusedSubgraph.phases.length, nodes: focusedSubgraph.nodes.length, edges: focusedSubgraph.edges.length },
+        validation: diffEvaluation.issues,
+        agent_trace: buildAgentTrace({ stage: 'diff_ready', intent: slotSession.intent, slots: slotSession.slots, contextPlan, diff: selectedDiff, evaluation: diffEvaluation, generationSource, repairAttempt }),
+        generation_source: generationSource,
+        generationSource: generationSource,
+        summary: selectedDiff.summary || 'No workflow changes were produced.',
+        all_changes: [],
+        allChanges: [],
+        total_changes: 0,
+        totalChanges: 0,
+        pending_change_ids: [],
+        pendingChangeIds: [],
+      });
+      appendEditSessionMessage(session, {
+        role: 'agent',
+        status: 'no_changes',
+        content: 'No workflow changes were produced. The request may already be satisfied, or it needs more specific target details.',
+        changes_count: 0,
+        selected_count: 0,
+        total_changes: 0,
+        validation_score: diffEvaluation.score,
+        critic: { status: 'needs_attention', score: diffEvaluation.score, errors: diffEvaluation.errors, warnings: diffEvaluation.warnings },
+        generation_source: generationSource,
+      });
+      saveEditSession(project, session);
+      const createdAt = new Date().toISOString();
+      appendAiConversation(project, [
+        {
+          id: `msg_user_${randomUUID()}`,
+          role: 'user',
+          content: requestText,
+          request: requestText,
+          workflow_version: project.workflow.version,
+          edit_session_id: session.id,
+          created_at: createdAt,
+        },
+        {
+          id: `msg_agent_${randomUUID()}`,
+          role: 'agent',
+          status: 'no_changes',
+          content: 'No workflow changes were produced. The request may already be satisfied, or it needs more specific target details.',
+          changes_count: 0,
+          selected_count: 0,
+          total_changes: 0,
+          generation_source: generationSource,
+          edit_session_id: session.id,
+          validation_score: diffEvaluation.score,
+          created_at: createdAt,
+        },
+      ]);
+      storage.saveProject(ctx.workspace_id, project);
+      return ok(res, ctx, { job_id: job.id, edit_session: session, model_status: getModelStatus(), ai_conversation: project.ai_conversation });
+    }
     runJob(ctx, project, job, (progress) => {
       progress('calling_model', 'Generating workflow diff');
-      const candidate = normalizeAgentDiff(modelResult?.output, effectiveRequestText, project.workflow, contextPlan);
-      const candidateHasChanges = Array.isArray(candidate?.changes) && candidate.changes.length > 0;
-      const generationSource = candidateHasChanges && modelResult?.status !== 'mock'
-        ? 'llm'
-        : (modelResult?.status === 'mock' ? 'mock_fallback' : (modelResult ? 'model_empty_fallback' : 'model_failed_fallback'));
-      project.last_diff = candidateHasChanges ? candidate : generateWorkflowDiff(effectiveRequestText, project.workflow, project.assets);
-      project.last_diff.context_policy = agentContextPolicy;
-      project.last_diff.context_plan = contextPlan;
-      project.last_diff.generation_source = generationSource;
-      project.last_diff.model_diff_status = modelResult?.status || 'failed';
-      project.last_diff.context_plan_status = planResult?.status || 'fallback';
-      project.last_diff.focused_subgraph_summary = {
+      const fullDiff = {
+        ...selectedDiff,
+        context_policy: agentContextPolicy,
+        context_plan: contextPlan,
+        generation_source: generationSource,
+        model_diff_status: modelResult?.status || 'failed',
+        context_plan_status: planResult?.status || 'fallback',
+        status: 'draft',
+        validation: diffEvaluation,
+      };
+      fullDiff.focused_subgraph_summary = {
         phases: focusedSubgraph.phases.length,
         nodes: focusedSubgraph.nodes.length,
         edges: focusedSubgraph.edges.length,
       };
-      if (contextScope) project.last_diff.context_scope = contextScope;
-      project.last_diff.status = 'draft';
-      const changes = project.last_diff.changes || [];
+      if (contextScope) fullDiff.context_scope = contextScope;
+      if (repairAttempt) {
+        fullDiff.repair_attempt = {
+          source: repairAttempt.source,
+          status: repairAttempt.result?.status || (repairAttempt.error ? 'failed' : 'fallback'),
+          error: repairAttempt.error?.message || null,
+        };
+      }
+      const { batchDiff, currentChanges, pendingChanges } = buildBatchedWorkflowDiff(fullDiff, batchSize, [], 1);
+      project.last_diff = batchDiff;
+      const changes = currentChanges;
+      const allChanges = fullDiff.changes || [];
+      const session = buildEditSession(project, requestText, effectiveRequestText, contextPlan, {
+        status: 'diff_ready',
+        candidate_diff_id: project.last_diff.id,
+        context_scope: project.last_diff.focused_subgraph_summary,
+        validation: diffEvaluation.issues,
+        agent_trace: buildAgentTrace({ stage: 'diff_ready', intent: slotSession.intent, slots: slotSession.slots, contextPlan, diff: project.last_diff, evaluation: diffEvaluation, generationSource, repairAttempt }),
+        plan: createExecutionPlanFromChanges(allChanges, {
+          currentIds: currentChanges.map((change) => change.id),
+          pendingIds: pendingChanges.map((change) => change.id),
+          evaluation: diffEvaluation,
+        }),
+        root_diff_id: fullDiff.id,
+        rootDiffId: fullDiff.id,
+        generation_source: generationSource,
+        generationSource: generationSource,
+        summary: fullDiff.summary,
+        all_changes: allChanges,
+        allChanges,
+        batch_size: batchSize,
+        batchSize,
+        batch_index: 1,
+        batchIndex: 1,
+        total_changes: allChanges.length,
+        totalChanges: allChanges.length,
+        pending_change_ids: pendingChanges.map((change) => change.id),
+        pendingChangeIds: pendingChanges.map((change) => change.id),
+        applied_change_ids: [],
+        appliedChangeIds: [],
+        skipped_change_ids: [],
+        skippedChangeIds: [],
+      });
+      appendEditSessionMessage(session, {
+        role: 'agent',
+        status: 'diff_ready',
+        content: pendingChanges.length
+          ? `${changes.length} of ${allChanges.length} changes are ready for review. ${pendingChanges.length} remain queued.`
+          : (project.last_diff.summary || `${changes.length} changes proposed`),
+        diff_id: project.last_diff.id,
+        changes_count: changes.length,
+        selected_count: changes.filter((change) => change.selected !== false).length,
+        total_changes: allChanges.length,
+        pending_changes: pendingChanges.length,
+        validation_score: diffEvaluation.score,
+        critic: { status: diffEvaluation.ok ? 'passed' : 'needs_attention', score: diffEvaluation.score, errors: diffEvaluation.errors, warnings: diffEvaluation.warnings },
+        generation_source: generationSource,
+      });
+      saveEditSession(project, session);
       const createdAt = new Date().toISOString();
       appendAiConversation(project, [
         {
@@ -937,19 +2826,112 @@ const server = createServer(async (req, res) => {
           id: `msg_agent_${randomUUID()}`,
           role: 'agent',
           diff_id: project.last_diff.id,
-          content: project.last_diff.summary || `${changes.length} changes proposed`,
+          content: pendingChanges.length
+            ? `${changes.length} of ${allChanges.length} changes are ready for review.`
+            : (project.last_diff.summary || `${changes.length} changes proposed`),
           request: effectiveRequestText,
           changes_count: changes.length,
           selected_count: changes.filter((change) => change.selected !== false).length,
+          total_changes: allChanges.length,
+          pending_changes: pendingChanges.length,
           generation_source: generationSource,
           status: 'draft',
+          edit_session_id: session.id,
+          validation_score: diffEvaluation.score,
           created_at: createdAt,
         },
       ]);
       return { type: 'workflow_diff', diff_id: project.last_diff.id };
     });
     storage.saveProject(ctx.workspace_id, project);
-    return ok(res, ctx, { job_id: job.id, diff: project.last_diff, model_status: getModelStatus(), ai_conversation: project.ai_conversation });
+    return ok(res, ctx, { job_id: job.id, diff: project.last_diff, edit_session: getActiveEditSession(project), model_status: getModelStatus(), ai_conversation: project.ai_conversation });
+  }
+
+  const editSessionsList = path.match(/^\/api\/projects\/([^/]+)\/edit-sessions$/);
+  if (method === 'GET' && editSessionsList) {
+    const project = getProject(ctx, editSessionsList[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    return ok(res, ctx, { sessions: ensureEditSessions(project), active: getActiveEditSession(project) });
+  }
+
+  const editSessionNext = path.match(/^\/api\/projects\/([^/]+)\/edit-sessions\/([^/]+)\/next$/);
+  if (method === 'POST' && editSessionNext) {
+    const project = getProject(ctx, editSessionNext[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    const session = ensureEditSessions(project).find((item) => item.id === editSessionNext[2]);
+    if (!session) return fail(res, ctx, 404, 'EDIT_SESSION_NOT_FOUND', 'Edit session not found');
+    if (!requireConfiguredLlm(res, ctx, 'the Workflow Edit Agent')) return;
+    if (session.status !== 'awaiting_next_batch') return fail(res, ctx, 409, 'EDIT_SESSION_NOT_AWAITING_NEXT_BATCH', 'Apply or reject the current workflow edit batch before requesting the next batch.');
+    const allChanges = session.all_changes || session.allChanges || [];
+    const completedIds = [
+      ...(session.applied_change_ids || session.appliedChangeIds || []),
+      ...(session.skipped_change_ids || session.skippedChangeIds || []),
+      ...(session.rejected_change_ids || session.rejectedChangeIds || []),
+    ];
+    const pendingChanges = allChanges.filter((change) => !completedIds.includes(change.id));
+    if (!pendingChanges.length) return fail(res, ctx, 400, 'NO_PENDING_CHANGES', 'No pending workflow edit changes remain.');
+    const batchSize = boundedEditSessionBatchSize(session.batch_size || session.batchSize);
+    const nextIndex = Number(session.batch_index || session.batchIndex || 1) + 1;
+    const sourceDiff = {
+      id: session.root_diff_id || session.rootDiffId || session.candidate_root_diff_id || session.candidateRootDiffId || `diff_${session.id}`,
+      request: session.effective_request || session.original_request,
+      summary: session.summary || 'Next workflow edit batch',
+      changes: allChanges,
+      generation_source: session.generation_source || session.generationSource || 'session_batch',
+      status: 'draft',
+      context_plan: session.context_plan || session.contextPlan || null,
+      context_policy: 'infer_context_from_request_and_workflow_json',
+      validation: session.validation || [],
+    };
+    const { batchDiff, currentChanges, pendingChanges: queuedChanges } = buildBatchedWorkflowDiff(sourceDiff, batchSize, completedIds, nextIndex);
+    const evaluation = evaluateDiffCandidate(project, batchDiff);
+    project.last_diff = {
+      ...batchDiff,
+      validation: evaluation,
+      focused_subgraph_summary: session.context_scope || session.contextScope || null,
+    };
+    const updatedSession = appendEditSessionMessage({
+      ...session,
+      status: 'diff_ready',
+      candidate_diff_id: project.last_diff.id,
+      candidateDiffId: project.last_diff.id,
+      batch_index: nextIndex,
+      batchIndex: nextIndex,
+      pending_change_ids: queuedChanges.map((change) => change.id),
+      pendingChangeIds: queuedChanges.map((change) => change.id),
+      plan: createExecutionPlanFromChanges(allChanges, {
+        currentIds: currentChanges.map((change) => change.id),
+        appliedIds: session.applied_change_ids || session.appliedChangeIds || [],
+        skippedIds: session.skipped_change_ids || session.skippedChangeIds || [],
+        rejectedIds: session.rejected_change_ids || session.rejectedChangeIds || [],
+        pendingIds: queuedChanges.map((change) => change.id),
+        evaluation,
+      }),
+      validation: evaluation.issues,
+      agent_trace: buildAgentTrace({ stage: 'diff_ready', intent: session.intent, slots: session.slots || {}, contextPlan: session.context_plan || session.contextPlan, diff: project.last_diff, evaluation, generationSource: project.last_diff.generation_source }),
+      agentTrace: buildAgentTrace({ stage: 'diff_ready', intent: session.intent, slots: session.slots || {}, contextPlan: session.context_plan || session.contextPlan, diff: project.last_diff, evaluation, generationSource: project.last_diff.generation_source }),
+    }, {
+      role: 'agent',
+      status: 'diff_ready',
+      content: `${currentChanges.length} more workflow change${currentChanges.length === 1 ? '' : 's'} are ready for review.${queuedChanges.length ? ` ${queuedChanges.length} remain queued.` : ''}`,
+      diff_id: project.last_diff.id,
+      changes_count: currentChanges.length,
+      selected_count: currentChanges.filter((change) => change.selected !== false).length,
+      total_changes: allChanges.length,
+      pending_changes: queuedChanges.length,
+      validation_score: evaluation.score,
+      critic: { status: evaluation.ok ? 'passed' : 'needs_attention', score: evaluation.score, errors: evaluation.errors, warnings: evaluation.warnings },
+      generation_source: project.last_diff.generation_source,
+    });
+    saveEditSession(project, updatedSession);
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { diff: project.last_diff, edit_session: updatedSession, ai_conversation: project.ai_conversation, model_status: getModelStatus() });
+  }
+
+  const editSessionGet = path.match(/^\/api\/projects\/([^/]+)\/edit-sessions\/([^/]+)$/);
+  if (method === 'GET' && editSessionGet) {
+    const project = getProject(ctx, editSessionGet[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    const session = ensureEditSessions(project).find((item) => item.id === editSessionGet[2]);
+    if (!session) return fail(res, ctx, 404, 'EDIT_SESSION_NOT_FOUND', 'Edit session not found');
+    return ok(res, ctx, session);
   }
 
   const diffGet = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)$/);
@@ -960,32 +2942,52 @@ const server = createServer(async (req, res) => {
   }
 
   const diffApply = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)\/apply$/);
-  if (method === 'POST' && diffApply) {
-    const project = getProject(ctx, diffApply[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+  const editSessionApply = path.match(/^\/api\/projects\/([^/]+)\/edit-sessions\/([^/]+)\/apply$/);
+  if (method === 'POST' && (diffApply || editSessionApply)) {
+    const project = getProject(ctx, diffApply?.[1] || editSessionApply?.[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
     if (body.workflow_version && Number(body.workflow_version) !== Number(project.workflow.version)) return fail(res, ctx, 409, 'VERSION_CONFLICT', 'Workflow has been updated by another operation. Please refresh and try again.');
-    const diff = project.last_diff; if (!diff || diff.id !== diffApply[2]) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
+    const targetSession = editSessionApply ? ensureEditSessions(project).find((item) => item.id === editSessionApply[2]) : null;
+    if (editSessionApply && !targetSession) return fail(res, ctx, 404, 'EDIT_SESSION_NOT_FOUND', 'Edit session not found');
+    const expectedDiffId = diffApply?.[2] || targetSession?.candidate_diff_id;
+    const diff = project.last_diff; if (!diff || diff.id !== expectedDiffId) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
     const previousVersion = project.workflow.version;
+    const selectedChangeIds = selectedDiffChangeIds(diff, body.selected_change_ids);
     recordUndoSnapshot(ctx, project, 'ai_diff_apply');
-    project.workflow = applyDiff(project.workflow, diff, body.selected_change_ids || diff.changes.filter((c) => c.selected).map((c) => c.id));
-    project.assets = markAffectedAssetsOutdated(diff.changes, project.assets);
+    project.workflow = applyDiff(project.workflow, diff, selectedChangeIds);
+    project.assets = applyAssetDiffChanges(project.assets, diff, selectedChangeIds);
+    project.assets = markAffectedAssetsOutdated((diff.changes || []).filter((change) => selectedChangeIds.length === 0 || selectedChangeIds.includes(change.id)), project.assets);
     project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
     markKitsStaleIfNeeded(project, previousVersion);
     diff.previous_version = previousVersion;
     diff.status = 'applied';
+    const session = targetSession || getActiveEditSession(project);
+    const sessionDiffId = session?.candidate_diff_id || session?.candidateDiffId;
+    const closedSession = sessionDiffId === diff.id
+      ? saveEditSession(project, closeEditSessionAfterApply(session, diff, selectedChangeIds))
+      : null;
     updateAiConversationMessage(project, diff.id, { status: 'applied' });
     storage.saveProject(ctx.workspace_id, project);
-    return ok(res, ctx, { workflow: project.workflow, validation_results: project.validation, ai_conversation: project.ai_conversation });
+    return ok(res, ctx, { workflow: project.workflow, validation_results: project.validation, edit_session: closedSession, ai_conversation: project.ai_conversation });
   }
 
   const diffReject = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)\/reject$/);
-  if (method === 'POST' && diffReject) {
-    const project = getProject(ctx, diffReject[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    if (!project.last_diff || project.last_diff.id !== diffReject[2]) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
+  const editSessionReject = path.match(/^\/api\/projects\/([^/]+)\/edit-sessions\/([^/]+)\/reject$/);
+  if (method === 'POST' && (diffReject || editSessionReject)) {
+    const project = getProject(ctx, diffReject?.[1] || editSessionReject?.[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    const targetSession = editSessionReject ? ensureEditSessions(project).find((item) => item.id === editSessionReject[2]) : null;
+    if (editSessionReject && !targetSession) return fail(res, ctx, 404, 'EDIT_SESSION_NOT_FOUND', 'Edit session not found');
+    const expectedDiffId = diffReject?.[2] || targetSession?.candidate_diff_id;
+    if (!project.last_diff || project.last_diff.id !== expectedDiffId) return fail(res, ctx, 404, 'DIFF_NOT_FOUND', 'Diff not found');
     project.last_diff.status = 'rejected';
+    const session = targetSession || getActiveEditSession(project);
+    const sessionDiffId = session?.candidate_diff_id || session?.candidateDiffId;
+    const closedSession = sessionDiffId === project.last_diff.id
+      ? saveEditSession(project, closeEditSessionAfterReject(session))
+      : null;
     updateAiConversationMessage(project, project.last_diff.id, { status: 'rejected' });
     storage.saveProject(ctx.workspace_id, project);
-    return ok(res, ctx, { diff_id: project.last_diff.id, status: 'rejected', ai_conversation: project.ai_conversation });
+    return ok(res, ctx, { diff_id: project.last_diff.id, status: 'rejected', edit_session: closedSession, ai_conversation: project.ai_conversation });
   }
   const diffRevert = path.match(/^\/api\/projects\/([^/]+)\/diffs\/([^/]+)\/revert$/);
   if (method === 'POST' && diffRevert) {

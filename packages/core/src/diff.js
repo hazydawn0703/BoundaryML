@@ -586,6 +586,29 @@ function buildHumanConfirmationChanges(userRequest, workflow) {
   return changes;
 }
 
+function isReviewGateForHighRiskRequest(request) {
+  return includesAny(request, [
+    'add review gates to all high-risk nodes',
+    'review gates to all high-risk nodes',
+    'all high-risk nodes',
+    '\u6240\u6709\u9ad8\u98ce\u9669\u8282\u70b9',
+    '\u9ad8\u98ce\u9669\u8282\u70b9',
+  ]) && includesAny(request, ['review gate', 'gate', 'approval', '\u5ba1\u6838\u95e8\u7981', '\u5ba1\u6279', '\u4eba\u5de5\u5ba1\u6838', '\u4eba\u5de5\u786e\u8ba4']);
+}
+
+function isConservativeWorkflowRequest(request) {
+  return includesAny(request, ['make this workflow more conservative', 'more conservative', 'conservative', '\u66f4\u4fdd\u5b88', '\u4fdd\u5b88']);
+}
+
+function isGeneratePromptsForAiNodesRequest(request) {
+  return includesAny(request, ['generate prompts for all ai nodes', 'prompts for all ai nodes', '\u4e3a\u6240\u6709 ai \u8282\u70b9\u751f\u6210\u63d0\u793a\u8bcd', '\u6240\u6709 ai \u8282\u70b9\u751f\u6210\u63d0\u793a\u8bcd'])
+    || (includesAny(request, ['prompt', '\u63d0\u793a\u8bcd']) && includesAny(request, ['all ai nodes', 'all ai', '\u6240\u6709ai', '\u6240\u6709 ai', '\u6240\u6709\u667a\u80fd']));
+}
+
+function isAddTestingBeforeLaunchRequest(request) {
+  return includesAny(request, ['add testing nodes before launch', 'testing before launch', '\u53d1\u5e03\u524d\u589e\u52a0\u6d4b\u8bd5', '\u4e0a\u7ebf\u524d\u589e\u52a0\u6d4b\u8bd5', '\u53d1\u5e03\u524d\u6d4b\u8bd5']);
+}
+
 function extractRequestedNodeName(userRequest) {
   const quoted = extractQuotedName(userRequest);
   if (quoted) return quoted;
@@ -699,8 +722,13 @@ function buildRequestedNodeAddChanges(userRequest, workflow) {
 }
 
 function extractValueAfterVerb(userRequest) {
-  const value = String(userRequest || '').match(/(?:to|as|=|:|\u4e3a|\u6539\u4e3a|\u6539\u6210|\u8bbe\u4e3a|\u8bbe\u7f6e\u4e3a|\u66f4\u65b0\u4e3a)\s*[\u201c\u201d"']?(.+?)[\u201c\u201d"']?\s*$/i);
-  return value?.[1]?.trim() || '';
+  const value = String(userRequest || '');
+  const verbMatches = [...value.matchAll(/(?:\u66f4\u65b0\u4e3a|\u8bbe\u7f6e\u4e3a|\u6539\u4e3a|\u6539\u6210|\u8bbe\u4e3a|to|as|\u4e3a)\s*[\u201c\u201d"']?(.+?)[\u201c\u201d"']?(?=$|\n)/gi)];
+  if (verbMatches.length) return verbMatches.at(-1)?.[1]?.trim() || '';
+  const valueMatches = [...value.matchAll(/(?:^|\n)\s*(?:value|new value|after)\s*(?:=|:)\s*[\u201c\u201d"']?(.+?)[\u201c\u201d"']?(?=$|\n)/gi)];
+  if (valueMatches.length) return valueMatches.at(-1)?.[1]?.trim() || '';
+  const assignmentMatches = [...value.matchAll(/(?:=)\s*[\u201c\u201d"']?(.+?)[\u201c\u201d"']?(?=$|\n)/gi)];
+  return assignmentMatches.at(-1)?.[1]?.trim() || '';
 }
 
 function normalizeRiskValue(value) {
@@ -773,6 +801,28 @@ function buildNodeFieldUpdateChanges(userRequest, workflow) {
   }];
 }
 
+function buildNodeDeleteChanges(userRequest, workflow) {
+  const request = String(userRequest || '');
+  const deleteIntent = includesAny(request, ['delete node', 'remove node', 'delete step', 'remove step', '\u5220\u9664\u8282\u70b9', '\u79fb\u9664\u8282\u70b9', '\u5220\u6389\u8282\u70b9'])
+    || (includesAny(request, ['delete ', 'remove ', '\u5220\u9664', '\u79fb\u9664']) && !includesAny(request, ['phase', '\u9636\u6bb5', 'edge', '\u8fde\u7ebf']));
+  if (!deleteIntent) return [];
+  const target = findMatchingNodes(request, workflow)[0];
+  if (!target) return [];
+  const targetId = target.id || target.node_id;
+  return [{
+    id: `change-delete-${safeDiffId(targetId, `${Date.now()}`)}`,
+    type: 'deleted',
+    targetType: 'node',
+    targetId,
+    field: 'node',
+    before: target,
+    after: null,
+    reason: `Delete ${target.name} from natural language request`,
+    impact: 'removes the node and its connected edges from the workflow',
+    selected: true,
+  }];
+}
+
 export function generateWorkflowDiff(userRequest, workflow, assets) {
   const request = lower(userRequest).trim();
   const changes = [];
@@ -786,10 +836,11 @@ export function generateWorkflowDiff(userRequest, workflow, assets) {
   }
 
   changes.push(...buildHumanConfirmationChanges(userRequest, workflow));
+  changes.push(...buildNodeDeleteChanges(userRequest, workflow));
   changes.push(...buildRequestedNodeAddChanges(userRequest, workflow));
   changes.push(...buildNodeFieldUpdateChanges(userRequest, workflow));
 
-  if (request.includes('add review gates to all high-risk nodes')) {
+  if (isReviewGateForHighRiskRequest(userRequest)) {
     (workflow.nodes || []).forEach((node) => {
       if (readNodeRisk(node) === 'high' && !readNodeReviewGate(node)?.required) {
         changes.push({
@@ -817,7 +868,7 @@ export function generateWorkflowDiff(userRequest, workflow, assets) {
     });
   }
 
-  if (request.includes('make this workflow more conservative')) {
+  if (isConservativeWorkflowRequest(userRequest)) {
     (workflow.nodes || []).forEach((node) => {
       if (readNodeMode(node) === 'ai_autonomous') {
         changes.push({
@@ -837,7 +888,7 @@ export function generateWorkflowDiff(userRequest, workflow, assets) {
     warnings.push('Conservative mode may increase delivery cycle time.');
   }
 
-  if (request.includes('generate prompts for all ai nodes')) {
+  if (isGeneratePromptsForAiNodesRequest(userRequest)) {
     (workflow.nodes || []).forEach((node) => {
       if (readNodeMode(node) !== 'human_only' && !(assets.prompts || []).find((p) => readAssetNodeId(p) === node.id)) {
         const prompt = generatePrompt(node);
@@ -857,9 +908,9 @@ export function generateWorkflowDiff(userRequest, workflow, assets) {
     });
   }
 
-  if (request.includes('add testing nodes before launch')) {
-    const testingPhase = (workflow.phases || []).find((phase) => phase.name === 'Testing');
-    const launchPhase = (workflow.phases || []).find((phase) => phase.name === 'Launch');
+  if (isAddTestingBeforeLaunchRequest(userRequest)) {
+    const testingPhase = (workflow.phases || []).find((phase) => phaseMatchesToken(phase, 'testing') || phaseMatchesToken(phase, '\u6d4b\u8bd5'));
+    const launchPhase = (workflow.phases || []).find((phase) => phaseMatchesToken(phase, 'launch') || phaseMatchesToken(phase, '\u53d1\u5e03'));
     if (testingPhase && launchPhase) {
       changes.push({
         id: 'change-add-regression-node',
