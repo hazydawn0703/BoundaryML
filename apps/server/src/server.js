@@ -1,9 +1,8 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createWorkflowFromTemplate, applyWorkflowPatch, applyDiff, createWorkflowSnapshot, markAffectedAssetsOutdated, normalizeWorkflowSpec } from '../../../packages/core/src/engine.js';
+import { applyWorkflowPatch, applyDiff, createWorkflowSnapshot, markAffectedAssetsOutdated, normalizeWorkflowSpec } from '../../../packages/core/src/engine.js';
 import { getTemplateById, listPublicTemplates, selectTemplateForProject } from '../../../packages/core/src/templates.js';
-import { generateWorkflowDraft } from '../../../packages/generators/src/workflowGenerator.js';
 import { generatePrompt } from '../../../packages/generators/src/promptGenerator.js';
 import { generateChecklist } from '../../../packages/generators/src/checklistGenerator.js';
 import { buildWorkflowIndex, extractFocusedSubgraph, generateWorkflowContextPlan, generateWorkflowDiff, normalizeAgentDiff, normalizeContextPlan, workflowDiffOutputContract } from '../../../packages/core/src/diff.js';
@@ -1557,7 +1556,7 @@ function extractProjectCreationSlots(text, previous = {}) {
     sensitive_areas: explicitSensitiveAreas.length ? explicitSensitiveAreas : (previous.sensitive_areas || []),
     context_pack: extractProjectCreationContextPack(text, previousContextPack),
   };
-  if (!next.project_type) next.project_type = 'AI Feature';
+  if (!next.project_type) next.project_type = 'Custom AI Workflow';
   if (!next.risk_level) next.risk_level = 'medium';
   if (!next.current_stage && textIncludesAny(text, ['discovery', '\u63a2\u7d22', '\u8c03\u7814'])) next.current_stage = 'Discovery';
   return next;
@@ -1618,6 +1617,19 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
   const previousSlots = session.slots || {};
   let modelResult = null;
   let modelError = null;
+  const modelCall = {
+    id: `call_${Date.now()}_project_agent`,
+    workspace_id: ctx.workspace_id,
+    created_by: ctx.user_id,
+    created_at: new Date().toISOString(),
+    last_activity_at: new Date().toISOString(),
+    model: getModelStatus().planning_model,
+    purpose: 'project_creation_plan',
+    status: 'running',
+    stage: 'requesting',
+    summary: `project creation: ${requestText}`,
+  };
+  modelCalls.unshift(modelCall);
   try {
     modelResult = await runModel('project_creation_plan', {
       request: requestText,
@@ -1629,7 +1641,7 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
         project: {
           name: 'short project name',
           goal: 'project goal',
-          project_type: 'AI Feature | Internal Tool | Legacy Modernization',
+          project_type: 'short domain-specific category, for example Contract Review AI or Internal Support Automation',
           current_stage: 'Discovery | Design | Development | Testing | Launch',
           risk_level: 'low | medium | high',
           target_deliverables: ['deliverable'],
@@ -1646,15 +1658,28 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
         confidence: 'low | medium | high',
         missing_fields: ['name | goal | current_stage'],
       },
+    }, {
+      onProgress: (progress) => Object.assign(modelCall, {
+        stage: progress.stage || 'reasoning',
+        reasoning_characters: progress.reasoning_characters || 0,
+        last_activity_at: new Date().toISOString(),
+      }),
     });
-    modelCalls.unshift({ id: `call_${Date.now()}_project_agent`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'project_creation_plan', status: modelResult.status, summary: modelResult.output?.summary || `project creation: ${requestText}` });
+    Object.assign(modelCall, { model: modelResult.model, status: modelResult.status, stage: 'completed', summary: modelResult.output?.summary || modelCall.summary, last_activity_at: new Date().toISOString() });
   } catch (error) {
     modelError = error;
-    modelCalls.unshift({ id: `call_${Date.now()}_project_agent`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().planning_model, purpose: 'project_creation_plan', status: 'failed', summary: error.message });
+    Object.assign(modelCall, { status: 'failed', stage: 'failed', summary: error.message, last_activity_at: new Date().toISOString() });
   }
   const modelSlots = modelResult?.status && modelResult.status !== 'mock'
     ? normalizeProjectCreationModelSlots(modelResult.output)
     : {};
+  const modelProvidedProjectPlan = Object.entries(modelSlots).some(([key, value]) => {
+    if (key === 'context_pack') return Object.values(value || {}).some((item) => Array.isArray(item) ? item.length : Boolean(item));
+    return Array.isArray(value) ? value.length : Boolean(value);
+  });
+  const modelFailure = modelError?.message
+    || (modelResult?.status !== 'succeeded' ? 'PROJECT_AGENT_MODEL_UNAVAILABLE' : '')
+    || (!modelProvidedProjectPlan ? 'PROJECT_AGENT_INVALID_MODEL_OUTPUT' : '');
   const fallbackSlots = extractProjectCreationSlots(requestText, previousSlots);
   const modelEnrichedSlots = mergeProjectCreationSlots(fallbackSlots, modelSlots);
   const explicitCurrentTurnSlots = extractExplicitProjectCreationSlots(requestText);
@@ -1665,11 +1690,7 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
     {
       stage: 'project_planner',
       status: modelError ? 'failed' : (modelResult?.status || 'fallback'),
-      generation_source: modelSlots && Object.keys(modelSlots).some((key) => {
-        const value = modelSlots[key];
-        if (key === 'context_pack') return Object.values(value || {}).some((item) => Array.isArray(item) ? item.length : Boolean(item));
-        return Array.isArray(value) ? value.length : Boolean(value);
-      }) ? 'llm' : (modelResult?.status === 'mock' ? 'mock_fallback' : 'deterministic_fallback'),
+      generation_source: modelProvidedProjectPlan ? 'llm' : 'failed',
       missing_slots: missing,
       context_pack_fields: Object.entries(slots.context_pack || {}).filter(([, value]) => Array.isArray(value) ? value.length : Boolean(value)).map(([key]) => key),
       error: modelError?.message || null,
@@ -1683,6 +1704,7 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
     agent_trace: trace,
     agentTrace: trace,
     model_status: modelResult?.status || (modelError ? 'failed' : 'fallback'),
+    model_error: modelFailure || null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -1930,9 +1952,9 @@ function buildAssetsForWorkflow(workflow, modelName = 'configured-planning-model
   return { prompts, checklists, artifact_templates, artifactTemplates: artifact_templates };
 }
 
-function modelWorkflowPayload(project, selectedTemplate) {
+function modelWorkflowPayload(project) {
   return {
-    instruction: 'Generate a BoundaryML workflow draft as strict JSON. Do not copy the sample AI SaaS Feature MVP unless the user project actually matches it.',
+    instruction: 'Generate a domain-specific BoundaryML workflow draft as strict JSON. Infer phases and nodes from this project only. Do not copy a generic software delivery template. Return at least three concrete nodes whose names and goals clearly match the project domain.',
     output_contract: {
       workflow: {
         phases: [{ id: 'phase-1', name: 'Discovery', order: 1 }],
@@ -1964,7 +1986,6 @@ function modelWorkflowPayload(project, selectedTemplate) {
       output_language: project.output_language || 'en',
     },
     context_pack: project.context_pack || {},
-    template: selectedTemplate.content || selectedTemplate,
     boundary_rules: [
       'High risk nodes require a required review gate.',
       'Human-only nodes must not have AI prompts.',
@@ -1972,6 +1993,59 @@ function modelWorkflowPayload(project, selectedTemplate) {
       'Every node must have inputs, outputs, and acceptance criteria.',
     ],
   };
+}
+
+async function prepareWorkflowGeneration(ctx, project, selectedTemplate) {
+  let modelResult;
+  const modelCall = {
+    id: `call_${Date.now()}_workflow_generate`,
+    workspace_id: ctx.workspace_id,
+    created_by: ctx.user_id,
+    created_at: new Date().toISOString(),
+    last_activity_at: new Date().toISOString(),
+    model: getModelStatus().planning_model,
+    purpose: 'workflow_generate',
+    status: 'running',
+    stage: 'requesting',
+    summary: `generating domain workflow for ${project.name}`,
+  };
+  modelCalls.unshift(modelCall);
+  try {
+    modelResult = await runModel('workflow_generate', modelWorkflowPayload(project), {
+      onProgress: (progress) => Object.assign(modelCall, {
+        stage: progress.stage || 'reasoning',
+        reasoning_characters: progress.reasoning_characters || 0,
+        last_activity_at: new Date().toISOString(),
+      }),
+    });
+    if (modelResult.status !== 'succeeded') throw new Error('WORKFLOW_MODEL_UNAVAILABLE: The configured LLM did not execute.');
+    Object.assign(modelCall, { model: modelResult.model, status: 'succeeded', stage: 'completed', summary: modelResult.output?.summary || `generated domain workflow for ${project.name}`, last_activity_at: new Date().toISOString() });
+  } catch (error) {
+    Object.assign(modelCall, { status: 'failed', stage: 'failed', summary: error.message || 'Workflow generation failed', last_activity_at: new Date().toISOString() });
+    throw error;
+  }
+
+  try {
+    const workflow = normalizeGeneratedWorkflow(project, selectedTemplate, modelResult.output);
+    const assets = buildAssetsForWorkflow(workflow, modelResult.model);
+    const schema = validateWorkflow(workflow);
+    if (!schema.ok) throw new Error(`MODEL_WORKFLOW_SCHEMA_INVALID: ${schema.errors.join('; ')}`);
+    const validation = validateRulesWorkflow(workflow, assets, { forGeneration: true, modelConfig: getModelStatus() });
+    const specCheck = validateBoundaryMLProjectSpec({ boundaryml_version: 'v0.1', project, context_pack: project.context_pack, workflow, assets, validation, execution_kits: project.execution_kits || [] });
+    if (!specCheck.ok) throw new Error(`MODEL_PROJECT_SPEC_INVALID: ${specCheck.errors.join('; ')}`);
+    return { workflow, assets, validation, modelResult };
+  } catch (error) {
+    modelCalls.unshift({ id: `call_${Date.now()}_invalid`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_generate', status: 'failed', summary: error.message || 'Model workflow output invalid' });
+    throw error;
+  }
+}
+
+function applyPreparedWorkflow(ctx, project, prepared) {
+  recordUndoSnapshot(ctx, project, 'model_generation');
+  project.workflow = prepared.workflow;
+  project.assets = prepared.assets;
+  project.validation = prepared.validation;
+  return { type: 'workflow', workflow_id: prepared.workflow.id, workflow_version: prepared.workflow.version };
 }
 function ensureWorkflowHistory(project) {
   if (!Array.isArray(project.workflow_history_items)) project.workflow_history_items = [];
@@ -2141,6 +2215,19 @@ const server = createServer(async (req, res) => {
     if (!requireConfiguredLlm(res, ctx, 'the project creation Agent')) return;
     let session = buildProjectCreationSession(ctx, requestText, { session_id: body.session_id || body.sessionId, output_language: body.output_language || body.outputLanguage });
     session = await enrichProjectCreationSessionWithModel(ctx, session, requestText);
+    if (session.model_error) {
+      const isChinese = normalizeProjectAgentLanguage(session.output_language || session.outputLanguage, textHasChinese(requestText) ? 'zh-Hans' : 'en') === 'zh-Hans';
+      session.status = 'failed';
+      session.messages.push({
+        role: 'agent',
+        status: 'failed',
+        content: isChinese ? '\u9879\u76ee\u89c4\u5212\u6a21\u578b\u8c03\u7528\u5931\u8d25\uff0c\u672a\u521b\u5efa\u9879\u76ee\u3002\u8bf7\u68c0\u67e5\u6a21\u578b\u914d\u7f6e\u540e\u91cd\u8bd5\u3002' : 'Project planning failed and no project was created. Check Model Access and try again.',
+        error: session.model_error,
+        at: new Date().toISOString(),
+      });
+      saveProjectCreationSession(session);
+      return fail(res, ctx, 502, 'PROJECT_AGENT_MODEL_FAILED', `Project planning failed: ${session.model_error}`, [{ session_id: session.id, cause: session.model_error }]);
+    }
     if (session.missing_slots.length) {
       const clarification = projectCreationClarification(session);
       session.status = 'collecting_info';
@@ -2177,6 +2264,20 @@ const server = createServer(async (req, res) => {
     }, selectedTemplate);
     const v = validateProject(project); if (!v.ok) return fail(res, ctx, 400, 'SCHEMA_INVALID', 'Project invalid', v.errors);
     ensureWorkflowHistory(project);
+    let preparedWorkflow;
+    try {
+      preparedWorkflow = await prepareWorkflowGeneration(ctx, project, selectedTemplate);
+    } catch (error) {
+      session.status = 'failed';
+      session.messages.push({ role: 'agent', status: 'failed', content: normalizeProjectAgentLanguage(session.output_language || session.outputLanguage) === 'zh-Hans' ? '\u5de5\u4f5c\u6d41\u751f\u6210\u5931\u8d25\uff0c\u9879\u76ee\u672a\u521b\u5efa\u3002\u8bf7\u68c0\u67e5\u6a21\u578b\u914d\u7f6e\u6216\u91cd\u8bd5\u3002' : 'Workflow generation failed and no project was created. Check Model Access or try again.', error: error.message, at: new Date().toISOString() });
+      saveProjectCreationSession(session);
+      return fail(res, ctx, 502, 'PROJECT_WORKFLOW_GENERATION_FAILED', 'The configured LLM could not generate a valid project workflow.', [{ session_id: session.id, cause: error.message }]);
+    }
+    const generationJob = createJob(ctx, project, 'generate_workflow_draft', { source: 'project_creation_agent', context_pack: structuredClone(project.context_pack || {}) }, readIdempotencyKey(req));
+    runJob(ctx, project, generationJob, (progress) => {
+      progress('running_boundary_rules', 'Applying validated model workflow');
+      return applyPreparedWorkflow(ctx, project, preparedWorkflow);
+    });
     session = {
       ...session,
       status: 'created',
@@ -2186,8 +2287,8 @@ const server = createServer(async (req, res) => {
       selectedTemplateId: selectedTemplate.id,
       context_pack: project.context_pack,
       contextPack: project.context_pack,
-      agent_trace: [...(session.agent_trace || []), selectedTemplateTrace],
-      agentTrace: [...(session.agent_trace || []), selectedTemplateTrace],
+      agent_trace: [...(session.agent_trace || []), selectedTemplateTrace, { stage: 'workflow_generator', status: 'completed', generation_source: 'llm', model: preparedWorkflow.modelResult.model, phases: project.workflow.phases.length, nodes: project.workflow.nodes.length }],
+      agentTrace: [...(session.agent_trace || []), selectedTemplateTrace, { stage: 'workflow_generator', status: 'completed', generation_source: 'llm', model: preparedWorkflow.modelResult.model, phases: project.workflow.phases.length, nodes: project.workflow.nodes.length }],
       messages: [...session.messages, { role: 'agent', status: 'created', content: normalizeProjectAgentLanguage(session.output_language || session.outputLanguage) === 'zh-Hans' ? `\u5df2\u521b\u5efa\u9879\u76ee ${project.name}\u3002` : `Created project ${project.name}.`, project_id: project.id, at: new Date().toISOString() }].slice(-AI_CONVERSATION_LIMIT),
       updated_at: new Date().toISOString(),
     };
@@ -2206,7 +2307,7 @@ const server = createServer(async (req, res) => {
     project.aiConversation = project.ai_conversation;
     saveProjectCreationSession(session);
     storage.saveProject(ctx.workspace_id, project);
-    return ok(res, ctx, { project, project_creation_session: session, model_status: getModelStatus() }, 201);
+    return ok(res, ctx, { project, project_creation_session: session, generation_job: generationJob, model_status: getModelStatus() }, 201);
   }
 
   if (method === 'POST' && path === '/api/projects') {
@@ -2285,56 +2386,20 @@ const server = createServer(async (req, res) => {
     if (!requireConfiguredLlm(res, ctx, 'Workflow Agent generation')) return;
     const job = createJob(ctx, project, 'generate_workflow_draft', { context_pack: structuredClone(project.context_pack || {}), workflow: structuredClone(project.workflow) }, readIdempotencyKey(req));
     const selectedTemplate = getTemplateById(project.created_from_template) || selectTemplateForProject(project);
-    let modelResult = null;
-    let modelError = null;
+    let preparedWorkflow;
     try {
-      modelResult = await runModel('workflow_generate', modelWorkflowPayload(project, selectedTemplate));
-      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_generate', status: modelResult.status || 'succeeded', summary: modelResult.output?.summary || (modelResult.status === 'mock' ? 'mock workflow fallback' : `generated workflow for ${project.name}`) });
+      preparedWorkflow = await prepareWorkflowGeneration(ctx, project, selectedTemplate);
     } catch (error) {
-      modelError = error;
-      modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: getModelStatus().planning_model, purpose: 'workflow_generate', status: 'failed', summary: error.message || 'Workflow generation failed' });
+      job.status = 'failed';
+      job.error = { code: 'WORKFLOW_GENERATION_FAILED', stage: 'calling_model', retryable: true, message: error.message };
+      setJobProgress(job, 'failed', error.message);
+      job.updated_at = new Date().toISOString();
+      storage.saveProject(ctx.workspace_id, project);
+      return fail(res, ctx, 502, 'WORKFLOW_GENERATION_FAILED', 'The configured LLM could not generate a valid workflow.', [{ job_id: job.id, cause: error.message }]);
     }
     runJob(ctx, project, job, (progress) => {
-      progress('calling_model', 'Generating workflow draft');
-      let workflow = null;
-      let assets = null;
-      if (modelResult && modelResult.status !== 'mock') {
-        progress('parsing_output', 'Parsing model workflow output');
-        try {
-          workflow = normalizeGeneratedWorkflow(project, selectedTemplate, modelResult.output);
-          assets = buildAssetsForWorkflow(workflow, modelResult.model);
-        } catch (error) {
-          modelCalls.unshift({ id: `call_${Date.now()}`, workspace_id: ctx.workspace_id, created_by: ctx.user_id, created_at: new Date().toISOString(), model: modelResult.model, purpose: 'workflow_generate', status: 'failed', summary: error.message || 'Model workflow output invalid' });
-          if (!getModelStatus().allow_mock) throw error;
-          workflow = null;
-          assets = null;
-        }
-      } else if (modelError && !getModelStatus().allow_mock) {
-        throw modelError;
-      }
-      const drafted = workflow ? null : generateWorkflowDraft({
-        ...project,
-        currentStage: project.current_stage,
-        riskLevel: project.risk_level,
-        deliveryScope: project.target_deliverables,
-        expectedAiScope: project.expected_ai_scope,
-        sensitiveAreas: project.sensitive_areas,
-        setupMode: project.setup_mode,
-      }, project.context_pack || {});
-      progress('parsing_output', 'Parsing generated output');
-      workflow = workflow || createWorkflowFromTemplate(project, project.context_pack, drafted.workflow);
-      assets = assets || drafted.assets || project.assets;
-      const schema = validateWorkflow(workflow); if (!schema.ok) throw new Error(schema.errors.join('; '));
-      progress('running_boundary_rules', 'Running boundary rules');
-      const validation = validateRulesWorkflow(workflow, assets, { forGeneration: true, modelConfig: modelResult && modelResult.status !== 'mock' ? getModelStatus() : null });
-      recordUndoSnapshot(ctx, project, 'model_generation');
-      project.workflow = workflow;
-      project.assets = assets;
-      project.validation = validation;
-      const specCheck = validateBoundaryMLProjectSpec({ boundaryml_version: 'v0.1', project, context_pack: project.context_pack, workflow, assets: project.assets, validation, execution_kits: project.execution_kits || [] });
-      if (!specCheck.ok) throw new Error(specCheck.errors.join('; '));
-      storage.saveProject(ctx.workspace_id, project);
-      return { type: 'workflow', workflow_id: workflow.id, workflow_version: workflow.version };
+      progress('running_boundary_rules', 'Applying validated model workflow');
+      return applyPreparedWorkflow(ctx, project, preparedWorkflow);
     });
     return ok(res, ctx, { job_id: job.id, status: job.status, workflow: project.workflow, validation_results: project.validation });
   }

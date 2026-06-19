@@ -213,32 +213,24 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
   box-shadow: var(--shadow-sm);
 }
 .card:hover { border-color: rgba(66, 87, 255, 0.18); }
-.project-agent-card { display: grid; gap: 12px; }
-.project-agent-messages {
-  display: grid;
-  gap: 10px;
-  max-height: 300px;
-  overflow: auto;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(248, 250, 252, 0.72);
+.project-agent-workspace {
+  position: relative;
+  min-height: calc(100vh - 146px);
+  overflow: hidden;
+  border: 1px solid rgba(219, 227, 239, 0.86);
+  background-color: #f7faff;
+  background-image: radial-gradient(circle, rgba(148, 163, 184, 0.24) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
-.project-agent-message {
-  max-width: 82%;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: #fff;
+.project-agent-exit {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 48;
 }
-.project-agent-message.user {
-  justify-self: end;
-  background: var(--primary-50);
-  border-color: rgba(66, 87, 255, 0.22);
-}
-.project-agent-message.agent { justify-self: start; }
-.project-agent-message p { margin: 4px 0 0; }
-.project-agent-message ul { margin: 8px 0 0; padding-left: 18px; }
+.project-agent-drawer { bottom: 96px; }
+.project-agent-drawer .ai-chat-list { flex: 1; }
+.project-agent-composer { width: min(780px, calc(100% - 64px)); }
 .project-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
 .project { position: relative; overflow: hidden; }
 .project::before {
@@ -617,6 +609,22 @@ textarea { min-height: 82px; resize: vertical; }
   cursor: default;
   user-select: none;
 }
+.workflow-empty-state {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  z-index: 55;
+  width: min(520px, calc(100% - 48px));
+  padding: 24px;
+  border: 1px solid rgba(201, 213, 230, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+.workflow-empty-state h3 { margin: 0 0 8px; }
+.workflow-empty-state p { margin: 0 0 18px; color: var(--muted); }
 .studio-page .workflow-canvas {
   height: 100%;
   min-height: 0;

@@ -48,9 +48,101 @@ async function apiFetch(baseUrl, path, options = {}) {
   return { status, body };
 }
 
+async function startFakeModelServer(port) {
+  const server = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk) => { raw += chunk; });
+    req.on('end', () => {
+      try {
+        const body = JSON.parse(raw || '{}');
+        if (/^qwen/i.test(body.model || '') && (body.enable_thinking !== true || body.stream !== true)) {
+          throw new Error('DashScope Qwen Agent requests must keep thinking enabled and stream model activity');
+        }
+        const userMessage = (body.messages || []).find((message) => message.role === 'user');
+        const envelope = JSON.parse(userMessage?.content || '{}');
+        const task = envelope.task;
+        const payload = envelope.payload || {};
+        let output = { summary: `fake response for ${task}` };
+        if (task === 'project_creation_plan') {
+          output = {
+            project: {
+              name: 'Planned AI Project',
+              goal: 'Deliver the requested domain workflow',
+              project_type: 'Custom AI Workflow',
+              current_stage: 'Discovery',
+              risk_level: 'medium',
+              target_deliverables: [],
+              expected_ai_scope: [],
+              sensitive_areas: [],
+              context_pack: {},
+            },
+            confidence: 'high',
+            missing_fields: [],
+          };
+        } else if (task === 'workflow_generate') {
+          const project = payload.project || {};
+          const domainText = `${project.name || ''} ${project.goal || ''}`;
+          const contractDomain = /contract|\u5408\u540c/i.test(domainText);
+          const phases = contractDomain
+            ? [{ id: 'phase-intake', name: 'Contract Intake', order: 1 }, { id: 'phase-review', name: 'Risk Review', order: 2 }, { id: 'phase-approval', name: 'Legal Approval', order: 3 }]
+            : [{ id: 'phase-intake', name: 'Goal Intake', order: 1 }, { id: 'phase-work', name: 'Domain Execution', order: 2 }, { id: 'phase-approval', name: 'Human Approval', order: 3 }];
+          const nodes = contractDomain
+            ? [
+              { id: 'node-contract-intake', phase_id: 'phase-intake', name: 'Contract Intake and Classification', goal: 'Collect the contract and identify its type and parties', execution_mode: 'human_lead_ai_assist', risk_level: 'medium', human_owner_role: 'Legal Operations', ai_role: 'Contract Intake Assistant', inputs: ['Contract file'], outputs: ['Classified contract brief'] },
+              { id: 'node-clause-risk', phase_id: 'phase-review', name: 'Clause and Risk Analysis', goal: 'Detect risky clauses and compare them with legal policy', execution_mode: 'ai_draft_human_review', risk_level: 'high', human_owner_role: 'Legal Counsel', ai_role: 'Clause Risk Analyst', inputs: ['Classified contract brief', 'Legal policy'], outputs: ['Risk-marked contract review'] },
+              { id: 'node-legal-approval', phase_id: 'phase-approval', name: 'Legal Approval', goal: 'Approve, reject, or return the reviewed contract for revision', execution_mode: 'human_only', risk_level: 'high', human_owner_role: 'Legal Approver', inputs: ['Risk-marked contract review'], outputs: ['Legal approval decision'] },
+            ]
+            : [
+              { id: 'node-goal-intake', phase_id: 'phase-intake', name: `${project.name || 'Project'} Goal Intake`, goal: project.goal || 'Clarify the project goal', execution_mode: 'human_lead_ai_assist', risk_level: 'medium', inputs: ['Project request'], outputs: ['Approved goal'] },
+              { id: 'node-domain-work', phase_id: 'phase-work', name: 'Domain Workflow Execution', goal: `Execute the core workflow for ${project.name || 'the project'}`, execution_mode: 'ai_draft_human_review', risk_level: 'medium', inputs: ['Approved goal'], outputs: ['Domain result'] },
+              { id: 'node-human-approval', phase_id: 'phase-approval', name: 'Human Approval', goal: 'Review and approve the domain result', execution_mode: 'human_only', risk_level: 'high', inputs: ['Domain result'], outputs: ['Approval decision'] },
+            ];
+          output = {
+            workflow: {
+              phases,
+              nodes,
+              edges: [
+                { id: 'edge-1', from: nodes[0].id, to: nodes[1].id, required_outputs: nodes[0].outputs },
+                { id: 'edge-2', from: nodes[1].id, to: nodes[2].id, required_outputs: nodes[1].outputs },
+              ],
+            },
+          };
+          if (/invalid workflow/i.test(domainText)) {
+            output.workflow.nodes = [];
+            output.workflow.edges = [];
+          }
+        } else if (task === 'workflow_context_plan') {
+          output = { intent: 'workflow_edit', targets: [], operation_scope: [] };
+        } else if (task === 'workflow_diff' || task === 'workflow_diff_repair') {
+          output = { changes: [], summary: 'Use deterministic edit fixture after a successful model call.' };
+        }
+        if (body.stream) {
+          res.writeHead(200, { 'content-type': 'text/event-stream' });
+          res.write(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: 'planning' } }] })}\n\n`);
+          res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(output) } }], usage: { prompt_tokens: 1, completion_tokens: 1 } })}\n\n`);
+          res.end('data: [DONE]\n\n');
+        } else {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(output) } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
+        }
+      } catch (error) {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: error.message } }));
+      }
+    });
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(Number(port), '127.0.0.1', resolve);
+  });
+  return server;
+}
+
 async function main() {
   const port = String(9900 + Math.floor(Math.random() * 80));
+  const modelPort = String(10800 + Math.floor(Math.random() * 80));
   const baseUrl = `http://127.0.0.1:${port}`;
+  const fakeModelServer = await startFakeModelServer(modelPort);
   const tmpDataDir = `.tmp-server-smoke-${Date.now()}`;
   const env = { ...process.env, BOUNDARYML_SERVER_PORT: port, BOUNDARYML_STORAGE_ADAPTER: 'file', BOUNDARYML_DATA_DIR: tmpDataDir };
   let server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
@@ -58,7 +150,7 @@ async function main() {
   try {
     await waitForServer(baseUrl);
     const health = await apiFetch(baseUrl, '/api/health'); assert(health.status === 200, 'health should return 200');
-    const modelConfigSave = await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ provider: 'openai-compatible', api_base_url: 'https://example.test/v1', api_key: 'sk-smoke-secret', default_model: 'smoke-default', planning_model: 'smoke-planning', prompt_model: 'smoke-prompt', diff_model: 'smoke-diff', timeout_ms: 12345, structured_output_enabled: false, allow_mock: true, log_level: 'debug' }) });
+    const modelConfigSave = await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ provider: 'openai-compatible', api_base_url: `http://127.0.0.1:${modelPort}/v1`, api_key: 'sk-smoke-secret', default_model: 'smoke-default', planning_model: 'smoke-planning', prompt_model: 'smoke-prompt', diff_model: 'smoke-diff', timeout_ms: 12345, structured_output_enabled: false, allow_mock: true, log_level: 'debug' }) });
     assert(modelConfigSave.body.data.status.default_model === 'smoke-default', 'saved model config should update runtime status');
     assert(modelConfigSave.body.data.status.mode === 'real', 'saved api key should switch model status out of mock mode');
     const modelConfig = await apiFetch(baseUrl, '/api/model/config');
@@ -127,7 +219,7 @@ async function main() {
     assert(blockedWorkflowGeneration.status === 428 && blockedWorkflowGeneration.body.error.code === 'LLM_CONFIGURATION_REQUIRED', 'workflow generation should require a configured LLM in Local Server mode');
     const blockedWorkflowEdit = await apiFetch(baseUrl, `/api/projects/${projectId}/edit-sessions/messages`, { method: 'POST', body: JSON.stringify({ request: 'make this workflow more conservative' }) });
     assert(blockedWorkflowEdit.status === 428 && blockedWorkflowEdit.body.error.code === 'LLM_CONFIGURATION_REQUIRED', 'Workflow Edit Agent should require a configured LLM in Local Server mode');
-    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ api_base_url: 'http://127.0.0.1:1/v1', api_key: 'sk-agent-smoke', timeout_ms: 1000, allow_mock: true }) });
+    await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ provider: 'aliyun', api_base_url: `http://127.0.0.1:${modelPort}/v1`, api_key: 'sk-agent-smoke', planning_model: 'qwen3.6-max-preview', timeout_ms: 1000, allow_mock: true }) });
     const projectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', {
       method: 'POST',
       body: JSON.stringify({
@@ -141,6 +233,29 @@ async function main() {
     assert(agentProject.expected_ai_scope.length === 1 && !agentProject.expected_ai_scope[0].includes('\u654f\u611f\u533a\u57df'), 'project agent should isolate AI scope from sensitive areas');
     assert(agentProject.context_pack.team_roles[0] === 'PM', 'project agent should remove Chinese linking words from Context Pack values');
     assert(agentProject.context_pack.tool_stack[0] === 'GitHub', 'project agent should isolate tool stack from following constraints');
+    assert(projectAgent.body.data.generation_job.status === 'succeeded' && agentProject.workflow.nodes.length >= 3, 'project Agent should return an atomically generated non-empty workflow');
+
+    const contractProjectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        output_language: 'zh-Hans',
+        request: '\u9879\u76ee\u540d\u79f0\u662f\u5408\u540c\u5ba1\u6838AI\uff0c\u76ee\u6807\u662f\u964d\u4f4e\u5408\u540c\u6cd5\u52a1\u5ba1\u6838\u65f6\u95f4\uff0c\u5f53\u524d\u9636\u6bb5\u662f\u63a2\u7d22\uff0c\u56e2\u961f\u89d2\u8272\u6709\u6cd5\u52a1\u548c\u4e1a\u52a1\u8d1f\u8d23\u4eba\uff0c\u5ba1\u6279\u6d41\u7a0b\u662f\u6cd5\u52a1\u5ba1\u6279\uff0c\u98ce\u9669\u7ea6\u675f\u662f\u5408\u540c\u6570\u636e\u4e0d\u80fd\u5916\u53d1\u3002',
+      }),
+    });
+    const contractProject = contractProjectAgent.body.data.project;
+    assert(contractProject.created_from_template === 'template-custom-ai-workflow', 'domain projects should use the neutral custom scaffold instead of the AI SaaS fallback template');
+    assert(contractProject.workflow.nodes.length === 3, 'contract review Agent creation should persist generated workflow nodes before returning');
+    assert(contractProject.workflow.nodes.some((node) => node.name === 'Clause and Risk Analysis'), 'contract review workflow should contain domain-specific review nodes');
+    assert(!contractProject.workflow.nodes.some((node) => node.name === 'PRD Draft Generation'), 'contract review workflow should not copy the AI SaaS MVP node set');
+
+    const projectsBeforeInvalidPlan = await apiFetch(baseUrl, '/api/projects');
+    const invalidWorkflowProject = await apiFetch(baseUrl, '/api/project-agent/messages', {
+      method: 'POST',
+      body: JSON.stringify({ request: 'name: Invalid Workflow; goal: test atomic project creation; current stage: discovery' }),
+    });
+    assert(invalidWorkflowProject.status === 502 && invalidWorkflowProject.body.error.code === 'PROJECT_WORKFLOW_GENERATION_FAILED', 'invalid model workflow output should fail project creation explicitly');
+    const projectsAfterInvalidPlan = await apiFetch(baseUrl, '/api/projects');
+    assert(projectsAfterInvalidPlan.body.data.length === projectsBeforeInvalidPlan.body.data.length, 'failed Agent generation must not persist an empty project shell');
 
     const agentEditProject = await apiFetch(baseUrl, '/api/projects', { method: 'POST', body: JSON.stringify({ name: 'agent-replan-project', goal: 'exercise multi-batch replanning' }) });
     const agentEditProjectId = agentEditProject.body.data.id;
@@ -173,18 +288,18 @@ async function main() {
     await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ api_key: 'sk-agent-smoke' }) });
     const replanned = await apiFetch(baseUrl, `/api/projects/${agentEditProjectId}/edit-sessions/messages`, {
       method: 'POST',
-      body: JSON.stringify({ request: 'add testing nodes before launch', batch_size: 1 }),
+      body: JSON.stringify({ request: 'add phase Security Review', batch_size: 1 }),
     });
     assert(replanned.body.data.edit_session.id === firstBatchSession.id, 'replanning should continue the active edit session');
     assert(replanned.body.data.edit_session.status === 'diff_ready', 'a replacement plan should return to diff review');
-    assert(replanned.body.data.diff?.changes?.[0]?.targetId === 'node-regression-check', 'replanning should replace pending work with the newly requested workflow change');
+    assert(replanned.body.data.diff?.changes?.[0]?.targetId === 'phase-security-review', 'replanning should replace pending work with the newly requested workflow change');
     assert(previousPendingIds.every((id) => replanned.body.data.edit_session.skipped_change_ids.includes(id)), 'replanning should mark the superseded pending changes as skipped');
     assert(replanned.body.data.edit_session.agent_trace.some((item) => item.stage === 'replanner'), 'replanning should record a traceable planner transition');
     const replannedApplied = await apiFetch(baseUrl, `/api/projects/${agentEditProjectId}/diffs/${replanned.body.data.diff.id}/apply`, {
       method: 'POST',
       body: JSON.stringify({ workflow_version: firstBatchApplied.body.data.workflow.version }),
     });
-    assert(replannedApplied.body.data.workflow.nodes.some((node) => node.id === 'node-regression-check'), 'the replacement workflow batch should remain applicable');
+    assert(replannedApplied.body.data.workflow.phases.some((phase) => phase.id === 'phase-security-review'), 'the replacement workflow batch should remain applicable');
     assert(replannedApplied.body.data.edit_session.status === 'applied', 'the replanned session should finish after its replacement work is applied');
 
     server.kill('SIGTERM'); await sleep(400);
@@ -197,6 +312,7 @@ async function main() {
     console.log('✅ server smoke passed');
   } finally {
     try { server.kill('SIGTERM'); } catch {}
+    await new Promise((resolve) => fakeModelServer.close(resolve));
     await sleep(100);
     rmSync(tmpDataDir, { recursive: true, force: true });
   }
