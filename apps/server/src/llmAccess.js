@@ -141,7 +141,37 @@ function parseStructuredContent(content) {
   return null;
 }
 
-export async function runModel(task, payload) {
+async function readStreamingModelResponse(response, onActivity = () => {}) {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('MODEL_STREAM_UNAVAILABLE');
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let content = '';
+  let reasoningCharacters = 0;
+  let usage = null;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === '[DONE]') continue;
+      let event;
+      try { event = JSON.parse(data); } catch { continue; }
+      const delta = event?.choices?.[0]?.delta || {};
+      content += delta.content || '';
+      reasoningCharacters += String(delta.reasoning_content || delta.reasoningContent || '').length;
+      usage = event.usage || usage;
+    }
+    onActivity({ reasoning_characters: reasoningCharacters });
+  }
+  return { content, reasoningCharacters, usage };
+}
+
+export async function runModel(task, payload, options = {}) {
   if (!hasApiKey()) {
     if (!config.allow_mock) throw new Error('MODEL_API_KEY_NOT_CONFIGURED: Save an API key in Settings / Model Access before testing a real model, or enable Mock fallback.');
     return {
@@ -155,22 +185,48 @@ export async function runModel(task, payload) {
 
   validateModelConfigForRequest();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeout_ms);
+  let timeout;
+  const refreshTimeout = () => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => controller.abort(), config.timeout_ms);
+  };
+  refreshTimeout();
+  const model = modelForTask(task);
+  const isDashScopeQwen = config.provider === 'aliyun'
+    || /dashscope/i.test(config.api_base_url)
+    || /^qwen/i.test(model);
   try {
     const response = await fetch(`${config.api_base_url.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${config.api_key}` },
       signal: controller.signal,
       body: JSON.stringify({
-        model: modelForTask(task),
+        model,
         messages: [
           { role: 'system', content: 'You are BoundaryML Model Access Layer. Return strict JSON only.' },
           { role: 'user', content: JSON.stringify({ task, payload }) },
         ],
         temperature: 0.2,
+        stream: isDashScopeQwen,
+        ...(isDashScopeQwen ? { enable_thinking: true, stream_options: { include_usage: true } } : {}),
         ...(config.structured_output_enabled ? { response_format: { type: 'json_object' } } : {}),
       }),
     });
+    if (isDashScopeQwen && response.ok) {
+      const streamed = await readStreamingModelResponse(response, (progress) => {
+        refreshTimeout();
+        options.onProgress?.({ stage: 'reasoning', ...progress });
+      });
+      return {
+        task,
+        provider: config.provider,
+        model,
+        status: 'succeeded',
+        output: parseStructuredContent(streamed.content) || { raw: streamed.content, summary: 'model returned unstructured content' },
+        usage: streamed.usage,
+        reasoning_activity: streamed.reasoningCharacters > 0,
+      };
+    }
     const rawBody = await response.text();
     let body = null;
     try { body = rawBody ? JSON.parse(rawBody) : null; } catch {}
@@ -180,11 +236,16 @@ export async function runModel(task, payload) {
     return {
       task,
       provider: config.provider,
-      model: modelForTask(task),
+      model,
       status: 'succeeded',
       output: parseStructuredContent(content) || { raw: content, summary: 'model returned unstructured content' },
       usage: body.usage || null,
     };
+  } catch (error) {
+    if (error?.name === 'AbortError' || controller.signal.aborted) {
+      throw new Error(`MODEL_REQUEST_TIMEOUT: Model produced no response activity for ${config.timeout_ms}ms. Retry or increase Timeout MS in Settings / Model Access.`);
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }

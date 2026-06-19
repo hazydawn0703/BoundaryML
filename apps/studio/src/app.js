@@ -104,6 +104,17 @@ const ZH_HANS_REPLACEMENTS = [
   ['Describe the project you want to create. Example: Create an AI SaaS onboarding project, goal: reduce manual setup, current stage: discovery, deliverables: PRD and workflow draft.', '描述你想创建的项目。例如：创建一个 AI SaaS 入门项目，目标是减少手动配置，当前阶段是探索，交付物是 PRD 和工作流草稿。'],
   ['Create Project with Agent', '用 Agent 创建项目'],
   ['Cancel Agent Session', '取消 Agent 会话'],
+  ['Describe the project you want to create. The Agent will ask for any important missing information before creating it.', '\u8bf7\u63cf\u8ff0\u4f60\u60f3\u521b\u5efa\u7684\u9879\u76ee\u3002Agent \u4f1a\u5148\u8be2\u95ee\u5fc5\u8981\u7684\u7f3a\u5931\u4fe1\u606f\uff0c\u518d\u521b\u5efa\u9879\u76ee\u3002'],
+  ['Describe the project you want to create...', '\u8bf7\u63cf\u8ff0\u4f60\u60f3\u521b\u5efa\u7684\u9879\u76ee...'],
+  ['Open Agent conversation', '\u6253\u5f00 Agent \u5bf9\u8bdd'],
+  ['Close Agent conversation', '\u5173\u95ed Agent \u5bf9\u8bdd'],
+  ['Send to project Agent', '\u53d1\u9001\u7ed9\u9879\u76ee Agent'],
+  ['Analyzing project request...', '\u6b63\u5728\u5206\u6790\u9879\u76ee\u9700\u6c42...'],
+  ['Planning project structure...', '\u6b63\u5728\u89c4\u5212\u9879\u76ee\u7ed3\u6784...'],
+  ['The model is still reasoning...', '\u6a21\u578b\u4ecd\u5728\u601d\u8003...'],
+  ['Completing the project plan and workflow...', '\u6b63\u5728\u5b8c\u6210\u9879\u76ee\u65b9\u6848\u548c\u5de5\u4f5c\u6d41...'],
+  ['Thinking remains enabled. Model activity resets the inactivity timeout.', '\u601d\u8003\u6a21\u5f0f\u5df2\u5f00\u542f\uff1b\u6a21\u578b\u6301\u7eed\u8f93\u51fa\u65f6\u4f1a\u81ea\u52a8\u91cd\u7f6e\u65e0\u6d3b\u52a8\u8d85\u65f6\u8ba1\u65f6\u3002'],
+  ['Last model activity:', '\u6700\u8fd1\u6a21\u578b\u6d3b\u52a8\uff1a'],
   ['Cancel', '\u53d6\u6d88'],
   ['Agent is thinking...', 'Agent 正在思考...'],
   ['Agent task', 'Agent \u4efb\u52a1'],
@@ -115,6 +126,12 @@ const ZH_HANS_REPLACEMENTS = [
   ['Workflow Agent requires a configured LLM in Local Server mode.', 'Local Server 模式下使用 Workflow Agent 前必须先配置 LLM。'],
   ['Configure an LLM in Settings / Model Access before using Workflow Agent.', '请先在“设置 / 模型访问”中配置 LLM，再使用 Workflow Agent。'],
   ['Configure an LLM to use Workflow Agent...', '配置 LLM 后即可使用 Workflow Agent...'],
+  ['Workflow has no nodes', '工作流中还没有节点'],
+  ['The previous workflow generation did not complete. Generate it again with the configured LLM.', '上一次工作流生成未完成，请使用已配置的 LLM 重新生成。'],
+  ['Generate Workflow with Agent', '使用 Agent 生成工作流'],
+  ['Generating Workflow...', '正在生成工作流...'],
+  ['Workflow generated successfully.', '工作流生成成功。'],
+  ['Workflow generation failed.', '工作流生成失败。'],
   ['Start with a project goal.', '从项目目标开始。'],
   ['BoundaryML will generate a human-AI workflow boundary draft.', 'BoundaryML 会生成一份人机协作边界工作流草稿。'],
   ['Data-driven projects powered by BoundaryML domain model.', '由 BoundaryML 领域模型驱动的数据化项目。'],
@@ -357,6 +374,7 @@ const ICONS = {
   filter: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/></svg>',
   more: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12h.01M19 12h.01M5 12h.01"/></svg>',
   send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/><path d="M8 9h8M8 13h5"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
 };
 
@@ -416,17 +434,18 @@ function applyWorkflowViewport(viewport) {
 }
 
 function autoResizeAiComposer() {
-  const input = app.querySelector('.ai-composer textarea[data-action="set-ai-request"]');
-  if (!input) return;
-  const composer = input.closest('.ai-composer');
-  input.style.height = 'auto';
-  const style = getComputedStyle(input);
-  const maxHeight = Number.parseFloat(style.maxHeight) || 96;
-  const minHeight = Number.parseFloat(style.minHeight) || 44;
-  const nextHeight = Math.min(input.scrollHeight, maxHeight);
-  input.style.height = `${nextHeight}px`;
-  input.style.overflowY = input.scrollHeight > maxHeight ? 'auto' : 'hidden';
-  composer?.classList.toggle('is-expanded', input.scrollHeight > minHeight + 2);
+  const inputs = app.querySelectorAll('.ai-composer textarea[data-action="set-ai-request"], .ai-composer textarea[data-action="set-project-agent-request"]');
+  inputs.forEach((input) => {
+    const composer = input.closest('.ai-composer');
+    input.style.height = 'auto';
+    const style = getComputedStyle(input);
+    const maxHeight = Number.parseFloat(style.maxHeight) || 96;
+    const minHeight = Number.parseFloat(style.minHeight) || 44;
+    const nextHeight = Math.min(input.scrollHeight, maxHeight);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    composer?.classList.toggle('is-expanded', input.scrollHeight > minHeight + 2);
+  });
 }
 
 function closestElement(target, selector) {
@@ -627,11 +646,33 @@ function renderProjectAgentMessage(message, language = 'en') {
   const role = message.role === 'user' ? 'user' : 'agent';
   const label = translateText(role === 'user' ? 'You' : 'Agent', language);
   const questions = message.clarification_questions || message.clarificationQuestions || [];
-  return `<div class="project-agent-message ${role}">
-    <strong>${label}</strong>
-    ${message.content ? `<p>${escapeAttr(message.content)}</p>` : ''}
-    ${questions.length ? `<ul>${questions.map((question) => `<li>${escapeAttr(question)}</li>`).join('')}</ul>` : ''}
+  const body = message.pending
+    ? `<div class="diff-pending" role="status" aria-live="polite"><span class="diff-pending-dot"></span><div><strong>${message.content || 'Analyzing project request...'}</strong><p class="muted">Thinking remains enabled. Model activity resets the inactivity timeout.</p>${message.lastActivityAt ? `<p class="muted">Last model activity: ${escapeAttr(message.lastActivityAt)}</p>` : ''}</div></div>`
+    : `${message.content ? `<p>${escapeAttr(message.content)}</p>` : ''}${questions.length ? `<ul class="ai-clarification-list">${questions.map((question) => `<li>${escapeAttr(question)}</li>`).join('')}</ul>` : ''}`;
+  return `<div class="ai-chat-message ${role}">
+    <div class="ai-chat-meta">${label}${message.at ? ` &middot; ${escapeAttr(message.at)}` : ''}</div>
+    <div class="ai-chat-bubble">${body}</div>
   </div>`;
+}
+
+function pollProjectAgentModelActivity(startedAt) {
+  window.setTimeout(async () => {
+    if (!getState().projectAgent?.pending || getState().projectAgent?.operationStartedAt !== startedAt) return;
+    try {
+      const result = await apiClient.modelApi.calls();
+      const calls = result.data?.calls || result.data || [];
+      const running = calls.find((call) => call.status === 'running'
+        && ['project_creation_plan', 'workflow_generate'].includes(call.purpose)
+        && Date.parse(call.created_at || 0) >= startedAt - 1000);
+      if (running) {
+        const progress = running.purpose === 'workflow_generate'
+          ? 'Completing the project plan and workflow...'
+          : (running.stage === 'reasoning' ? 'The model is still reasoning...' : 'Planning project structure...');
+        setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, progress, lastActivityAt: running.last_activity_at || null } }));
+      }
+    } catch {}
+    pollProjectAgentModelActivity(startedAt);
+  }, 1500);
 }
 
 function renderCreatePage() {
@@ -643,29 +684,29 @@ function renderCreatePage() {
   const messages = [...(session.messages || [])];
   if (agent.pending && agent.request) {
     messages.push({ role: 'user', content: agent.request });
-    messages.push({ role: 'agent', content: translateText('Agent is thinking...', language) });
+    messages.push({ role: 'agent', pending: true, content: agent.progress || 'Analyzing project request...', lastActivityAt: agent.lastActivityAt });
   }
   const missing = session.missing_slots || session.missingSlots || [];
-  return `<section class="page"><div class="card form project-agent-card">
-    <label>Create with Agent<textarea data-action="set-project-agent-request" rows="3" placeholder="${llmRequired ? 'Configure an LLM to use Workflow Agent...' : 'Describe the project you want to create. Example: Create an AI SaaS onboarding project, goal: reduce manual setup, current stage: discovery, deliverables: PRD and workflow draft.'}" ${llmRequired ? 'disabled' : ''}>${agent.request || ''}</textarea></label>
-    ${llmRequired ? '<p class="inline-warning">Workflow Agent requires a configured LLM in Local Server mode.</p>' : ''}
-    ${missing.length ? `<p class="inline-warning">${translateText('Missing:', language)} ${missing.join(', ')}</p>` : ''}
-    ${messages.length ? `<div class="project-agent-messages">${messages.slice(-8).map((message) => renderProjectAgentMessage(message, language)).join('')}</div>` : ''}
-    <div class="actions">${llmRequired ? '<button type="button" data-action="open-model-settings" class="primary">Configure LLM</button>' : `<button type="button" data-action="send-project-agent" class="primary" ${agent.pending ? 'disabled' : ''}>${translateText(agent.pending ? 'Creating...' : 'Create Project with Agent', language)}</button>`}${(agent.session || agent.request) ? `<button type="button" data-action="clear-project-agent">${translateText('Cancel Agent Session', language)}</button>` : ''}</div>
-  </div><form class="card form" data-form="create-project">
-    <div class="grid-2">
-      <label>Project Name<input name="name" required/></label>
-      <label>Project Goal<input name="goal" required/></label>
-      <label>Project Type<select name="type"><option>AI Feature</option><option>Internal Tool</option><option>Legacy Modernization</option></select></label>
-      <label>Current Stage<input name="currentStage" required placeholder="Discovery / Design / Development / Testing / Launch"/></label>
-      <label>Target Deliverables<input name="deliveryScope" placeholder="PRD, prototype, API spec, launch plan"/></label>
-      <label>Expected AI Scope<input name="expectedAiScope" placeholder="PRD, code, tests, docs, review"/></label>
-      <label>Sensitive Areas<input name="sensitiveAreas" placeholder="Customer data, production release, security"/></label>
-      <label>Risk Level<select name="riskLevel"><option>low</option><option>medium</option><option>high</option></select></label>
-      <label>Setup Mode<select name="setupMode"><option value="quick_start">Quick Start</option><option value="org_aware">Organization-Aware Setup</option></select></label>
+  const drawerOpen = agent.open !== false;
+  const conversation = messages.length
+    ? messages.slice(-10).map((message) => renderProjectAgentMessage(message, language)).join('')
+    : '<div class="ai-chat-empty">Describe the project you want to create. The Agent will ask for any important missing information before creating it.</div>';
+  return `<section class="project-agent-workspace">
+    <button class="project-agent-exit" type="button" data-action="goto" data-page="projects">Cancel</button>
+    ${drawerOpen ? `<aside class="ai-conversation-drawer project-agent-drawer"><article class="card panel">
+      <div class="toolbar"><h3>Create Project with Agent</h3><button class="icon-button" data-action="toggle-project-agent-drawer" aria-label="Close Agent conversation" title="Close">${ICONS.close}</button></div>
+      ${missing.length ? `<p class="inline-warning">${translateText('Missing:', language)} ${missing.join(', ')}</p>` : ''}
+      <div class="ai-chat-list">${conversation}</div>
+      ${(agent.session || agent.request) ? `<button type="button" data-action="clear-project-agent">${translateText('Cancel Agent Session', language)}</button>` : ''}
+    </article></aside>` : ''}
+    <div class="ai-composer project-agent-composer">
+      <button class="icon-button ai-drawer-open" data-action="toggle-project-agent-drawer" aria-label="Open Agent conversation" title="Open Agent conversation" aria-expanded="${drawerOpen ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.chat}</span></button>
+      <textarea data-action="set-project-agent-request" rows="1" placeholder="${llmRequired ? 'Configure an LLM to use Workflow Agent...' : 'Describe the project you want to create...'}" ${llmRequired ? 'disabled' : ''}>${escapeAttr(agent.request || '')}</textarea>
+      ${llmRequired
+        ? '<button class="primary ai-send ai-configure" data-action="open-model-settings">Configure LLM</button>'
+        : `<button class="primary ai-send" data-action="send-project-agent" aria-label="${agent.pending ? 'Creating...' : 'Send to project Agent'}" title="${agent.pending ? 'Creating...' : 'Send to project Agent'}" ${agent.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span></button>`}
     </div>
-    <div class="actions"><button type="button" data-action="goto" data-page="projects">Cancel</button><button type="submit" class="primary" ${llmRequired ? 'disabled title="Configure LLM first"' : ''}>Generate Workflow Draft</button></div>
-  </form></section>`;
+  </section>`;
 }
 
 function renderContextPage(state) {
@@ -916,10 +957,12 @@ function renderStudio(state) {
   const historyPanel = historyOpen
     ? `<div class="workflow-history-panel card panel"><div class="toolbar"><h3>History</h3><button data-action="save-workflow-history">Save Current Version</button></div><ul>${(state.workflowHistory || []).length ? state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('') : '<li>No saved versions yet</li>'}</ul></div>`
     : '';
+  const emptyWorkflow = (project.workflow.nodes || []).length === 0;
 
   return `<section class="page studio-page">
   <section class="workflow-board">
     <div class="workflow-canvas">
+      ${emptyWorkflow ? `<div class="workflow-empty-state"><h3>Workflow has no nodes</h3><p>The previous workflow generation did not complete. Generate it again with the configured LLM.</p><button class="primary" data-action="regenerate-empty-workflow" ${state.workflowGenerationPending ? 'disabled' : ''}>${state.workflowGenerationPending ? 'Generating Workflow...' : 'Generate Workflow with Agent'}</button></div>` : ''}
       ${renderWorkflowCanvasTools(viewport)}
       ${renderWorkflowCanvasFilters(state)}
       ${renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport)}
@@ -2539,6 +2582,23 @@ function handleAction(event) {
     return;
   }
   if (action === 'use-ai-suggestion') setState((prev) => ({ ...prev, aiEdit: { ...prev.aiEdit, open: true, request: target.dataset.suggestion } }));
+  if (action === 'regenerate-empty-workflow') {
+    const st = getState();
+    if (!ensureAgentLlmConfigured(st)) return;
+    const project = getActiveProject(st);
+    if (!st.serverAvailable || !project?.id) return;
+    setState((prev) => ({ ...prev, workflowGenerationPending: true }));
+    apiClient.workflowApi.generate(project.id)
+      .then(() => refreshProjectRuntime(project.id))
+      .then(() => showToast(translateText('Workflow generated successfully.', getState().language || 'en'), 'success'))
+      .catch((error) => {
+        if (handleAgentLlmError(error)) return;
+        showToast(error.message || translateText('Workflow generation failed.', getState().language || 'en'), 'error');
+        setState((prev) => ({ ...prev, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` }));
+      })
+      .finally(() => setState((prev) => ({ ...prev, workflowGenerationPending: false })));
+    return;
+  }
   if (action === 'send-project-agent') {
     const st = getState();
     if (!ensureAgentLlmConfigured(st)) return;
@@ -2547,26 +2607,41 @@ function handleAction(event) {
       showToast(translateText('Describe the project first.', st.language || 'en'), 'error');
       return;
     }
-    setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, pending: true } }));
+    const projectAgentStartedAt = Date.now();
+    setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, pending: true, progress: 'Analyzing project request...', lastActivityAt: null, operationStartedAt: projectAgentStartedAt } }));
+    pollProjectAgentModelActivity(projectAgentStartedAt);
+    [
+      [8000, 'Planning project structure...'],
+      [25000, 'The model is still reasoning...'],
+      [50000, 'Completing the project plan and workflow...'],
+    ].forEach(([delay, progress]) => window.setTimeout(() => {
+      if (!getState().projectAgent?.pending) return;
+      setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, progress } }));
+    }, delay));
     apiClient.projectAgentApi.message({ request, session_id: st.projectAgent?.session?.id, setup_mode: 'quick_start', output_language: st.language || 'en' })
       .then(async ({ data }) => {
         const session = withCamelAliases(data.project_creation_session || data.projectCreationSession || null);
         if (data.project) {
           const createdProject = withCamelAliases(data.project);
-          const generateResult = await apiClient.workflowApi.generate(createdProject.id);
-          setState((prev) => ({ ...prev, jobs: [generateResult.data, ...prev.jobs].slice(0, 10) }));
+          const generationJob = withCamelAliases(data.generation_job || data.generationJob || null);
+          if (generationJob) setState((prev) => ({ ...prev, jobs: [generationJob, ...prev.jobs].slice(0, 10) }));
           const projectsResult = await apiClient.projectsApi.list();
           const projects = projectsResult.data?.projects || projectsResult.data || [];
           await loadProjectRuntime(createdProject.id, { navigate: false, projectSummaries: projects });
-          setState((prev) => ({ ...prev, activeProjectId: createdProject.id, currentPage: 'studio', projectAgent: { request: '', session: null, pending: false } }));
+          setState((prev) => ({ ...prev, activeProjectId: createdProject.id, currentPage: 'studio', projectAgent: { open: true, request: '', session: null, pending: false, progress: null } }));
           return;
         }
-        setState((prev) => ({ ...prev, projectAgent: { request: '', session, pending: false }, modelStatus: data.model_status || prev.modelStatus }));
+        setState((prev) => ({ ...prev, projectAgent: { open: prev.projectAgent?.open !== false, request: '', session, pending: false, progress: null }, modelStatus: data.model_status || prev.modelStatus }));
       })
       .catch((error) => {
         if (handleAgentLlmError(error)) return;
-        setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, pending: false }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` }));
+        showToast(error.message || 'Project creation failed.', 'error');
+        setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, pending: false, progress: null }, serverError: `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` }));
       });
+    return;
+  }
+  if (action === 'toggle-project-agent-drawer') {
+    setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, open: prev.projectAgent?.open === false } }));
     return;
   }
   if (action === 'clear-project-agent') {
@@ -2574,9 +2649,9 @@ function handleAction(event) {
     const sessionId = st.projectAgent?.session?.id;
     if (st.serverAvailable && sessionId) {
       apiClient.projectAgentApi.message({ request: 'cancel project creation', session_id: sessionId, output_language: st.language || 'en' })
-        .finally(() => setState((prev) => ({ ...prev, projectAgent: { request: '', session: null, pending: false } })));
+        .finally(() => setState((prev) => ({ ...prev, projectAgent: { open: true, request: '', session: null, pending: false, progress: null } })));
     } else {
-      setState((prev) => ({ ...prev, projectAgent: { request: '', session: null, pending: false } }));
+      setState((prev) => ({ ...prev, projectAgent: { open: true, request: '', session: null, pending: false, progress: null } }));
     }
     return;
   }
@@ -3139,6 +3214,7 @@ function handleInput(event) {
     updateUiStateSilently((state) => {
       state.projectAgent.request = target.value;
     });
+    autoResizeAiComposer();
     return;
   }
 
@@ -3305,43 +3381,6 @@ function handleInput(event) {
 }
 
 function handleSubmit(event) {
-  if (event.target.dataset.form === 'create-project') {
-    event.preventDefault();
-    if (!ensureAgentLlmConfigured(getState())) return;
-    const data = Object.fromEntries(new FormData(event.target));
-    const projectInput = {
-      ...data,
-      deliveryScope: data.deliveryScope.split(',').map((x) => x.trim()),
-      expectedAiScope: data.expectedAiScope.split(',').map((x) => x.trim()),
-      sensitiveAreas: data.sensitiveAreas.split(',').map((x) => x.trim()),
-    };
-
-    apiClient.projectsApi.create({
-      name: data.name,
-      goal: data.goal,
-      project_type: data.type,
-      current_stage: data.currentStage,
-      risk_level: data.riskLevel,
-      target_deliverables: projectInput.deliveryScope,
-      expected_ai_scope: projectInput.expectedAiScope,
-      sensitive_areas: projectInput.sensitiveAreas,
-      setup_mode: data.setupMode,
-      output_language: 'en',
-    }).then(async ({ data: createdProject }) => {
-      if (data.setupMode === 'quick_start') {
-        const generateResult = await apiClient.workflowApi.generate(createdProject.id);
-        setState((prev) => ({ ...prev, jobs: [generateResult.data, ...prev.jobs].slice(0, 10) }));
-      }
-      const projectsResult = await apiClient.projectsApi.list();
-      const projects = projectsResult.data?.projects || projectsResult.data || [];
-      await loadProjectRuntime(createdProject.id, { navigate: false, projectSummaries: projects });
-      setState((prev) => ({ ...prev, activeProjectId: createdProject.id, currentPage: data.setupMode === 'org_aware' ? 'context' : 'studio' }));
-    }).catch((error) => {
-      if (handleAgentLlmError(error)) return;
-      setState((prev) => ({ ...prev, serverError: error.message || 'Failed to create project' }));
-    });
-  }
-
   if (event.target.dataset.form === 'context-pack') {
     event.preventDefault();
     if (!ensureAgentLlmConfigured(getState())) return;
