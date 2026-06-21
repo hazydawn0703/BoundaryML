@@ -374,7 +374,6 @@ const ICONS = {
   filter: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M7 12h10"/><path d="M10 19h4"/></svg>',
   more: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12h.01M19 12h.01M5 12h.01"/></svg>',
   send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
-  chat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/><path d="M8 9h8M8 13h5"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
 };
 
@@ -687,20 +686,16 @@ function renderCreatePage() {
     messages.push({ role: 'agent', pending: true, content: agent.progress || 'Analyzing project request...', lastActivityAt: agent.lastActivityAt });
   }
   const missing = session.missing_slots || session.missingSlots || [];
-  const drawerOpen = agent.open !== false;
   const conversation = messages.length
     ? messages.slice(-10).map((message) => renderProjectAgentMessage(message, language)).join('')
     : '<div class="ai-chat-empty">Describe the project you want to create. The Agent will ask for any important missing information before creating it.</div>';
   return `<section class="project-agent-workspace">
-    <button class="project-agent-exit" type="button" data-action="goto" data-page="projects">Cancel</button>
-    ${drawerOpen ? `<aside class="ai-conversation-drawer project-agent-drawer"><article class="card panel">
-      <div class="toolbar"><h3>Create Project with Agent</h3><button class="icon-button" data-action="toggle-project-agent-drawer" aria-label="Close Agent conversation" title="Close">${ICONS.close}</button></div>
+    <button class="project-agent-exit" type="button" data-action="cancel-project-creation" ${agent.pending ? 'disabled' : ''}>Cancel</button>
+    <div class="project-agent-conversation" aria-live="polite">
       ${missing.length ? `<p class="inline-warning">${translateText('Missing:', language)} ${missing.join(', ')}</p>` : ''}
       <div class="ai-chat-list">${conversation}</div>
-      ${(agent.session || agent.request) ? `<button type="button" data-action="clear-project-agent">${translateText('Cancel Agent Session', language)}</button>` : ''}
-    </article></aside>` : ''}
+    </div>
     <div class="ai-composer project-agent-composer">
-      <button class="icon-button ai-drawer-open" data-action="toggle-project-agent-drawer" aria-label="Open Agent conversation" title="Open Agent conversation" aria-expanded="${drawerOpen ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.chat}</span></button>
       <textarea data-action="set-project-agent-request" rows="1" placeholder="${llmRequired ? 'Configure an LLM to use Workflow Agent...' : 'Describe the project you want to create...'}" ${llmRequired ? 'disabled' : ''}>${escapeAttr(agent.request || '')}</textarea>
       ${llmRequired
         ? '<button class="primary ai-send ai-configure" data-action="open-model-settings">Configure LLM</button>'
@@ -1552,7 +1547,8 @@ function renderPage(state) {
 function render() {
   const state = getState();
   const isStudioPage = state.currentPage === 'studio';
-  app.innerHTML = `<div class="app-shell ${isStudioPage ? 'studio-shell' : ''}" data-theme="open-source">${isStudioPage ? '' : renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
+  const isCreatePage = state.currentPage === 'create';
+  app.innerHTML = `<div class="app-shell ${isStudioPage ? 'studio-shell' : ''} ${isCreatePage ? 'create-shell' : ''}" data-theme="open-source">${isStudioPage ? '' : renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
   localizeDom(state.language || 'en');
   autoResizeAiComposer();
   ensureFieldSaveIndicators();
@@ -2628,10 +2624,10 @@ function handleAction(event) {
           const projectsResult = await apiClient.projectsApi.list();
           const projects = projectsResult.data?.projects || projectsResult.data || [];
           await loadProjectRuntime(createdProject.id, { navigate: false, projectSummaries: projects });
-          setState((prev) => ({ ...prev, activeProjectId: createdProject.id, currentPage: 'studio', projectAgent: { open: true, request: '', session: null, pending: false, progress: null } }));
+          setState((prev) => ({ ...prev, activeProjectId: createdProject.id, currentPage: 'studio', projectAgent: { request: '', session: null, pending: false, progress: null } }));
           return;
         }
-        setState((prev) => ({ ...prev, projectAgent: { open: prev.projectAgent?.open !== false, request: '', session, pending: false, progress: null }, modelStatus: data.model_status || prev.modelStatus }));
+        setState((prev) => ({ ...prev, projectAgent: { request: '', session, pending: false, progress: null }, modelStatus: data.model_status || prev.modelStatus }));
       })
       .catch((error) => {
         if (handleAgentLlmError(error)) return;
@@ -2640,18 +2636,19 @@ function handleAction(event) {
       });
     return;
   }
-  if (action === 'toggle-project-agent-drawer') {
-    setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, open: prev.projectAgent?.open === false } }));
-    return;
-  }
-  if (action === 'clear-project-agent') {
+  if (action === 'cancel-project-creation') {
     const st = getState();
     const sessionId = st.projectAgent?.session?.id;
+    const finishCancellation = () => setState((prev) => ({
+      ...prev,
+      currentPage: 'projects',
+      projectAgent: { request: '', session: null, pending: false, progress: null },
+    }));
     if (st.serverAvailable && sessionId) {
       apiClient.projectAgentApi.message({ request: 'cancel project creation', session_id: sessionId, output_language: st.language || 'en' })
-        .finally(() => setState((prev) => ({ ...prev, projectAgent: { open: true, request: '', session: null, pending: false, progress: null } })));
+        .finally(finishCancellation);
     } else {
-      setState((prev) => ({ ...prev, projectAgent: { open: true, request: '', session: null, pending: false, progress: null } }));
+      finishCancellation();
     }
     return;
   }
