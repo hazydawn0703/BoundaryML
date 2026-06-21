@@ -1635,8 +1635,13 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
       request: requestText,
       existing_slots: previousSlots,
       output_language: session.output_language || session.outputLanguage || 'en',
-      required_fields: ['name', 'goal', 'current_stage'],
-      optional_fields: ['project_type', 'risk_level', 'target_deliverables', 'expected_ai_scope', 'sensitive_areas'],
+      required_fields: ['name', 'goal', 'current_stage', 'target_deliverables', 'expected_ai_scope', 'sensitive_areas', 'context_pack.team_roles', 'context_pack.approval_process', 'context_pack.risk_constraints'],
+      optional_fields: ['project_type', 'risk_level', 'context_pack.tool_stack', 'context_pack.historical_process_materials'],
+      quality_rules: [
+        'Do not silently finalize the project. Extract explicit facts and make clearly labeled proposals for inferred values.',
+        'Return an empty value and list the field in missing_fields when a safe workflow boundary cannot be inferred.',
+        'The user will review and confirm the resulting blueprint before project creation.',
+      ],
       output_contract: {
         project: {
           name: 'short project name',
@@ -1656,7 +1661,7 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
           },
         },
         confidence: 'low | medium | high',
-        missing_fields: ['name | goal | current_stage'],
+        missing_fields: ['name | goal | current_stage | target_deliverables | expected_ai_scope | sensitive_areas | context_pack.team_roles | context_pack.approval_process | context_pack.risk_constraints'],
       },
     }, {
       onProgress: (progress) => Object.assign(modelCall, {
@@ -1681,9 +1686,21 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
     || (modelResult?.status !== 'succeeded' ? 'PROJECT_AGENT_MODEL_UNAVAILABLE' : '')
     || (!modelProvidedProjectPlan ? 'PROJECT_AGENT_INVALID_MODEL_OUTPUT' : '');
   const fallbackSlots = extractProjectCreationSlots(requestText, previousSlots);
-  const modelEnrichedSlots = mergeProjectCreationSlots(fallbackSlots, modelSlots);
+  const modelEnrichedSlots = mergeProjectCreationSlots(modelSlots, fallbackSlots);
+  const fallbackContextPack = fallbackSlots.context_pack || {};
+  modelEnrichedSlots.context_pack = { ...(modelEnrichedSlots.context_pack || {}) };
+  for (const [key, value] of Object.entries(fallbackContextPack)) {
+    if (Array.isArray(value) ? value.length : Boolean(value)) modelEnrichedSlots.context_pack[key] = value;
+  }
   const explicitCurrentTurnSlots = extractExplicitProjectCreationSlots(requestText);
   const slots = mergeProjectCreationSlots(modelEnrichedSlots, explicitCurrentTurnSlots);
+  const explicitContextPack = explicitCurrentTurnSlots.context_pack || {};
+  if (Object.keys(explicitContextPack).length) {
+    slots.context_pack = { ...(slots.context_pack || {}) };
+    for (const [key, value] of Object.entries(explicitContextPack)) {
+      if (Array.isArray(value) ? value.length : Boolean(value)) slots.context_pack[key] = value;
+    }
+  }
   const missing = missingProjectCreationSlots(slots);
   const trace = [
     ...(session.agent_trace || session.agentTrace || []),
@@ -1710,10 +1727,17 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
 }
 
 function missingProjectCreationSlots(slots) {
+  const contextPack = slots.context_pack || slots.contextPack || {};
   return [
     !slots.name ? 'name' : null,
     !slots.goal ? 'goal' : null,
     !slots.current_stage ? 'current_stage' : null,
+    !slots.target_deliverables?.length ? 'target_deliverables' : null,
+    !slots.expected_ai_scope?.length ? 'expected_ai_scope' : null,
+    !slots.sensitive_areas?.length ? 'sensitive_areas' : null,
+    !contextPack.team_roles?.length ? 'team_roles' : null,
+    !contextPack.approval_process?.length ? 'approval_process' : null,
+    !contextPack.risk_constraints?.length ? 'risk_constraints' : null,
   ].filter(Boolean);
 }
 
@@ -1738,6 +1762,14 @@ function isCancelProjectCreationRequest(text) {
     '\u4e0d\u505a\u4e86',
     '\u91cd\u65b0\u6765',
   ]);
+}
+
+function isConfirmProjectCreationRequest(text) {
+  const normalized = String(text || '').trim().toLowerCase().replace(/[.!。！]/g, '');
+  return [
+    'confirm', 'confirmed', 'confirm creation', 'create it', 'proceed', 'looks good', 'yes, create it',
+    '\u786e\u8ba4', '\u786e\u8ba4\u521b\u5efa', '\u5f00\u59cb\u521b\u5efa', '\u53ef\u4ee5\u521b\u5efa', '\u6ca1\u95ee\u9898', '\u6309\u8fd9\u4e2a\u521b\u5efa',
+  ].includes(normalized);
 }
 
 function cancelProjectCreationSession(session, requestText) {
@@ -1824,13 +1856,54 @@ function projectCreationClarification(session) {
     name: isChinese ? '\u9879\u76ee\u540d\u79f0\u662f\u4ec0\u4e48\uff1f' : 'What should the project be called?',
     goal: isChinese ? '\u8fd9\u4e2a\u9879\u76ee\u7684\u76ee\u6807\u662f\u4ec0\u4e48\uff1f' : 'What is the project goal?',
     current_stage: isChinese ? '\u5f53\u524d\u5904\u4e8e\u54ea\u4e2a\u9636\u6bb5\uff1f' : 'What stage is the project currently in?',
+    target_deliverables: isChinese ? '\u5e0c\u671b\u8fd9\u4e2a\u9879\u76ee\u6700\u7ec8\u4ea4\u4ed8\u54ea\u4e9b\u6210\u679c\uff1f' : 'What outcomes or artifacts should this project deliver?',
+    expected_ai_scope: isChinese ? 'AI \u5e94\u8be5\u8d1f\u8d23\u54ea\u4e9b\u5de5\u4f5c\uff0c\u54ea\u4e9b\u5fc5\u987b\u7531\u4eba\u5b8c\u6210\uff1f' : 'What should AI handle, and what must remain human-owned?',
+    sensitive_areas: isChinese ? '\u6709\u54ea\u4e9b\u654f\u611f\u6570\u636e\u3001\u64cd\u4f5c\u6216\u9ad8\u98ce\u9669\u533a\u57df\uff1f\u5982\u679c\u6ca1\u6709\u8bf7\u660e\u786e\u8bf4\u660e\u3002' : 'Which data, actions, or decisions are sensitive? Say explicitly if there are none.',
+    team_roles: isChinese ? '\u8c01\u4f1a\u53c2\u4e0e\u9879\u76ee\uff0c\u4ed6\u4eec\u5206\u522b\u8d1f\u8d23\u4ec0\u4e48\uff1f' : 'Which roles participate, and what are they accountable for?',
+    approval_process: isChinese ? '\u54ea\u4e9b\u7ed3\u679c\u9700\u8981\u4eba\u5de5\u5ba1\u6838\u6216\u6279\u51c6\uff1f' : 'Which results require human review or approval?',
+    risk_constraints: isChinese ? '\u5fc5\u987b\u9075\u5b88\u54ea\u4e9b\u9690\u79c1\u3001\u5408\u89c4\u3001\u5b89\u5168\u6216\u53d1\u5e03\u7ea6\u675f\uff1f' : 'Which privacy, compliance, safety, or release constraints must be enforced?',
   };
   return {
     status: 'needs_clarification',
     content: isChinese ? '\u6211\u53ef\u4ee5\u5e2e\u4f60\u521b\u5efa\u9879\u76ee\uff0c\u4f46\u9700\u8981\u5148\u8865\u5168\u51e0\u4e2a\u5173\u952e\u4fe1\u606f\u3002' : 'I can create the project, but I need a few key details first.',
-    questions: session.missing_slots.map((slot) => questions[slot] || slot),
+    questions: session.missing_slots.slice(0, 3).map((slot) => questions[slot] || slot),
     missing_fields: session.missing_slots,
   };
+}
+
+function projectCreationConfirmation(session) {
+  const isChinese = normalizeProjectAgentLanguage(session.output_language || session.outputLanguage) === 'zh-Hans';
+  const slots = session.slots || {};
+  const contextPack = slots.context_pack || slots.contextPack || {};
+  const value = (items) => (Array.isArray(items) ? items.join(isChinese ? '\u3001' : ', ') : (items || (isChinese ? '\u672a\u8bbe\u7f6e' : 'Not set')));
+  const lines = isChinese
+    ? [
+      '\u9879\u76ee\u84dd\u56fe\u5df2\u51c6\u5907\u597d\uff0c\u8bf7\u786e\u8ba4\uff1a',
+      `\u540d\u79f0\uff1a${slots.name}`,
+      `\u76ee\u6807\uff1a${slots.goal}`,
+      `\u5f53\u524d\u9636\u6bb5\uff1a${slots.current_stage}`,
+      `\u4ea4\u4ed8\u7269\uff1a${value(slots.target_deliverables)}`,
+      `AI \u8303\u56f4\uff1a${value(slots.expected_ai_scope)}`,
+      `\u654f\u611f\u533a\u57df\uff1a${value(slots.sensitive_areas)}`,
+      `\u53c2\u4e0e\u89d2\u8272\uff1a${value(contextPack.team_roles)}`,
+      `\u5ba1\u6279\u6d41\u7a0b\uff1a${value(contextPack.approval_process)}`,
+      `\u98ce\u9669\u7ea6\u675f\uff1a${value(contextPack.risk_constraints)}`,
+      '\u8bf7\u56de\u590d\u201c\u786e\u8ba4\u521b\u5efa\u201d\uff0c\u6216\u76f4\u63a5\u544a\u8bc9\u6211\u9700\u8981\u4fee\u6539\u7684\u5185\u5bb9\u3002',
+    ]
+    : [
+      'The project blueprint is ready for review:',
+      `Name: ${slots.name}`,
+      `Goal: ${slots.goal}`,
+      `Current stage: ${slots.current_stage}`,
+      `Deliverables: ${value(slots.target_deliverables)}`,
+      `AI scope: ${value(slots.expected_ai_scope)}`,
+      `Sensitive areas: ${value(slots.sensitive_areas)}`,
+      `Team roles: ${value(contextPack.team_roles)}`,
+      `Approval process: ${value(contextPack.approval_process)}`,
+      `Risk constraints: ${value(contextPack.risk_constraints)}`,
+      'Reply "Confirm creation", or tell me what you want to change.',
+    ];
+  return { status: 'awaiting_confirmation', content: lines.join('\n') };
 }
 
 loadProjectCreationSessions();
@@ -2213,27 +2286,44 @@ const server = createServer(async (req, res) => {
       return ok(res, ctx, { project_creation_session: cancelledSession, model_status: getModelStatus() });
     }
     if (!requireConfiguredLlm(res, ctx, 'the project creation Agent')) return;
-    let session = buildProjectCreationSession(ctx, requestText, { session_id: body.session_id || body.sessionId, output_language: body.output_language || body.outputLanguage });
-    session = await enrichProjectCreationSessionWithModel(ctx, session, requestText);
-    if (session.model_error) {
-      const isChinese = normalizeProjectAgentLanguage(session.output_language || session.outputLanguage, textHasChinese(requestText) ? 'zh-Hans' : 'en') === 'zh-Hans';
-      session.status = 'failed';
-      session.messages.push({
-        role: 'agent',
-        status: 'failed',
-        content: isChinese ? '\u9879\u76ee\u89c4\u5212\u6a21\u578b\u8c03\u7528\u5931\u8d25\uff0c\u672a\u521b\u5efa\u9879\u76ee\u3002\u8bf7\u68c0\u67e5\u6a21\u578b\u914d\u7f6e\u540e\u91cd\u8bd5\u3002' : 'Project planning failed and no project was created. Check Model Access and try again.',
-        error: session.model_error,
-        at: new Date().toISOString(),
-      });
+    const confirmationRequested = existingProjectSession?.status === 'awaiting_confirmation' && isConfirmProjectCreationRequest(requestText);
+    let session;
+    if (confirmationRequested) {
+      const now = new Date().toISOString();
+      session = {
+        ...existingProjectSession,
+        status: 'creating_project',
+        messages: [...(existingProjectSession.messages || []), { role: 'user', content: requestText, at: now }].slice(-AI_CONVERSATION_LIMIT),
+        updated_at: now,
+      };
+    } else {
+      session = buildProjectCreationSession(ctx, requestText, { session_id: body.session_id || body.sessionId, output_language: body.output_language || body.outputLanguage });
+      session = await enrichProjectCreationSessionWithModel(ctx, session, requestText);
+      if (session.model_error) {
+        const isChinese = normalizeProjectAgentLanguage(session.output_language || session.outputLanguage, textHasChinese(requestText) ? 'zh-Hans' : 'en') === 'zh-Hans';
+        session.status = 'failed';
+        session.messages.push({
+          role: 'agent',
+          status: 'failed',
+          content: isChinese ? '\u9879\u76ee\u89c4\u5212\u6a21\u578b\u8c03\u7528\u5931\u8d25\uff0c\u672a\u521b\u5efa\u9879\u76ee\u3002\u8bf7\u68c0\u67e5\u6a21\u578b\u914d\u7f6e\u540e\u91cd\u8bd5\u3002' : 'Project planning failed and no project was created. Check Model Access and try again.',
+          error: session.model_error,
+          at: new Date().toISOString(),
+        });
+        saveProjectCreationSession(session);
+        return fail(res, ctx, 502, 'PROJECT_AGENT_MODEL_FAILED', `Project planning failed: ${session.model_error}`, [{ session_id: session.id, cause: session.model_error }]);
+      }
+      if (session.missing_slots.length) {
+        const clarification = projectCreationClarification(session);
+        session.status = 'collecting_info';
+        session.messages.push({ role: 'agent', status: 'needs_clarification', content: clarification.content, clarification_questions: clarification.questions, missing_fields: clarification.missing_fields, at: new Date().toISOString() });
+        saveProjectCreationSession(session);
+        return ok(res, ctx, { project_creation_session: session, clarification, model_status: getModelStatus() });
+      }
+      const confirmation = projectCreationConfirmation(session);
+      session.status = 'awaiting_confirmation';
+      session.messages.push({ role: 'agent', ...confirmation, at: new Date().toISOString() });
       saveProjectCreationSession(session);
-      return fail(res, ctx, 502, 'PROJECT_AGENT_MODEL_FAILED', `Project planning failed: ${session.model_error}`, [{ session_id: session.id, cause: session.model_error }]);
-    }
-    if (session.missing_slots.length) {
-      const clarification = projectCreationClarification(session);
-      session.status = 'collecting_info';
-      session.messages.push({ role: 'agent', status: 'needs_clarification', content: clarification.content, clarification_questions: clarification.questions, missing_fields: clarification.missing_fields, at: new Date().toISOString() });
-      saveProjectCreationSession(session);
-      return ok(res, ctx, { project_creation_session: session, clarification, model_status: getModelStatus() });
+      return ok(res, ctx, { project_creation_session: session, confirmation, model_status: getModelStatus() });
     }
     session.status = 'creating_project';
     saveProjectCreationSession(session);

@@ -16,7 +16,7 @@ function initialState() {
     validationResults: validateWorkflow(exampleProject.workflow, exampleProject.assets),
     activeNodeDetailTab: 'overview',
     aiEdit: { open: false, request: '', diff: null, pending: false },
-    projectAgent: { open: true, request: '', session: null, pending: false, progress: null },
+    projectAgent: { request: '', session: null, pending: false, progress: null },
     workflowGenerationPending: false,
     exportPreviewType: 'workflow_spec.yaml',
     settingsNavOpen: false,
@@ -64,7 +64,6 @@ function persistUiState() {
     serverAvailable: state.serverAvailable,
     language: state.language || 'en',
     projectAgent: {
-      open: state.projectAgent?.open !== false,
       request: state.projectAgent?.request || '',
       session: state.projectAgent?.session || null,
       pending: false,

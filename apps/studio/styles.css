@@ -164,7 +164,10 @@ nav { display: grid; gap: 7px; }
   color: var(--muted);
   font-size: 13px;
   font-weight: 650;
+  min-width: 190px;
+  flex: 0 0 auto;
 }
+.language-switcher > span { min-width: 64px; white-space: nowrap; text-align: right; }
 .language-switcher select { min-width: 112px; }
 main { padding: 24px; overflow: auto; min-width: 0; }
 .studio-shell main {
@@ -172,6 +175,8 @@ main { padding: 24px; overflow: auto; min-width: 0; }
   overflow: hidden;
   min-height: 0;
 }
+.create-shell .main { height: 100vh; min-height: 100vh; overflow: hidden; }
+.create-shell main { padding: 0; overflow: hidden; min-height: 0; }
 .page { animation: fade-slide 220ms ease both; }
 .studio-page {
   height: 100%;
@@ -215,9 +220,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
 .card:hover { border-color: rgba(66, 87, 255, 0.18); }
 .project-agent-workspace {
   position: relative;
-  min-height: calc(100vh - 146px);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(219, 227, 239, 0.86);
+  border: 0;
   background-color: #f7faff;
   background-image: radial-gradient(circle, rgba(148, 163, 184, 0.24) 1px, transparent 1px);
   background-size: 24px 24px;
@@ -228,9 +234,35 @@ button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow
   right: 16px;
   z-index: 48;
 }
-.project-agent-drawer { bottom: 96px; }
-.project-agent-drawer .ai-chat-list { flex: 1; }
-.project-agent-composer { width: min(780px, calc(100% - 64px)); }
+.project-agent-conversation {
+  width: min(780px, calc(100% - 48px));
+  height: calc(100% - 96px);
+  margin: 0 auto;
+  padding: 54px 8px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+.project-agent-conversation .ai-chat-list { flex: 1; overflow: visible; }
+.project-agent-conversation .ai-chat-bubble p { white-space: pre-wrap; }
+.project-agent-conversation > button { align-self: flex-start; }
+.ai-composer.project-agent-composer {
+  width: min(780px, calc(100% - 64px));
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.ai-composer.project-agent-composer textarea,
+.ai-composer.project-agent-composer.is-expanded textarea {
+  grid-column: 1;
+  grid-row: 1;
+}
+.ai-composer.project-agent-composer .ai-send,
+.ai-composer.project-agent-composer.is-expanded .ai-send {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  justify-self: end;
+}
 .project-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
 .project { position: relative; overflow: hidden; }
 .project::before {
@@ -1090,6 +1122,12 @@ li { margin: 6px 0; }
   }
   .ai-composer.is-expanded .ai-send {
     grid-column: 3;
+  }
+  .ai-composer.project-agent-composer {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .ai-composer.project-agent-composer.is-expanded .ai-send {
+    grid-column: 2;
   }
   .ai-conversation-drawer {
     right: 12px;

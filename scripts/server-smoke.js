@@ -71,10 +71,14 @@ async function startFakeModelServer(port) {
               project_type: 'Custom AI Workflow',
               current_stage: 'Discovery',
               risk_level: 'medium',
-              target_deliverables: [],
-              expected_ai_scope: [],
-              sensitive_areas: [],
-              context_pack: {},
+              target_deliverables: ['Domain workflow'],
+              expected_ai_scope: ['Analyze project inputs and draft outputs'],
+              sensitive_areas: ['Project data'],
+              context_pack: {
+                team_roles: ['Project owner', 'Domain reviewer'],
+                approval_process: ['Domain reviewer approval'],
+                risk_constraints: ['Do not release unreviewed AI output'],
+              },
             },
             confidence: 'high',
             missing_fields: [],
@@ -220,26 +224,56 @@ async function main() {
     const blockedWorkflowEdit = await apiFetch(baseUrl, `/api/projects/${projectId}/edit-sessions/messages`, { method: 'POST', body: JSON.stringify({ request: 'make this workflow more conservative' }) });
     assert(blockedWorkflowEdit.status === 428 && blockedWorkflowEdit.body.error.code === 'LLM_CONFIGURATION_REQUIRED', 'Workflow Edit Agent should require a configured LLM in Local Server mode');
     await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ provider: 'aliyun', api_base_url: `http://127.0.0.1:${modelPort}/v1`, api_key: 'sk-agent-smoke', planning_model: 'qwen3.6-max-preview', timeout_ms: 1000, allow_mock: true }) });
-    const projectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', {
+    const projectAgentPlan = await apiFetch(baseUrl, '/api/project-agent/messages', {
       method: 'POST',
       body: JSON.stringify({
         output_language: 'zh-Hans',
         request: '\u9879\u76ee\u540d\u79f0\u662f\u5ba2\u6237\u5165\u95e8\u52a9\u624b\uff0c\u76ee\u6807\u662f\u7f29\u77ed\u5ba2\u6237\u4e0a\u7ebf\u65f6\u95f4\uff0c\u5f53\u524d\u9636\u6bb5\u662f\u63a2\u7d22\uff0c\u76ee\u6807\u4ea4\u4ed8\u7269\u662f PRD\u3001\u5de5\u4f5c\u6d41\u8349\u7a3f\u548c\u53d1\u5e03\u6e05\u5355\uff0c\u9884\u671f AI \u8303\u56f4\u662f\u751f\u6210\u63d0\u793a\u8bcd\u548c\u68c0\u67e5\u6e05\u5355\uff0c\u654f\u611f\u533a\u57df\u662f\u5ba2\u6237\u9690\u79c1\uff0c\u56e2\u961f\u89d2\u8272\u6709 PM\u3001\u8bbe\u8ba1\u5e08\uff0c\u5ba1\u6279\u6d41\u7a0b\u662f PM Review\uff0c\u5de5\u5177\u6808\u662f GitHub\uff0c\u98ce\u9669\u7ea6\u675f\u662f\u4e0d\u80fd\u66b4\u9732\u5ba2\u6237\u6570\u636e\u3002',
       }),
     });
+    assert(!projectAgentPlan.body.data.project, 'project Agent should not create a project before blueprint confirmation');
+    assert(projectAgentPlan.body.data.project_creation_session.status === 'awaiting_confirmation', 'complete project details should produce an awaiting-confirmation blueprint');
+    const projectAgentRevision = await apiFetch(baseUrl, '/api/project-agent/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        output_language: 'zh-Hans',
+        session_id: projectAgentPlan.body.data.project_creation_session.id,
+        request: '\u76ee\u6807\u662f\u5728\u4eba\u5de5\u5ba1\u6279\u524d\u63d0\u4f9b\u53ef\u8ffd\u6eaf\u7684\u5ba2\u6237\u5165\u95e8\u8349\u6848',
+      }),
+    });
+    assert(!projectAgentRevision.body.data.project && projectAgentRevision.body.data.project_creation_session.status === 'awaiting_confirmation', 'editing a blueprint should continue the conversation instead of creating immediately');
+    assert(projectAgentRevision.body.data.project_creation_session.slots.goal.includes('\u53ef\u8ffd\u6eaf'), 'explicit follow-up details should update the pending project blueprint');
+    const projectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        output_language: 'zh-Hans',
+        session_id: projectAgentRevision.body.data.project_creation_session.id,
+        request: '\u786e\u8ba4\u521b\u5efa',
+      }),
+    });
     const agentProject = projectAgent.body.data.project;
+    assert(agentProject.goal.includes('\u53ef\u8ffd\u6eaf'), 'confirmed project should use the revised multi-turn blueprint');
     assert(agentProject?.name === '\u5ba2\u6237\u5165\u95e8\u52a9\u624b', 'project agent should isolate the project name from a multi-field request');
     assert(agentProject.target_deliverables.length > 0 && !agentProject.target_deliverables.join(' ').includes('AI \u8303\u56f4'), `project agent should stop deliverables at the next labeled field: ${JSON.stringify(agentProject.target_deliverables)}`);
     assert(agentProject.expected_ai_scope.length === 1 && !agentProject.expected_ai_scope[0].includes('\u654f\u611f\u533a\u57df'), 'project agent should isolate AI scope from sensitive areas');
-    assert(agentProject.context_pack.team_roles[0] === 'PM', 'project agent should remove Chinese linking words from Context Pack values');
+    assert(agentProject.context_pack.team_roles[0] === 'PM', `project agent should remove Chinese linking words from Context Pack values: ${JSON.stringify(agentProject.context_pack.team_roles)}`);
     assert(agentProject.context_pack.tool_stack[0] === 'GitHub', 'project agent should isolate tool stack from following constraints');
     assert(projectAgent.body.data.generation_job.status === 'succeeded' && agentProject.workflow.nodes.length >= 3, 'project Agent should return an atomically generated non-empty workflow');
 
-    const contractProjectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', {
+    const contractProjectPlan = await apiFetch(baseUrl, '/api/project-agent/messages', {
       method: 'POST',
       body: JSON.stringify({
         output_language: 'zh-Hans',
         request: '\u9879\u76ee\u540d\u79f0\u662f\u5408\u540c\u5ba1\u6838AI\uff0c\u76ee\u6807\u662f\u964d\u4f4e\u5408\u540c\u6cd5\u52a1\u5ba1\u6838\u65f6\u95f4\uff0c\u5f53\u524d\u9636\u6bb5\u662f\u63a2\u7d22\uff0c\u56e2\u961f\u89d2\u8272\u6709\u6cd5\u52a1\u548c\u4e1a\u52a1\u8d1f\u8d23\u4eba\uff0c\u5ba1\u6279\u6d41\u7a0b\u662f\u6cd5\u52a1\u5ba1\u6279\uff0c\u98ce\u9669\u7ea6\u675f\u662f\u5408\u540c\u6570\u636e\u4e0d\u80fd\u5916\u53d1\u3002',
+      }),
+    });
+    assert(contractProjectPlan.body.data.project_creation_session.status === 'awaiting_confirmation', 'contract project should wait for explicit user confirmation');
+    const contractProjectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        output_language: 'zh-Hans',
+        session_id: contractProjectPlan.body.data.project_creation_session.id,
+        request: '\u786e\u8ba4\u521b\u5efa',
       }),
     });
     const contractProject = contractProjectAgent.body.data.project;
@@ -249,9 +283,14 @@ async function main() {
     assert(!contractProject.workflow.nodes.some((node) => node.name === 'PRD Draft Generation'), 'contract review workflow should not copy the AI SaaS MVP node set');
 
     const projectsBeforeInvalidPlan = await apiFetch(baseUrl, '/api/projects');
-    const invalidWorkflowProject = await apiFetch(baseUrl, '/api/project-agent/messages', {
+    const invalidWorkflowPlan = await apiFetch(baseUrl, '/api/project-agent/messages', {
       method: 'POST',
       body: JSON.stringify({ request: 'name: Invalid Workflow; goal: test atomic project creation; current stage: discovery' }),
+    });
+    assert(invalidWorkflowPlan.body.data.project_creation_session.status === 'awaiting_confirmation', 'invalid workflow fixture should still require blueprint confirmation first');
+    const invalidWorkflowProject = await apiFetch(baseUrl, '/api/project-agent/messages', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: invalidWorkflowPlan.body.data.project_creation_session.id, request: 'Confirm creation' }),
     });
     assert(invalidWorkflowProject.status === 502 && invalidWorkflowProject.body.error.code === 'PROJECT_WORKFLOW_GENERATION_FAILED', 'invalid model workflow output should fail project creation explicitly');
     const projectsAfterInvalidPlan = await apiFetch(baseUrl, '/api/projects');
