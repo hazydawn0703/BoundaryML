@@ -64,7 +64,16 @@ async function startFakeModelServer(port) {
         const payload = envelope.payload || {};
         let output = { summary: `fake response for ${task}` };
         if (task === 'project_creation_plan') {
+          const revisingRequestSource = /\u9700\u6c42.*(?:\u6765\u81ea|\u6765\u6e90)|\u6295\u653e\u56e2\u961f|\u8fd0\u8425\u56e2\u961f/i.test(payload.request || '');
           output = {
+            intent: revisingRequestSource ? 'revise_blueprint' : 'complete_blueprint',
+            assistant_reply: revisingRequestSource
+              ? '\u662f\u7684\uff0c\u4f5c\u56fe\u9700\u6c42\u5e94\u7531\u6295\u653e\u56e2\u961f\u6216\u8fd0\u8425\u56e2\u961f\u53d1\u8d77\uff0c\u6211\u5df2\u636e\u6b64\u66f4\u65b0\u84dd\u56fe\u3002'
+              : 'I prepared a reviewable project blueprint.',
+            reasoning_summary: revisingRequestSource
+              ? '\u9700\u6c42\u6765\u6e90\u3001\u53d1\u8d77\u56e2\u961f\u4e0e\u4e0a\u4e0b\u6e38\u8d23\u4efb\u8fb9\u754c'
+              : 'Project goals, deliverables, AI boundaries, roles, and approvals',
+            changed_fields: revisingRequestSource ? ['context_pack.request_sources', 'context_pack.team_roles'] : [],
             project: {
               name: 'Planned AI Project',
               goal: 'Deliver the requested domain workflow',
@@ -75,7 +84,8 @@ async function startFakeModelServer(port) {
               expected_ai_scope: ['Analyze project inputs and draft outputs'],
               sensitive_areas: ['Project data'],
               context_pack: {
-                team_roles: ['Project owner', 'Domain reviewer'],
+                request_sources: revisingRequestSource ? ['\u6295\u653e\u56e2\u961f', '\u8fd0\u8425\u56e2\u961f'] : ['Project owner'],
+                team_roles: revisingRequestSource ? ['\u6295\u653e\u56e2\u961f', '\u8fd0\u8425\u56e2\u961f', 'Domain reviewer'] : ['Project owner', 'Domain reviewer'],
                 approval_process: ['Domain reviewer approval'],
                 risk_constraints: ['Do not release unreviewed AI output'],
               },
@@ -233,6 +243,7 @@ async function main() {
     });
     assert(!projectAgentPlan.body.data.project, 'project Agent should not create a project before blueprint confirmation');
     assert(projectAgentPlan.body.data.project_creation_session.status === 'awaiting_confirmation', 'complete project details should produce an awaiting-confirmation blueprint');
+    assert(projectAgentPlan.body.data.project_creation_session.slots.context_pack.team_roles[0] === 'PM', `project agent should remove Chinese linking words from Context Pack values: ${JSON.stringify(projectAgentPlan.body.data.project_creation_session.slots.context_pack.team_roles)}`);
     const projectAgentRevision = await apiFetch(baseUrl, '/api/project-agent/messages', {
       method: 'POST',
       body: JSON.stringify({
@@ -243,20 +254,34 @@ async function main() {
     });
     assert(!projectAgentRevision.body.data.project && projectAgentRevision.body.data.project_creation_session.status === 'awaiting_confirmation', 'editing a blueprint should continue the conversation instead of creating immediately');
     assert(projectAgentRevision.body.data.project_creation_session.slots.goal.includes('\u53ef\u8ffd\u6eaf'), 'explicit follow-up details should update the pending project blueprint');
-    const projectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', {
+    const projectAgentSourceRevision = await apiFetch(baseUrl, '/api/project-agent/messages', {
       method: 'POST',
       body: JSON.stringify({
         output_language: 'zh-Hans',
         session_id: projectAgentRevision.body.data.project_creation_session.id,
+        request: '\u4f5c\u56fe\u7684\u9700\u6c42\u6765\u81ea\u54ea\u91cc\uff1f\u4e0d\u5e94\u8be5\u6765\u81ea\u6295\u653e\u56e2\u961f\uff0c\u6216\u8005\u8fd0\u8425\u56e2\u961f\u5417\uff1f',
+      }),
+    });
+    const sourceRevisionSession = projectAgentSourceRevision.body.data.project_creation_session;
+    assert(sourceRevisionSession.status === 'awaiting_confirmation', 'a blueprint challenge should remain conversational until confirmation');
+    assert(sourceRevisionSession.slots.context_pack.request_sources.includes('\u6295\u653e\u56e2\u961f') && sourceRevisionSession.slots.context_pack.request_sources.includes('\u8fd0\u8425\u56e2\u961f'), 'model-declared changed fields should revise request sources without explicit field labels');
+    assert(sourceRevisionSession.slots.context_pack.team_roles.includes('\u6295\u653e\u56e2\u961f'), 'model-declared role changes should update the pending blueprint');
+    assert(sourceRevisionSession.messages.at(-1).content.includes('\u6211\u5df2\u636e\u6b64\u66f4\u65b0\u84dd\u56fe'), 'Agent should directly answer the latest blueprint question before showing the revised blueprint');
+    const projectAgent = await apiFetch(baseUrl, '/api/project-agent/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        output_language: 'zh-Hans',
+        session_id: sourceRevisionSession.id,
         request: '\u786e\u8ba4\u521b\u5efa',
       }),
     });
     const agentProject = projectAgent.body.data.project;
     assert(agentProject.goal.includes('\u53ef\u8ffd\u6eaf'), 'confirmed project should use the revised multi-turn blueprint');
+    assert(agentProject.context_pack.request_sources.includes('\u6295\u653e\u56e2\u961f'), 'confirmed project should persist conversational request-source revisions');
     assert(agentProject?.name === '\u5ba2\u6237\u5165\u95e8\u52a9\u624b', 'project agent should isolate the project name from a multi-field request');
     assert(agentProject.target_deliverables.length > 0 && !agentProject.target_deliverables.join(' ').includes('AI \u8303\u56f4'), `project agent should stop deliverables at the next labeled field: ${JSON.stringify(agentProject.target_deliverables)}`);
     assert(agentProject.expected_ai_scope.length === 1 && !agentProject.expected_ai_scope[0].includes('\u654f\u611f\u533a\u57df'), 'project agent should isolate AI scope from sensitive areas');
-    assert(agentProject.context_pack.team_roles[0] === 'PM', `project agent should remove Chinese linking words from Context Pack values: ${JSON.stringify(agentProject.context_pack.team_roles)}`);
+    assert(agentProject.context_pack.team_roles.includes('\u8fd0\u8425\u56e2\u961f'), 'confirmed project should persist conversational role revisions');
     assert(agentProject.context_pack.tool_stack[0] === 'GitHub', 'project agent should isolate tool stack from following constraints');
     assert(projectAgent.body.data.generation_job.status === 'succeeded' && agentProject.workflow.nodes.length >= 3, 'project Agent should return an atomically generated non-empty workflow');
 

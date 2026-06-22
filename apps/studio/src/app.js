@@ -14,6 +14,11 @@ import { applyWorkflowDiff } from '../../../packages/core/src/diff.js';
 
 const app = document.getElementById('app');
 const AI_CONVERSATION_LIMIT = 20;
+const UI_THEMES = {
+  'open-source': { label: 'Open Source' },
+  signal: { label: 'Signal' },
+  contrast: { label: 'High Contrast' },
+};
 
 const UI_LANGUAGES = {
   en: 'English',
@@ -95,6 +100,11 @@ const ZH_HANS_REPLACEMENTS = [
   ['Mode: Local Demo / Mock Model', '模式：Local Demo / Mock Model'],
   ['Mode: Local Server', '模式：Local Server'],
   ['Reconnect Server', '重新连接服务'],
+  ['Theme Settings', '主题设置'],
+  ['BoundaryML preferences', 'BoundaryML 偏好设置'],
+  ['High Contrast', '高对比度'],
+  ['Open Source', '开源主题'],
+  ['Signal', '信号'],
   ['Open Source Theme', '开源主题'],
   ['Context Pack', '上下文包'],
   ['Context Management', '上下文管理'],
@@ -113,9 +123,12 @@ const ZH_HANS_REPLACEMENTS = [
   ['Planning project structure...', '\u6b63\u5728\u89c4\u5212\u9879\u76ee\u7ed3\u6784...'],
   ['The model is still reasoning...', '\u6a21\u578b\u4ecd\u5728\u601d\u8003...'],
   ['Completing the project plan and workflow...', '\u6b63\u5728\u5b8c\u6210\u9879\u76ee\u65b9\u6848\u548c\u5de5\u4f5c\u6d41...'],
-  ['Thinking remains enabled. Model activity resets the inactivity timeout.', '\u601d\u8003\u6a21\u5f0f\u5df2\u5f00\u542f\uff1b\u6a21\u578b\u6301\u7eed\u8f93\u51fa\u65f6\u4f1a\u81ea\u52a8\u91cd\u7f6e\u65e0\u6d3b\u52a8\u8d85\u65f6\u8ba1\u65f6\u3002'],
+  ['Current focus:', '\u5f53\u524d\u91cd\u70b9\uff1a'],
+  ['Reviewing the latest request against the current project blueprint', '\u6b63\u5728\u5c06\u6700\u65b0\u9700\u6c42\u4e0e\u5f53\u524d\u9879\u76ee\u84dd\u56fe\u8fdb\u884c\u5bf9\u7167'],
   ['Last model activity:', '\u6700\u8fd1\u6a21\u578b\u6d3b\u52a8\uff1a'],
   ['Cancel', '\u53d6\u6d88'],
+  ['New conversation', '\u65b0\u5bf9\u8bdd'],
+  ['Start a new project conversation', '\u5f00\u59cb\u65b0\u7684\u9879\u76ee\u5bf9\u8bdd'],
   ['Agent is thinking...', 'Agent 正在思考...'],
   ['Agent task', 'Agent \u4efb\u52a1'],
   ['Continue next batch', '\u7ee7\u7eed\u4e0b\u4e00\u6279'],
@@ -375,6 +388,7 @@ const ICONS = {
   more: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12h.01M19 12h.01M5 12h.01"/></svg>',
   send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+  newConversation: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h6"/><path d="M18 2v6M15 5h6"/></svg>',
 };
 
 function translateText(text, language) {
@@ -533,13 +547,16 @@ function renderSidebar(state) {
     ['projects', 'Projects'],
     ['jobs', 'Jobs'],
   ];
-  const settingsSelected = state.currentPage === 'settings-model' || state.currentPage === 'settings';
+  const settingsSelected = ['settings', 'settings-model', 'settings-theme'].includes(state.currentPage);
   const settingsOpen = state.settingsNavOpen || settingsSelected;
 
-  return `<aside class="sidebar"><div class="logo">Boundary<span>ML</span></div><div class="theme-strip">Open Source Theme<div class="theme-swatch-row"><span class="theme-swatch primary"></span><span class="theme-swatch accent"></span><span class="theme-swatch violet"></span></div></div>
+  return `<aside class="sidebar"><div class="logo">Boundary<span>ML</span></div>
     <nav>${pages.map(([id, label]) => `<button class="nav-item ${state.currentPage === id ? 'active' : ''}" data-action="goto" data-page="${id}">${label}</button>`).join('')}
       <button class="nav-item ${settingsSelected ? 'active' : ''}" data-action="toggle-settings-nav" aria-expanded="${settingsOpen}">Settings</button>
-      <div class="subnav ${settingsOpen ? 'open' : ''}"><button class="subnav-item ${settingsSelected ? 'active' : ''}" data-action="goto" data-page="settings-model">Model Access</button></div>
+      <div class="subnav ${settingsOpen ? 'open' : ''}">
+        <button class="subnav-item ${['settings', 'settings-model'].includes(state.currentPage) ? 'active' : ''}" data-action="goto" data-page="settings-model">Model Access</button>
+        <button class="subnav-item ${state.currentPage === 'settings-theme' ? 'active' : ''}" data-action="goto" data-page="settings-theme">Theme Settings</button>
+      </div>
     </nav>
   </aside>`;
 }
@@ -559,6 +576,7 @@ function renderTopbar(state) {
     jobs: ['Jobs', 'Monitor recent generation tasks'],
     settings: ['Settings', 'Manage model and runtime settings'],
     'settings-model': ['Model Access', 'Manage model provider, keys, and runtime test calls'],
+    'settings-theme': ['Theme Settings', 'BoundaryML preferences'],
   };
   const isProjectTopbar = !pageCopy[state.currentPage] && Boolean(project?.id);
   const [title, subtitle] = pageCopy[state.currentPage] || [
@@ -646,7 +664,7 @@ function renderProjectAgentMessage(message, language = 'en') {
   const label = translateText(role === 'user' ? 'You' : 'Agent', language);
   const questions = message.clarification_questions || message.clarificationQuestions || [];
   const body = message.pending
-    ? `<div class="diff-pending" role="status" aria-live="polite"><span class="diff-pending-dot"></span><div><strong>${message.content || 'Analyzing project request...'}</strong><p class="muted">Thinking remains enabled. Model activity resets the inactivity timeout.</p>${message.lastActivityAt ? `<p class="muted">Last model activity: ${escapeAttr(message.lastActivityAt)}</p>` : ''}</div></div>`
+    ? `<div class="diff-pending" role="status" aria-live="polite"><span class="diff-pending-dot"></span><div><strong>${message.content || 'Analyzing project request...'}</strong><p class="muted"><strong>Current focus:</strong> ${escapeAttr(message.focusSummary || 'Reviewing the latest request against the current project blueprint')}</p>${message.lastActivityAt ? `<p class="muted">Last model activity: ${escapeAttr(message.lastActivityAt)}</p>` : ''}</div></div>`
     : `${message.content ? `<p>${escapeAttr(message.content)}</p>` : ''}${questions.length ? `<ul class="ai-clarification-list">${questions.map((question) => `<li>${escapeAttr(question)}</li>`).join('')}</ul>` : ''}`;
   return `<div class="ai-chat-message ${role}">
     <div class="ai-chat-meta">${label}${message.at ? ` &middot; ${escapeAttr(message.at)}` : ''}</div>
@@ -667,7 +685,7 @@ function pollProjectAgentModelActivity(startedAt) {
         const progress = running.purpose === 'workflow_generate'
           ? 'Completing the project plan and workflow...'
           : (running.stage === 'reasoning' ? 'The model is still reasoning...' : 'Planning project structure...');
-        setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, progress, lastActivityAt: running.last_activity_at || null } }));
+        setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, progress, focusSummary: running.focus_summary || prev.projectAgent?.focusSummary || '', lastActivityAt: running.last_activity_at || null } }));
       }
     } catch {}
     pollProjectAgentModelActivity(startedAt);
@@ -683,23 +701,28 @@ function renderCreatePage() {
   const messages = [...(session.messages || [])];
   if (agent.pending && agent.request) {
     messages.push({ role: 'user', content: agent.request });
-    messages.push({ role: 'agent', pending: true, content: agent.progress || 'Analyzing project request...', lastActivityAt: agent.lastActivityAt });
+    messages.push({ role: 'agent', pending: true, content: agent.progress || 'Analyzing project request...', focusSummary: agent.focusSummary, lastActivityAt: agent.lastActivityAt });
   }
   const missing = session.missing_slots || session.missingSlots || [];
   const conversation = messages.length
     ? messages.slice(-10).map((message) => renderProjectAgentMessage(message, language)).join('')
     : '<div class="ai-chat-empty">Describe the project you want to create. The Agent will ask for any important missing information before creating it.</div>';
   return `<section class="project-agent-workspace">
-    <button class="project-agent-exit" type="button" data-action="cancel-project-creation" ${agent.pending ? 'disabled' : ''}>Cancel</button>
     <div class="project-agent-conversation" aria-live="polite">
       ${missing.length ? `<p class="inline-warning">${translateText('Missing:', language)} ${missing.join(', ')}</p>` : ''}
       <div class="ai-chat-list">${conversation}</div>
     </div>
-    <div class="ai-composer project-agent-composer">
-      <textarea data-action="set-project-agent-request" rows="1" placeholder="${llmRequired ? 'Configure an LLM to use Workflow Agent...' : 'Describe the project you want to create...'}" ${llmRequired ? 'disabled' : ''}>${escapeAttr(agent.request || '')}</textarea>
-      ${llmRequired
-        ? '<button class="primary ai-send ai-configure" data-action="open-model-settings">Configure LLM</button>'
-        : `<button class="primary ai-send" data-action="send-project-agent" aria-label="${agent.pending ? 'Creating...' : 'Send to project Agent'}" title="${agent.pending ? 'Creating...' : 'Send to project Agent'}" ${agent.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span></button>`}
+    <div class="project-agent-controls">
+      <div class="project-agent-toolbar">
+        <button type="button" data-action="new-project-conversation" title="Start a new project conversation" ${agent.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.newConversation}</span><span>New conversation</span></button>
+        <button type="button" data-action="cancel-project-creation" ${agent.pending ? 'disabled' : ''}>Cancel</button>
+      </div>
+      <div class="ai-composer project-agent-composer">
+        <textarea data-action="set-project-agent-request" rows="1" placeholder="${llmRequired ? 'Configure an LLM to use Workflow Agent...' : 'Describe the project you want to create...'}" ${llmRequired ? 'disabled' : ''}>${escapeAttr(agent.request || '')}</textarea>
+        ${llmRequired
+          ? '<button class="primary ai-send ai-configure" data-action="open-model-settings">Configure LLM</button>'
+          : `<button class="primary ai-send" data-action="send-project-agent" aria-label="${agent.pending ? 'Creating...' : 'Send to project Agent'}" title="${agent.pending ? 'Creating...' : 'Send to project Agent'}" ${agent.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span></button>`}
+      </div>
     </div>
   </section>`;
 }
@@ -1486,6 +1509,17 @@ function renderJobs(state) {
   </section>`;
 }
 
+function renderThemeSettings(state) {
+  const activeTheme = UI_THEMES[state.theme] ? state.theme : 'open-source';
+  return `<section class="page theme-settings-page"><div class="theme-grid" role="radiogroup" aria-label="Theme Settings">
+    ${Object.entries(UI_THEMES).map(([id, theme]) => `<label class="theme-option ${activeTheme === id ? 'active' : ''}" data-theme-option="${id}">
+      <input type="radio" name="theme" value="${id}" data-action="set-theme" ${activeTheme === id ? 'checked' : ''}/>
+      <span class="theme-option-swatches" aria-hidden="true"><span></span><span></span><span></span></span>
+      <strong>${theme.label}</strong>
+    </label>`).join('')}
+  </div></section>`;
+}
+
 function renderSettings(state) {
   const logs = state.modelCalls || [];
   const modelStatus = state.modelStatus || {};
@@ -1539,6 +1573,7 @@ function renderPage(state) {
     case 'assets': return renderAssets(state);
     case 'export': return renderExport(state);
     case 'settings-model': return renderSettings(state);
+    case 'settings-theme': return renderThemeSettings(state);
     case 'settings': return renderSettings(state);
     default: return renderProjects(state);
   }
@@ -1548,7 +1583,9 @@ function render() {
   const state = getState();
   const isStudioPage = state.currentPage === 'studio';
   const isCreatePage = state.currentPage === 'create';
-  app.innerHTML = `<div class="app-shell ${isStudioPage ? 'studio-shell' : ''} ${isCreatePage ? 'create-shell' : ''}" data-theme="open-source">${isStudioPage ? '' : renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
+  const theme = UI_THEMES[state.theme] ? state.theme : 'open-source';
+  document.documentElement.dataset.theme = theme;
+  app.innerHTML = `<div class="app-shell ${isStudioPage ? 'studio-shell' : ''} ${isCreatePage ? 'create-shell' : ''}" data-theme="${theme}">${isStudioPage ? '' : renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
   localizeDom(state.language || 'en');
   autoResizeAiComposer();
   ensureFieldSaveIndicators();
@@ -1802,7 +1839,7 @@ function handleWorkflowPointerUp(event) {
 function handleWorkflowWheel(event) {
   const composer = closestElement(event.target, '.ai-composer');
   if (composer) {
-    const input = composer.querySelector('textarea[data-action="set-ai-request"]');
+    const input = composer.querySelector('textarea[data-action="set-ai-request"], textarea[data-action="set-project-agent-request"]');
     if (input) input.scrollTop += event.deltaY;
     event.preventDefault();
     event.stopPropagation();
@@ -1945,6 +1982,7 @@ function handleAction(event) {
   }
   if (action === 'goto') setState((prev) => ({ ...prev, currentPage: target.dataset.page, settingsNavOpen: target.dataset.page?.startsWith('settings') ? true : prev.settingsNavOpen }));
   if (action === 'set-language') setState((prev) => ({ ...prev, language: UI_LANGUAGES[target.value] ? target.value : 'en' }));
+  if (action === 'set-theme') setState((prev) => ({ ...prev, theme: UI_THEMES[target.value] ? target.value : 'open-source' }));
   if (action === 'refresh-server-mode') bootstrapRuntimeMode();
   if (action === 'open-project') {
     const projectId = target.dataset.projectId;
@@ -2604,7 +2642,7 @@ function handleAction(event) {
       return;
     }
     const projectAgentStartedAt = Date.now();
-    setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, pending: true, progress: 'Analyzing project request...', lastActivityAt: null, operationStartedAt: projectAgentStartedAt } }));
+    setState((prev) => ({ ...prev, projectAgent: { ...prev.projectAgent, pending: true, progress: 'Analyzing project request...', focusSummary: '', lastActivityAt: null, operationStartedAt: projectAgentStartedAt } }));
     pollProjectAgentModelActivity(projectAgentStartedAt);
     [
       [8000, 'Planning project structure...'],
@@ -2649,6 +2687,25 @@ function handleAction(event) {
         .finally(finishCancellation);
     } else {
       finishCancellation();
+    }
+    return;
+  }
+  if (action === 'new-project-conversation') {
+    const st = getState();
+    const sessionId = st.projectAgent?.session?.id;
+    const startFreshConversation = () => setState((prev) => ({
+      ...prev,
+      projectAgent: { request: '', session: null, pending: false, progress: null },
+      serverError: '',
+    }));
+    if (st.serverAvailable && sessionId) {
+      apiClient.projectAgentApi.message({ request: 'cancel project creation', session_id: sessionId, output_language: st.language || 'en' })
+        .then(startFreshConversation)
+        .catch((error) => {
+          showToast(error.message || 'Failed to start a new conversation.', 'error');
+        });
+    } else {
+      startFreshConversation();
     }
     return;
   }
@@ -3377,6 +3434,14 @@ function handleInput(event) {
   }
 }
 
+function handleComposerKeydown(event) {
+  if (event.target.dataset.action !== 'set-project-agent-request') return;
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  const sendButton = event.target.closest('.project-agent-composer')?.querySelector('[data-action="send-project-agent"]');
+  if (sendButton && !sendButton.disabled) sendButton.click();
+}
+
 function handleSubmit(event) {
   if (event.target.dataset.form === 'context-pack') {
     event.preventDefault();
@@ -3450,6 +3515,7 @@ bootstrapRuntimeMode();
 document.addEventListener('click', handleAction);
 document.addEventListener('click', handleDocumentOverlayClick);
 document.addEventListener('input', handleInput);
+document.addEventListener('keydown', handleComposerKeydown);
 document.addEventListener('change', handleAction);
 document.addEventListener('submit', handleSubmit);
 document.addEventListener('pointerdown', handleWorkflowPointerDown);
