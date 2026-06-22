@@ -1227,6 +1227,7 @@ function asList(value, fallback = []) {
 
 function createContextPack(input = {}) {
   return {
+    request_sources: asList(input.request_sources || input.requestSources),
     team_roles: asList(input.team_roles || input.teamRoles),
     approval_process: asList(input.approval_process || input.approvalProcess),
     tool_stack: asList(input.tool_stack || input.toolStack),
@@ -1305,6 +1306,7 @@ function normalizeProjectContextList(value) {
 }
 
 const PROJECT_CONTEXT_FIELD_ALIASES = {
+  request_sources: ['request sources', 'request source', 'demand sources', 'demand source', '\u9700\u6c42\u6765\u6e90', '\u9700\u6c42\u63d0\u51fa\u65b9', '\u9700\u6c42\u65b9', '\u53d1\u8d77\u56e2\u961f'],
   team_roles: ['team roles', 'roles', '\u56e2\u961f\u89d2\u8272', '\u56e2\u961f\u6210\u5458', '\u53c2\u4e0e\u89d2\u8272'],
   approval_process: ['approval process', 'approval flow', 'review process', '\u5ba1\u6279\u6d41\u7a0b', '\u5ba1\u6838\u6d41\u7a0b', '\u95e8\u7981'],
   tool_stack: ['tool stack', 'tools', '\u5de5\u5177\u6808', '\u5de5\u5177'],
@@ -1406,6 +1408,7 @@ function normalizeProjectCreationContextPack(input = {}) {
   const source = input?.context_pack || input?.contextPack || input?.context || input;
   if (!source || typeof source !== 'object') return {};
   return {
+    request_sources: normalizeProjectContextList(source.request_sources || source.requestSources || source.demand_sources || source.demandSources),
     team_roles: normalizeProjectContextList(source.team_roles || source.teamRoles || source.roles),
     approval_process: normalizeProjectContextList(source.approval_process || source.approvalProcess || source.review_process || source.reviewProcess),
     tool_stack: normalizeProjectContextList(source.tool_stack || source.toolStack || source.tools),
@@ -1417,6 +1420,7 @@ function normalizeProjectCreationContextPack(input = {}) {
 function extractProjectCreationContextPack(text, previous = {}) {
   const source = String(text || '');
   const extracted = {
+    request_sources: normalizeProjectContextList(extractLabeledProjectContextValue(source, PROJECT_CONTEXT_FIELD_ALIASES.request_sources)),
     team_roles: normalizeProjectContextList(extractLabeledProjectContextValue(source, PROJECT_CONTEXT_FIELD_ALIASES.team_roles)),
     approval_process: normalizeProjectContextList(extractLabeledProjectContextValue(source, PROJECT_CONTEXT_FIELD_ALIASES.approval_process)),
     tool_stack: normalizeProjectContextList(extractLabeledProjectContextValue(source, PROJECT_CONTEXT_FIELD_ALIASES.tool_stack)),
@@ -1429,7 +1433,7 @@ function extractProjectCreationContextPack(text, previous = {}) {
 function mergeProjectCreationContextPack(previous = {}, next = {}) {
   const merged = normalizeProjectCreationContextPack(previous);
   const incoming = normalizeProjectCreationContextPack(next);
-  for (const key of ['team_roles', 'approval_process', 'tool_stack', 'risk_constraints']) {
+  for (const key of ['request_sources', 'team_roles', 'approval_process', 'tool_stack', 'risk_constraints']) {
     const values = [...(merged[key] || []), ...(incoming[key] || [])].map((item) => String(item || '').trim()).filter(Boolean);
     merged[key] = [...new Set(values)];
   }
@@ -1613,6 +1617,62 @@ function normalizeProjectCreationModelSlots(output) {
   };
 }
 
+function normalizeProjectCreationChangedFields(output = {}) {
+  const raw = output.changed_fields || output.changedFields || output.updated_fields || output.updatedFields || [];
+  const aliases = {
+    request_sources: 'context_pack.request_sources',
+    team_roles: 'context_pack.team_roles',
+    approval_process: 'context_pack.approval_process',
+    tool_stack: 'context_pack.tool_stack',
+    risk_constraints: 'context_pack.risk_constraints',
+    historical_process_materials: 'context_pack.historical_process_materials',
+  };
+  const allowed = new Set([
+    'name', 'goal', 'project_type', 'current_stage', 'risk_level', 'target_deliverables', 'expected_ai_scope', 'sensitive_areas',
+    'context_pack.request_sources', 'context_pack.team_roles', 'context_pack.approval_process', 'context_pack.tool_stack',
+    'context_pack.risk_constraints', 'context_pack.historical_process_materials',
+  ]);
+  return [...new Set((Array.isArray(raw) ? raw : [raw]).map((field) => {
+    const normalized = String(field || '').trim().replace(/^contextPack\./, 'context_pack.');
+    return aliases[normalized] || normalized;
+  }).filter((field) => allowed.has(field)))];
+}
+
+function applyDeclaredProjectCreationChanges(slots, modelSlots, changedFields, explicitSlots) {
+  const next = structuredClone(slots || {});
+  const explicitContext = explicitSlots.context_pack || {};
+  for (const field of changedFields) {
+    if (field.startsWith('context_pack.')) {
+      const contextField = field.slice('context_pack.'.length);
+      const explicitValue = explicitContext[contextField];
+      if (Array.isArray(explicitValue) ? explicitValue.length : Boolean(explicitValue)) continue;
+      if (!(contextField in (modelSlots.context_pack || {}))) continue;
+      next.context_pack ||= {};
+      next.context_pack[contextField] = structuredClone(modelSlots.context_pack[contextField]);
+      continue;
+    }
+    const explicitValue = explicitSlots[field];
+    if (Array.isArray(explicitValue) ? explicitValue.length : Boolean(explicitValue)) continue;
+    if (field in modelSlots) next[field] = structuredClone(modelSlots[field]);
+  }
+  return next;
+}
+
+function projectCreationFocusSummary(requestText, language = 'en') {
+  const isChinese = normalizeProjectAgentLanguage(language, textHasChinese(requestText) ? 'zh-Hans' : 'en') === 'zh-Hans';
+  const text = String(requestText || '').toLowerCase();
+  if (textIncludesAny(text, ['\u9700\u6c42\u6765\u6e90', '\u9700\u6c42\u65b9', '\u8c01\u63d0\u51fa', '\u54ea\u91cc', 'request source', 'demand source', 'who requests'])) {
+    return isChinese ? '\u9700\u6c42\u6765\u6e90\u3001\u53d1\u8d77\u56e2\u961f\u4e0e\u4e0a\u4e0b\u6e38\u8d23\u4efb\u8fb9\u754c' : 'Request sources, initiating teams, and upstream/downstream ownership';
+  }
+  if (textIncludesAny(text, ['\u5ba1\u6279', '\u5ba1\u6838', '\u98ce\u9669', '\u5408\u89c4', 'approval', 'review', 'risk', 'compliance'])) {
+    return isChinese ? '\u5ba1\u6279\u8def\u5f84\u3001\u98ce\u9669\u7ea6\u675f\u4e0e\u4eba\u673a\u8d23\u4efb\u8fb9\u754c' : 'Approval paths, risk constraints, and human-AI ownership';
+  }
+  if (textIncludesAny(text, ['\u4ea4\u4ed8', 'ai \u8303\u56f4', '\u4eba\u5de5', 'deliverable', 'ai scope', 'human'])) {
+    return isChinese ? '\u4ea4\u4ed8\u7269\u3001AI \u5de5\u4f5c\u8303\u56f4\u4e0e\u4eba\u5de5\u51b3\u7b56\u70b9' : 'Deliverables, AI scope, and human decision points';
+  }
+  return isChinese ? '\u9879\u76ee\u76ee\u6807\u3001\u4ea4\u4ed8\u7269\u3001AI \u8fb9\u754c\u3001\u89d2\u8272\u4e0e\u5ba1\u6279\u7ea6\u675f' : 'Project goals, deliverables, AI boundaries, roles, and approvals';
+}
+
 async function enrichProjectCreationSessionWithModel(ctx, session, requestText) {
   const previousSlots = session.slots || {};
   let modelResult = null;
@@ -1627,6 +1687,7 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
     purpose: 'project_creation_plan',
     status: 'running',
     stage: 'requesting',
+    focus_summary: projectCreationFocusSummary(requestText, session.output_language || session.outputLanguage),
     summary: `project creation: ${requestText}`,
   };
   modelCalls.unshift(modelCall);
@@ -1634,15 +1695,23 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
     modelResult = await runModel('project_creation_plan', {
       request: requestText,
       existing_slots: previousSlots,
+      conversation: (session.messages || []).slice(-6).map((message) => ({ role: message.role, content: message.content })),
       output_language: session.output_language || session.outputLanguage || 'en',
-      required_fields: ['name', 'goal', 'current_stage', 'target_deliverables', 'expected_ai_scope', 'sensitive_areas', 'context_pack.team_roles', 'context_pack.approval_process', 'context_pack.risk_constraints'],
+      required_fields: ['name', 'goal', 'current_stage', 'target_deliverables', 'expected_ai_scope', 'sensitive_areas', 'context_pack.request_sources', 'context_pack.team_roles', 'context_pack.approval_process', 'context_pack.risk_constraints'],
       optional_fields: ['project_type', 'risk_level', 'context_pack.tool_stack', 'context_pack.historical_process_materials'],
       quality_rules: [
         'Do not silently finalize the project. Extract explicit facts and make clearly labeled proposals for inferred values.',
         'Return an empty value and list the field in missing_fields when a safe workflow boundary cannot be inferred.',
         'The user will review and confirm the resulting blueprint before project creation.',
+        'Treat the request as the latest turn in a conversation. Answer questions directly and revise the blueprint when the user challenges an assumption.',
+        'List every field intentionally revised in changed_fields. Do not list unchanged fields.',
+        'Never return an unchanged blueprint without an assistant_reply that directly addresses the latest user message.',
       ],
       output_contract: {
+        intent: 'complete_blueprint | answer_question | revise_blueprint',
+        assistant_reply: 'direct answer to the latest user message and a concise explanation of proposed blueprint revisions',
+        reasoning_summary: 'one short user-safe summary of the current planning focus; do not reveal hidden chain-of-thought',
+        changed_fields: ['field path intentionally changed, for example context_pack.request_sources or context_pack.team_roles'],
         project: {
           name: 'short project name',
           goal: 'project goal',
@@ -1653,6 +1722,7 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
           expected_ai_scope: ['AI responsibility'],
           sensitive_areas: ['sensitive area'],
           context_pack: {
+            request_sources: ['team, role, system, event, or business trigger that originates work requests'],
             team_roles: ['project role or accountable owner'],
             approval_process: ['approval or review gate'],
             tool_stack: ['tool, system, repository, design app, deployment target'],
@@ -1661,7 +1731,7 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
           },
         },
         confidence: 'low | medium | high',
-        missing_fields: ['name | goal | current_stage | target_deliverables | expected_ai_scope | sensitive_areas | context_pack.team_roles | context_pack.approval_process | context_pack.risk_constraints'],
+        missing_fields: ['name | goal | current_stage | target_deliverables | expected_ai_scope | sensitive_areas | context_pack.request_sources | context_pack.team_roles | context_pack.approval_process | context_pack.risk_constraints'],
       },
     }, {
       onProgress: (progress) => Object.assign(modelCall, {
@@ -1670,14 +1740,23 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
         last_activity_at: new Date().toISOString(),
       }),
     });
-    Object.assign(modelCall, { model: modelResult.model, status: modelResult.status, stage: 'completed', summary: modelResult.output?.summary || modelCall.summary, last_activity_at: new Date().toISOString() });
+    Object.assign(modelCall, {
+      model: modelResult.model,
+      status: modelResult.status,
+      stage: 'completed',
+      summary: modelResult.output?.summary || modelResult.output?.reasoning_summary || modelResult.output?.reasoningSummary || modelCall.summary,
+      focus_summary: modelResult.output?.reasoning_summary || modelResult.output?.reasoningSummary || modelCall.focus_summary,
+      last_activity_at: new Date().toISOString(),
+    });
   } catch (error) {
     modelError = error;
     Object.assign(modelCall, { status: 'failed', stage: 'failed', summary: error.message, last_activity_at: new Date().toISOString() });
   }
+  const modelOutput = modelResult?.output || {};
   const modelSlots = modelResult?.status && modelResult.status !== 'mock'
     ? normalizeProjectCreationModelSlots(modelResult.output)
     : {};
+  const changedFields = normalizeProjectCreationChangedFields(modelOutput);
   const modelProvidedProjectPlan = Object.entries(modelSlots).some(([key, value]) => {
     if (key === 'context_pack') return Object.values(value || {}).some((item) => Array.isArray(item) ? item.length : Boolean(item));
     return Array.isArray(value) ? value.length : Boolean(value);
@@ -1693,7 +1772,7 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
     if (Array.isArray(value) ? value.length : Boolean(value)) modelEnrichedSlots.context_pack[key] = value;
   }
   const explicitCurrentTurnSlots = extractExplicitProjectCreationSlots(requestText);
-  const slots = mergeProjectCreationSlots(modelEnrichedSlots, explicitCurrentTurnSlots);
+  let slots = mergeProjectCreationSlots(modelEnrichedSlots, explicitCurrentTurnSlots);
   const explicitContextPack = explicitCurrentTurnSlots.context_pack || {};
   if (Object.keys(explicitContextPack).length) {
     slots.context_pack = { ...(slots.context_pack || {}) };
@@ -1701,6 +1780,7 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
       if (Array.isArray(value) ? value.length : Boolean(value)) slots.context_pack[key] = value;
     }
   }
+  slots = applyDeclaredProjectCreationChanges(slots, modelSlots, changedFields, explicitCurrentTurnSlots);
   const missing = missingProjectCreationSlots(slots);
   const trace = [
     ...(session.agent_trace || session.agentTrace || []),
@@ -1710,6 +1790,8 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
       generation_source: modelProvidedProjectPlan ? 'llm' : 'failed',
       missing_slots: missing,
       context_pack_fields: Object.entries(slots.context_pack || {}).filter(([, value]) => Array.isArray(value) ? value.length : Boolean(value)).map(([key]) => key),
+      changed_fields: changedFields,
+      reasoning_summary: modelOutput.reasoning_summary || modelOutput.reasoningSummary || null,
       error: modelError?.message || null,
     },
   ];
@@ -1722,6 +1804,9 @@ async function enrichProjectCreationSessionWithModel(ctx, session, requestText) 
     agentTrace: trace,
     model_status: modelResult?.status || (modelError ? 'failed' : 'fallback'),
     model_error: modelFailure || null,
+    assistant_reply: modelOutput.assistant_reply || modelOutput.assistantReply || '',
+    reasoning_summary: modelOutput.reasoning_summary || modelOutput.reasoningSummary || '',
+    changed_fields: changedFields,
     updated_at: new Date().toISOString(),
   };
 }
@@ -1735,6 +1820,7 @@ function missingProjectCreationSlots(slots) {
     !slots.target_deliverables?.length ? 'target_deliverables' : null,
     !slots.expected_ai_scope?.length ? 'expected_ai_scope' : null,
     !slots.sensitive_areas?.length ? 'sensitive_areas' : null,
+    !contextPack.request_sources?.length ? 'request_sources' : null,
     !contextPack.team_roles?.length ? 'team_roles' : null,
     !contextPack.approval_process?.length ? 'approval_process' : null,
     !contextPack.risk_constraints?.length ? 'risk_constraints' : null,
@@ -1859,6 +1945,7 @@ function projectCreationClarification(session) {
     target_deliverables: isChinese ? '\u5e0c\u671b\u8fd9\u4e2a\u9879\u76ee\u6700\u7ec8\u4ea4\u4ed8\u54ea\u4e9b\u6210\u679c\uff1f' : 'What outcomes or artifacts should this project deliver?',
     expected_ai_scope: isChinese ? 'AI \u5e94\u8be5\u8d1f\u8d23\u54ea\u4e9b\u5de5\u4f5c\uff0c\u54ea\u4e9b\u5fc5\u987b\u7531\u4eba\u5b8c\u6210\uff1f' : 'What should AI handle, and what must remain human-owned?',
     sensitive_areas: isChinese ? '\u6709\u54ea\u4e9b\u654f\u611f\u6570\u636e\u3001\u64cd\u4f5c\u6216\u9ad8\u98ce\u9669\u533a\u57df\uff1f\u5982\u679c\u6ca1\u6709\u8bf7\u660e\u786e\u8bf4\u660e\u3002' : 'Which data, actions, or decisions are sensitive? Say explicitly if there are none.',
+    request_sources: isChinese ? '\u8c01\u4f1a\u63d0\u51fa\u6216\u89e6\u53d1\u8fd9\u4e9b\u5de5\u4f5c\u9700\u6c42\uff1f' : 'Who or what originates and triggers these work requests?',
     team_roles: isChinese ? '\u8c01\u4f1a\u53c2\u4e0e\u9879\u76ee\uff0c\u4ed6\u4eec\u5206\u522b\u8d1f\u8d23\u4ec0\u4e48\uff1f' : 'Which roles participate, and what are they accountable for?',
     approval_process: isChinese ? '\u54ea\u4e9b\u7ed3\u679c\u9700\u8981\u4eba\u5de5\u5ba1\u6838\u6216\u6279\u51c6\uff1f' : 'Which results require human review or approval?',
     risk_constraints: isChinese ? '\u5fc5\u987b\u9075\u5b88\u54ea\u4e9b\u9690\u79c1\u3001\u5408\u89c4\u3001\u5b89\u5168\u6216\u53d1\u5e03\u7ea6\u675f\uff1f' : 'Which privacy, compliance, safety, or release constraints must be enforced?',
@@ -1878,6 +1965,7 @@ function projectCreationConfirmation(session) {
   const value = (items) => (Array.isArray(items) ? items.join(isChinese ? '\u3001' : ', ') : (items || (isChinese ? '\u672a\u8bbe\u7f6e' : 'Not set')));
   const lines = isChinese
     ? [
+      ...(session.assistant_reply ? [session.assistant_reply, ''] : []),
       '\u9879\u76ee\u84dd\u56fe\u5df2\u51c6\u5907\u597d\uff0c\u8bf7\u786e\u8ba4\uff1a',
       `\u540d\u79f0\uff1a${slots.name}`,
       `\u76ee\u6807\uff1a${slots.goal}`,
@@ -1885,12 +1973,14 @@ function projectCreationConfirmation(session) {
       `\u4ea4\u4ed8\u7269\uff1a${value(slots.target_deliverables)}`,
       `AI \u8303\u56f4\uff1a${value(slots.expected_ai_scope)}`,
       `\u654f\u611f\u533a\u57df\uff1a${value(slots.sensitive_areas)}`,
+      `\u9700\u6c42\u6765\u6e90\uff1a${value(contextPack.request_sources)}`,
       `\u53c2\u4e0e\u89d2\u8272\uff1a${value(contextPack.team_roles)}`,
       `\u5ba1\u6279\u6d41\u7a0b\uff1a${value(contextPack.approval_process)}`,
       `\u98ce\u9669\u7ea6\u675f\uff1a${value(contextPack.risk_constraints)}`,
       '\u8bf7\u56de\u590d\u201c\u786e\u8ba4\u521b\u5efa\u201d\uff0c\u6216\u76f4\u63a5\u544a\u8bc9\u6211\u9700\u8981\u4fee\u6539\u7684\u5185\u5bb9\u3002',
     ]
     : [
+      ...(session.assistant_reply ? [session.assistant_reply, ''] : []),
       'The project blueprint is ready for review:',
       `Name: ${slots.name}`,
       `Goal: ${slots.goal}`,
@@ -1898,6 +1988,7 @@ function projectCreationConfirmation(session) {
       `Deliverables: ${value(slots.target_deliverables)}`,
       `AI scope: ${value(slots.expected_ai_scope)}`,
       `Sensitive areas: ${value(slots.sensitive_areas)}`,
+      `Request sources: ${value(contextPack.request_sources)}`,
       `Team roles: ${value(contextPack.team_roles)}`,
       `Approval process: ${value(contextPack.approval_process)}`,
       `Risk constraints: ${value(contextPack.risk_constraints)}`,

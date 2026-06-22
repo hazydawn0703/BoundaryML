@@ -9,6 +9,7 @@ function initialState() {
     runtimeMode: 'local_demo',
     serverAvailable: false,
     language: 'en',
+    theme: 'open-source',
     currentPage: 'projects',
     projects: [exampleProject],
     activeProjectId: exampleProject.id,
@@ -63,6 +64,7 @@ function persistUiState() {
     runtimeMode: state.runtimeMode,
     serverAvailable: state.serverAvailable,
     language: state.language || 'en',
+    theme: state.theme || 'open-source',
     projectAgent: {
       request: state.projectAgent?.request || '',
       session: state.projectAgent?.session || null,
