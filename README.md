@@ -1,6 +1,15 @@
-﻿# BoundaryML
+# BoundaryML
 
-BoundaryML 是一个面向 AI 转型项目的 **可视化人机协作边界编排系统**。它帮助团队在项目启动前明确：项目阶段、节点输入输出、人机执行模式、Review Gate、Execution Assets 与可导出的 Execution Kit。
+BoundaryML 是面向 **人机协作工作流** 的边界建模与治理层。它帮助团队在 AI 参与复杂项目之前，明确：项目阶段、节点输入输出、人机执行模式、Review Gate、Execution Assets 与可导出的 Execution Kit。
+
+BoundaryML 的第一个重点落地场景是 **Agentic Development**：将模糊的软件开发任务转成可审核、可测试、可交接给 Codex / Claude Code / GitHub Copilot / Cursor / Hermes / OpenClaw 等 Coding Agent 的 Agent-ready Execution Kit。
+
+换句话说：
+
+- BoundaryML 的底层能力是通用的人机协作边界建模；
+- Agentic Development 是第一个商业爆破点；
+- Agent-ready Execution Kit 是第一个场景化输出；
+- AI Coding Governance Kit 是第一个商业化套件。
 
 ## 当前公开范围
 
@@ -91,6 +100,8 @@ Server 公开只读模板 API：`GET /api/templates` 与 `GET /api/templates/:te
 - `examples/templates.json`
 
 这些示例均为 BoundaryML Spec，包含 workflow、assets、validation、diff 示例与模板引用。
+
+当前公开示例以软件开发和 AI 转型项目为主，但 BoundaryML Spec 本身并不限定于 Coding Agent 场景，后续可扩展到 GEO 运营、内容生产、企业审批、数据分析、咨询交付和多 Agent 业务流程治理。
 
 ## Workspace 结构
 
