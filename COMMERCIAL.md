@@ -1,6 +1,6 @@
 # BoundaryML Commercial Boundary
 
-BoundaryML Core is open source. The community repository is intended to make the BoundaryML Spec, basic workflow model, local tooling, validation, and basic execution-kit generation available for local use and community contribution.
+BoundaryML Core is open source. The community repository is intended to make the BoundaryML Spec, basic human-AI workflow model, local tooling, validation, and basic execution-kit generation available for local use and community contribution.
 
 BoundaryML also has commercial offerings for teams that need production-ready templates, governance packs, advanced exporters, hosted collaboration, enterprise deployment, or done-for-you execution-kit delivery.
 
@@ -8,7 +8,7 @@ BoundaryML also has commercial offerings for teams that need production-ready te
 
 - BoundaryML Spec
 - schema validation
-- basic workflow model
+- basic human-AI workflow model
 - local studio
 - local server
 - basic rules
@@ -17,6 +17,9 @@ BoundaryML also has commercial offerings for teams that need production-ready te
 
 ## Commercial Offerings Include
 
+- Human-AI workflow governance packs
+- Vertical execution kit templates
+- Agentic Development / AI Coding Governance Kit as the first commercial wedge
 - Pro workflow templates
 - Agent governance rule packs
 - Advanced exporters
@@ -26,9 +29,16 @@ BoundaryML also has commercial offerings for teams that need production-ready te
 
 ## Commercial Assets Include
 
+### First Commercial Wedge
+
 - AI Coding Governance Kit
-- GEO Launch Ops Kit
+- Agent-Ready Execution Kit Service
 - Legacy System AI Modernization Kit
+
+### Broader BoundaryML Commercial Assets
+
+- Human-AI Workflow Governance Kits
+- GEO Launch Ops Kit
 - Internal AI Tool Launch Kit
 - enterprise approval templates
 - compliance / security / production release rule packs

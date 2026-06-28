@@ -82,7 +82,14 @@ validation:
   results: []
 
 execution_kits: []
+agent_execution_plans: []
+sandbox_execution_contracts: []
+agent_runs: []
+execution_evidence: []
+promotion_gates: []
 ```
+
+`agent_execution_plans`、`sandbox_execution_contracts`、`agent_runs`、`execution_evidence` 和 `promotion_gates` 在 P0 可以只进入导出结构，不要求真实运行或真实 dispatch。
 
 ---
 
@@ -340,7 +347,32 @@ nodes:
       name: "PM Review"
       reviewer_role: "Product Manager"
       required: true
+    agent_execution:
+      enabled: false
+      execution_level: "l0_human_only"
+      execution_target: null
+      sandbox_execution_contract_id: null
 ```
+
+
+### 15.8.3 Node Agent Execution 推荐字段
+
+当 Node 可能交给 Coding Agent 或外部工程工具执行时，建议增加 `agent_execution` 字段：
+
+```yaml
+agent_execution:
+  enabled: false
+  execution_level: "l0_human_only"
+  execution_target: null
+  sandbox_execution_contract_id: null
+```
+
+字段说明：
+
+- `enabled`：该节点是否允许交给 Agent；
+- `execution_level`：Agent 执行等级；
+- `execution_target`：计划交给哪个 Agent / Adapter；
+- `sandbox_execution_contract_id`：关联的沙箱执行契约。
 
 ---
 
@@ -834,6 +866,30 @@ Reason: This node involves architecture decisions and downstream implementation 
 | High Risk 改为 AI Autonomous | MVP 不允许 | 必须改为其他模式 |
 | Human Only 改为 AI 执行模式 | 允许或禁止取决于规则 | 若涉及高风险则禁止 |
 | 模型推荐被用户拒绝 | 允许 | 记录原因可选 |
+
+---
+
+## 17.8 Coding Agent Execution Level
+
+Coding Agent Execution Level 是独立于 Execution Mode 的治理概念。Execution Mode 表达“人机协作方式”，Coding Agent Execution Level 表达“Agent 可执行权限等级”。
+
+| 等级 | 名称 | 含义 | 典型任务 |
+| -- | --- | --- | --- |
+| L0 | Human Only | Agent 不可执行，只能生成 checklist 或建议 | 生产发布审批、法务、安全策略 |
+| L1 | Agent Suggest | Agent 只读仓库和上下文，输出方案，不改代码 | 影响面分析、技术方案、重构建议 |
+| L2 | Agent Patch | Agent 可生成代码补丁，但不运行完整环境、不创建 PR | 小修、文档、低风险组件改动 |
+| L3 | Agent Sandbox | Agent 可在隔离沙箱中改代码、运行测试、生成 preview / PR | 普通前端功能、Bugfix、测试补充 |
+| L4 | Agent Pipeline | Agent 可触发 CI/CD 到 staging，但不能进入 production | 内部工具、低风险服务、预发布验证 |
+| L5 | Agent Autonomous | Agent 可在强约束内自动完成、合并或发布 | 极低风险、强测试覆盖、可快速回滚任务 |
+
+规则说明：
+
+- High Risk 节点默认不得超过 L2，除非有明确 Review Gate 和 Promotion Gate；
+- production release 默认 L0 或最多 L1；
+- 涉及 customer data / secrets / payment / legal 的节点不得 L4 / L5；
+- L3 以上必须有 Sandbox Execution Contract；
+- L4 以上必须有 Promotion Gate；
+- L5 不进入 MVP，仅作为长期方向。
 
 ---
 
@@ -1344,6 +1400,100 @@ MVP 中允许导出 Draft Kit 和 Final Kit。
 
 > This kit contains unresolved validation issues and should not be used as a final execution handoff.
 
+## 20.11 Agent-ready Execution Kit 可选输出
+
+在默认 Execution Kit 目录结构中，可以增加以下 Agentic Development 输出：
+
+```text
+execution-kit/
+├─ 08_agent_execution_plan.md
+├─ 09_sandbox_execution_contracts.yaml
+└─ 10_promotion_gates.md
+```
+
+说明：
+
+- P0 只要求生成 Agent-ready Execution Kit，不要求真实 dispatch；
+- `08_agent_execution_plan.md` 描述哪些 Node 可以交给 Agent、执行等级、目标 Agent、是否需要人工确认；
+- `09_sandbox_execution_contracts.yaml` 描述每个 Agent 节点的沙箱执行契约；
+- `10_promotion_gates.md` 描述 sandbox → PR → staging → production 的门禁规则。
+
+## 20.12 Sandbox Execution Contract Spec
+
+Sandbox Execution Contract 定义 Coding Agent 在沙箱执行开发节点时的完整约束。P0 中它可以作为导出对象存在，不要求 BoundaryML 真正创建沙箱或派发 Agent。
+
+```yaml
+sandbox_execution_contract:
+  id: "sandbox-contract-login-page-v1"
+  node_id: "node-frontend-login-page"
+  status: "draft"
+
+  execution_target:
+    type: "coding_agent"
+    provider: "codex"
+    adapter: "codex_cloud_sandbox"
+    dispatch_mode: "manual_confirmed"
+
+  repo_scope:
+    repository: "company/app"
+    base_branch: "develop"
+    working_branch: "agent/login-page-redesign"
+    allowed_paths:
+      - "apps/web/src/pages/login/**"
+      - "apps/web/src/components/auth/**"
+    forbidden_paths:
+      - "packages/payment/**"
+      - "infra/**"
+      - ".github/workflows/**"
+
+  runtime_scope:
+    sandbox_type: "ephemeral"
+    allow_network: false
+    allow_package_install: true
+    max_runtime_minutes: 30
+    allowed_commands:
+      - "npm install"
+      - "npm run lint"
+      - "npm run test"
+      - "npm run build"
+
+  secret_scope:
+    production_secrets: "forbidden"
+    test_secrets: "allowed"
+    env_profile: "preview"
+
+  cost_budget:
+    max_cost_usd_per_run: 2.00
+    max_iterations: 2
+    max_model_calls: 20
+
+  acceptance_tests:
+    required:
+      - "npm run lint"
+      - "npm run test"
+      - "npm run build"
+    optional:
+      - "npm run e2e"
+
+  output_required:
+    - "code_diff"
+    - "test_report"
+    - "risk_summary"
+    - "preview_url"
+
+  review_gate:
+    reviewer_role: "Tech Lead"
+    required: true
+    merge_allowed_after_review: true
+
+  promotion_policy:
+    can_create_pr: true
+    can_merge: false
+    can_deploy_preview: true
+    can_deploy_staging: false
+    can_deploy_production: false
+```
+
 ---
 
 # 21. Planning vs Execution Boundary
@@ -1425,9 +1575,22 @@ MVP 不做：
 - Linear Issue 创建；
 - Jira Task 创建；
 - Codex Prompt Pack 导出；
-- Cursor / Claude Code 指令包导出。
+- Cursor / Claude Code 指令包导出；
+- 通过 Agent Adapter 发起受控执行。
 
-但这些仍应被定义为“导出 / 交接 / 适配”，而不是 BoundaryML 自己成为全流程执行系统。
+但这些仍应被定义为“导出 / 交接 / 适配”，而不是 BoundaryML 自己成为全流程执行系统。BoundaryML 后续可以通过 Agent Adapter 发起受控执行，但这不意味着 BoundaryML 成为通用 Agent Runtime。正确分层是：
+
+```text
+BoundaryML
+= 规划 + 边界 + 审核 + 成本 + 授权 + 证据回收 + 发布门
+
+Coding Agent / External Agent
+= 在受控沙箱或外部工具中执行具体任务
+```
+
+```text
+Agent 负责执行，BoundaryML 负责决定什么能执行、怎么执行、花多少钱、谁审核、结果能不能进入下游。
+```
 
 ---
 
