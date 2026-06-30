@@ -10,7 +10,9 @@
 
 BoundaryML Spec 用于定义 BoundaryML 内部最核心的产品对象协议。
 
-同时，BoundaryML Spec 也是 Agent-ready Execution Kit 的语义基础：它让外部 coding agents、项目管理工具和人工审核者能够理解同一套 Project、Context Pack、Workflow、Node、Execution Mode、Review Gate、Artifact、Prompt、Checklist 和 Execution Kit 结构。
+BoundaryML Spec 是通用人机协作工作流的语义基础。它用于确保 Studio、模型接入层、Boundary Rules、Execution Kit、CLI、外部工具适配器和人工审核者理解同一套 Project、Context Pack、Workflow、Node、Execution Mode、Review Gate、Artifact、Prompt、Checklist 和 Execution Kit 结构。
+
+Agent-ready Execution Kit 是 BoundaryML Spec 在 Agentic Development 场景下的第一个场景化应用。它不改变 BoundaryML Spec 的通用边界，也不代表所有 BoundaryML 项目都必须面向 Coding Agent。
 
 它不是数据库表结构，也不是具体 API 文档，而是为了确保以下模块使用同一套产品对象语义：
 
@@ -89,7 +91,11 @@ execution_evidence: []
 promotion_gates: []
 ```
 
-`agent_execution_plans`、`sandbox_execution_contracts`、`agent_runs`、`execution_evidence` 和 `promotion_gates` 在 P0 可以只进入导出结构，不要求真实运行或真实 dispatch。
+其中 `agent_execution_plans`、`sandbox_execution_contracts`、`agent_runs`、`execution_evidence` 和 `promotion_gates` 属于 Agentic Development 场景扩展对象。
+
+它们用于支持 Coding Agent / 外部 Agent 的受控执行、沙箱契约、证据回收和发布门禁。非 Agentic Development 场景可以不使用这些对象，或保持为空数组。
+
+P0 阶段这些对象可以只进入导出结构，不要求真实运行或真实 dispatch。
 
 ---
 
@@ -374,6 +380,20 @@ agent_execution:
 - `execution_target`：计划交给哪个 Agent / Adapter；
 - `sandbox_execution_contract_id`：关联的沙箱执行契约。
 
+`agent_execution` 是 Agentic Development 场景下的推荐扩展字段，不是所有 Node 的通用必填字段。
+
+非 Agentic Development 场景可以不使用该字段，或将其保持为：
+
+```yaml
+agent_execution:
+  enabled: false
+  execution_level: "l0_human_only"
+  execution_target: null
+  sandbox_execution_contract_id: null
+```
+
+该字段不改变 `execution_mode` 的语义。`execution_mode` 仍然表达通用的人机协作方式；`agent_execution.execution_level` 只表达 Agentic Development 场景下 Agent 的执行权限等级。
+
 ---
 
 ## 15.9 Edge / Connection Spec
@@ -526,6 +546,19 @@ execution_kits:
       - "markdown"
       - "yaml"
 ```
+
+---
+
+## 15.13 通用对象与场景扩展对象
+
+BoundaryML Spec 分为两类对象：
+
+| 类型 | 对象 | 说明 |
+|---|---|---|
+| 通用对象 | Project / Context Pack / Workflow / Phase / Node / Edge / Review Gate / Artifact Contract / Prompt / Checklist / Execution Kit / Validation Result | 所有 BoundaryML 项目的核心对象 |
+| 场景扩展对象 | Agent Execution Plan / Sandbox Execution Contract / Agent Run / Execution Evidence / Promotion Gate | Agentic Development 场景下用于 Coding Agent 受控执行和工程链路治理的扩展对象 |
+
+场景扩展对象不得反向收窄 BoundaryML 的通用产品定义。
 
 ---
 

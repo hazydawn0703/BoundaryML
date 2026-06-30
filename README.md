@@ -103,6 +103,10 @@ Server 公开只读模板 API：`GET /api/templates` 与 `GET /api/templates/:te
 
 当前公开示例以软件开发和 AI 转型项目为主，但 BoundaryML Spec 本身并不限定于 Coding Agent 场景，后续可扩展到 GEO 运营、内容生产、企业审批、数据分析、咨询交付和多 Agent 业务流程治理。
 
+## 关键文档
+
+- `docs/BoundaryML PRD Agentic Development 补充章节42–47.md` — Agentic Development 场景补充，定义 Coding Agent 执行等级、沙箱执行契约、证据回收、Promotion Gate 和 Agent 安全 / 成本 / 权限规则。
+
 ## Workspace 结构
 
 - `apps/studio`：BoundaryML Studio
