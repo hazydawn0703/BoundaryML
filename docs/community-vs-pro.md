@@ -9,7 +9,8 @@
 | Basic Execution Kit Export | Included | Included | Included |
 | Community Templates | Limited examples | Included as base examples | Included as base examples |
 | Pro Templates | Not included | Included | Included / customizable |
-| AI Coding Governance Kit | Not included | Included as commercial kit | Customizable enterprise kit |
+| Human-AI Workflow Governance Kits | Not included | Included as commercial kits | Customizable enterprise kits |
+| AI Coding Governance Kit | Not included | Included as first commercial wedge | Customizable enterprise kit |
 | GEO Launch Ops Kit | Not included | Included as commercial kit | Customizable enterprise kit |
 | Advanced Exporters | Not included | Selected advanced exporters | GitHub / Linear / Jira advanced exporters with team workflows |
 | Team Workspace | Not included | Not included unless explicitly packaged | Included |
