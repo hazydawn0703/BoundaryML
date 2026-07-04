@@ -106,6 +106,7 @@ Server 公开只读模板 API：`GET /api/templates` 与 `GET /api/templates/:te
 ## 关键文档
 
 - `docs/BoundaryML PRD Agentic Development 补充章节42–47.md` — Agentic Development 场景补充，定义 Coding Agent 执行等级、沙箱执行契约、证据回收、Promotion Gate 和 Agent 安全 / 成本 / 权限规则。
+- `docs/open-source-phase-plan.md` — 最新开源 / 闭源 Phase 计划，明确 Agentic Development P0 的 Agent / Sandbox Tab、Sandbox Contract Export 和 Community Core 边界。
 
 ## Workspace 结构
 
