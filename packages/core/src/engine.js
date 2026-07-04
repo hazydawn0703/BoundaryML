@@ -73,6 +73,10 @@ export function applyDiff(workflow, diff, selectedChangeIds = []) {
     aiRole: 'ai_role',
     artifactContract: 'artifact_contract',
     reviewGate: 'review_gate',
+    agentExecutionPlan: 'agent_execution_plan',
+    sandboxExecutionContract: 'sandbox_execution_contract',
+    promotionGate: 'promotion_gate',
+    executionEvidenceTemplate: 'execution_evidence_template',
     promptStatus: 'prompt_status',
     checklistStatus: 'checklist_status',
   }[field] || field);

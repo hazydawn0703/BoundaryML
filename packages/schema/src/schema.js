@@ -1,4 +1,14 @@
 import { JOB_STATUS, VALIDATION_LEVEL } from './constants.js';
+import {
+  AGENT_DISPATCH_MODES,
+  AGENT_EXECUTION_LEVELS,
+  AGENT_EXECUTION_TARGETS,
+  NETWORK_POLICIES,
+  PACKAGE_INSTALL_POLICIES,
+  PROMOTION_GATE_TYPES,
+  SECRET_POLICIES,
+  deriveAgenticWorkflowObjects,
+} from './agentic.js';
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:/;
 
@@ -24,6 +34,10 @@ export const ENTITY_SCHEMAS = {
   generation_job: { required: ['id', 'workspace_id', 'created_by', 'project_id', 'type', 'status', 'created_at', 'updated_at', 'input_snapshot', 'progress', 'cancel_requested'] },
   model_call_log: { required: ['id', 'workspace_id', 'model', 'purpose', 'status', 'created_at'] },
   template: { required: ['id', 'name', 'template_type', 'version', 'content'] },
+  agent_execution_plan: { required: ['node_id', 'enabled', 'execution_level', 'execution_target', 'sandbox_execution_contract_id', 'status'] },
+  sandbox_execution_contract: { required: ['id', 'node_id', 'execution_target', 'repo_scope', 'runtime_scope', 'secret_scope', 'cost_budget', 'acceptance_tests', 'output_required', 'review_gate', 'promotion_policy', 'failure_handling'] },
+  promotion_gate: { required: ['id', 'node_id', 'gate_type', 'required_checks', 'human_approval_required', 'status'] },
+  execution_evidence_template: { required: ['id', 'node_id', 'required_items', 'status'] },
 };
 
 const ALLOWED_JOB_STATUS = new Set(Object.values(JOB_STATUS));
@@ -55,6 +69,39 @@ function validateCoreTypes(type, data) {
   if (type === 'generation_job' && data.status && !ALLOWED_JOB_STATUS.has(data.status)) errors.push('generation_job.status invalid');
   if (type === 'validation_result' && data.level && !ALLOWED_VALIDATION_LEVEL.has(data.level)) errors.push('validation_result.level invalid');
   if (type === 'workflow' && typeof data.version !== 'number') errors.push('workflow.version must be number');
+  if (type === 'agent_execution_plan') {
+    if (typeof data.enabled !== 'boolean') errors.push('agent_execution_plan.enabled must be boolean');
+    if (data.execution_level && !AGENT_EXECUTION_LEVELS.includes(data.execution_level)) errors.push('agent_execution_plan.execution_level invalid');
+    if (data.execution_target && !AGENT_EXECUTION_TARGETS.includes(data.execution_target)) errors.push('agent_execution_plan.execution_target invalid');
+    if (data.dispatch_mode && !AGENT_DISPATCH_MODES.includes(data.dispatch_mode)) errors.push('agent_execution_plan.dispatch_mode invalid');
+  }
+  if (type === 'sandbox_execution_contract') {
+    const repoScope = data.repo_scope || {};
+    const runtimeScope = data.runtime_scope || {};
+    const secretScope = data.secret_scope || {};
+    const acceptanceTests = data.acceptance_tests || {};
+    const outputRequired = data.output_required || {};
+    const promotionPolicy = data.promotion_policy || {};
+    if (!AGENT_EXECUTION_TARGETS.includes(data.execution_target)) errors.push('sandbox_execution_contract.execution_target invalid');
+    if (!Array.isArray(repoScope.allowed_paths)) errors.push('sandbox_execution_contract.repo_scope.allowed_paths must be array');
+    if (!Array.isArray(repoScope.forbidden_paths)) errors.push('sandbox_execution_contract.repo_scope.forbidden_paths must be array');
+    if (!Array.isArray(runtimeScope.allowed_commands)) errors.push('sandbox_execution_contract.runtime_scope.allowed_commands must be array');
+    if (runtimeScope.network_policy && !NETWORK_POLICIES.includes(runtimeScope.network_policy)) errors.push('sandbox_execution_contract.runtime_scope.network_policy invalid');
+    if (runtimeScope.package_install_policy && !PACKAGE_INSTALL_POLICIES.includes(runtimeScope.package_install_policy)) errors.push('sandbox_execution_contract.runtime_scope.package_install_policy invalid');
+    if (secretScope.policy && !SECRET_POLICIES.includes(secretScope.policy)) errors.push('sandbox_execution_contract.secret_scope.policy invalid');
+    if (!Array.isArray(acceptanceTests.required)) errors.push('sandbox_execution_contract.acceptance_tests.required must be array');
+    if (!Array.isArray(acceptanceTests.optional)) errors.push('sandbox_execution_contract.acceptance_tests.optional must be array');
+    if (!Array.isArray(outputRequired.evidence)) errors.push('sandbox_execution_contract.output_required.evidence must be array');
+    if (!Array.isArray(promotionPolicy.promotion_gates)) errors.push('sandbox_execution_contract.promotion_policy.promotion_gates must be array');
+  }
+  if (type === 'promotion_gate') {
+    if (data.gate_type && !PROMOTION_GATE_TYPES.includes(data.gate_type)) errors.push('promotion_gate.gate_type invalid');
+    if (!Array.isArray(data.required_checks)) errors.push('promotion_gate.required_checks must be array');
+    if (typeof data.human_approval_required !== 'boolean') errors.push('promotion_gate.human_approval_required must be boolean');
+  }
+  if (type === 'execution_evidence_template' && !Array.isArray(data.required_items)) {
+    errors.push('execution_evidence_template.required_items must be array');
+  }
   return errors;
 }
 
@@ -83,6 +130,32 @@ export const validateWorkflowSnapshot = (payload) => validateSchema('workflow_sn
 export const validateGenerationJob = (payload) => validateSchema('generation_job', payload);
 export const validateModelCallLog = (payload) => validateSchema('model_call_log', payload);
 export const validateTemplate = (payload) => validateSchema('template', payload);
+export const validateAgentExecutionPlan = (payload) => validateSchema('agent_execution_plan', payload);
+export const validateSandboxExecutionContract = (payload) => validateSchema('sandbox_execution_contract', payload);
+export const validatePromotionGate = (payload) => validateSchema('promotion_gate', payload);
+export const validateExecutionEvidenceTemplate = (payload) => validateSchema('execution_evidence_template', payload);
+
+function validateAgenticWorkflowObjects(workflow) {
+  const errors = [];
+  const agenticObjects = deriveAgenticWorkflowObjects(workflow || {});
+  agenticObjects.agent_execution_plans.forEach((item, i) => {
+    const result = validateAgentExecutionPlan(item);
+    errors.push(...result.errors.map((e) => `workflow.agent_execution_plans[${i}]: ${e}`));
+  });
+  agenticObjects.sandbox_execution_contracts.forEach((item, i) => {
+    const result = validateSandboxExecutionContract(item);
+    errors.push(...result.errors.map((e) => `workflow.sandbox_execution_contracts[${i}]: ${e}`));
+  });
+  agenticObjects.promotion_gates.forEach((item, i) => {
+    const result = validatePromotionGate(item);
+    errors.push(...result.errors.map((e) => `workflow.promotion_gates[${i}]: ${e}`));
+  });
+  agenticObjects.execution_evidence_templates.forEach((item, i) => {
+    const result = validateExecutionEvidenceTemplate(item);
+    errors.push(...result.errors.map((e) => `workflow.execution_evidence_templates[${i}]: ${e}`));
+  });
+  return errors;
+}
 
 export function validateAssets(assets) {
   const normalized = toSnakeCaseKeys(assets);
@@ -126,6 +199,7 @@ export function validateBoundaryMLProjectSpec(payload) {
     (normalized.workflow.phases || []).forEach((phase, i) => errors.push(...validatePhase(phase).errors.map((e) => `workflow.phases[${i}]: ${e}`)));
     (normalized.workflow.nodes || []).forEach((node, i) => errors.push(...validateNode(node).errors.map((e) => `workflow.nodes[${i}]: ${e}`)));
     (normalized.workflow.edges || []).forEach((edge, i) => errors.push(...validateEdge(edge).errors.map((e) => `workflow.edges[${i}]: ${e}`)));
+    errors.push(...validateAgenticWorkflowObjects(normalized.workflow));
   }
 
   if (normalized.assets) {

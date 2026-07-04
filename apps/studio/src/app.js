@@ -1,4 +1,24 @@
 import { EXECUTION_MODES } from '../../../packages/schema/src/constants.js';
+import {
+  AGENT_DISPATCH_MODES,
+  AGENT_EXECUTION_LEVELS,
+  AGENT_EXECUTION_TARGET_LABELS,
+  AGENT_EXECUTION_TARGETS,
+  NETWORK_POLICIES,
+  PACKAGE_INSTALL_POLICIES,
+  PROMOTION_GATE_TYPES,
+  SECRET_POLICIES,
+  agentExecutionLevelNumber,
+  createDefaultAgentExecutionPlan,
+  createDefaultExecutionEvidenceTemplate,
+  createDefaultPromotionGate,
+  createDefaultSandboxExecutionContract,
+  normalizeAgenticNode,
+  readAgentExecutionPlan,
+  readExecutionEvidenceTemplate,
+  readPromotionGate,
+  readSandboxExecutionContract,
+} from '../../../packages/schema/src/agentic.js';
 import { getState, setState, subscribe, getActiveProject, replaceActiveProject, replaceActiveProjectSilently, recomputeValidation, setRuntimeMode, updateUiStateSilently } from './state/store.js';
 import { apiClient } from './api-client/index.js';
 import {
@@ -854,6 +874,69 @@ function renderEdgeHints(project, phaseNodes) {
   }).join('');
 }
 
+function renderAgenticTab(state, node) {
+  const plan = createDefaultAgentExecutionPlan(node, readAgentExecutionPlan(node) || {});
+  const contract = createDefaultSandboxExecutionContract(node, readSandboxExecutionContract(node) || {});
+  const gate = createDefaultPromotionGate(node, readPromotionGate(node) || {});
+  const evidence = createDefaultExecutionEvidenceTemplate(node, readExecutionEvidenceTemplate(node) || {});
+  const repoScope = contract.repo_scope || {};
+  const runtimeScope = contract.runtime_scope || {};
+  const secretScope = contract.secret_scope || {};
+  const costBudget = contract.cost_budget || {};
+  const acceptanceTests = contract.acceptance_tests || {};
+  const outputRequired = contract.output_required || {};
+  const promotionPolicy = contract.promotion_policy || {};
+  const agenticRules = (state.validationResults || []).filter((item) => item.targetId === node.id && ['agent_execution_plan', 'sandbox_execution_contract', 'promotion_gate'].includes(item.targetType));
+  const l3WithoutContract = plan.enabled && agentExecutionLevelNumber(plan.execution_level) >= 3 && !readSandboxExecutionContract(node);
+  const productionAuto = promotionPolicy.production_auto_deploy_allowed || gate.agent_auto_promote_allowed;
+  return `<div class="agentic-tab">
+    ${l3WithoutContract ? '<p class="inline-error">L3+ Agent execution needs a saved Sandbox Execution Contract.</p>' : ''}
+    ${productionAuto ? '<p class="inline-error">Production deploy cannot be automated by Agent.</p>' : ''}
+    ${agenticRules.map((rule) => `<p class="inline-${rule.level}">${rule.title}</p>`).join('')}
+    <h4>Agent Execution Plan</h4>
+    <label class="check"><input type="checkbox" data-action="update-agentic-field" data-field="agent_execution_plan.enabled" data-node-id="${node.id}" ${plan.enabled ? 'checked' : ''}/>Agent enabled</label>
+    <label>Agent Execution Level<select data-action="update-agentic-field" data-field="agent_execution_plan.execution_level" data-node-id="${node.id}">${optionList(AGENT_EXECUTION_LEVELS, plan.execution_level)}</select></label>
+    <label>Execution Target<select data-action="update-agentic-field" data-field="agent_execution_plan.execution_target" data-node-id="${node.id}">${optionList(AGENT_EXECUTION_TARGETS, plan.execution_target, AGENT_EXECUTION_TARGET_LABELS)}</select></label>
+    <label>Dispatch Mode<select data-action="update-agentic-field" data-field="agent_execution_plan.dispatch_mode" data-node-id="${node.id}">${optionList(AGENT_DISPATCH_MODES, plan.dispatch_mode)}</select></label>
+    <h4>Repository Scope</h4>
+    <label>Repository<input data-action="update-agentic-field" data-field="sandbox_execution_contract.repo_scope.repository" data-node-id="${node.id}" value="${escapeAttr(repoScope.repository || '')}"/></label>
+    <label>Base Branch<input data-action="update-agentic-field" data-field="sandbox_execution_contract.repo_scope.base_branch" data-node-id="${node.id}" value="${escapeAttr(repoScope.base_branch || 'main')}"/></label>
+    <label>Working Branch<input data-action="update-agentic-field" data-field="sandbox_execution_contract.repo_scope.working_branch" data-node-id="${node.id}" value="${escapeAttr(repoScope.working_branch || '')}"/></label>
+    <label>Allowed Paths<textarea data-action="update-agentic-field" data-field="sandbox_execution_contract.repo_scope.allowed_paths" data-node-id="${node.id}">${escapeAttr(agenticListValue(repoScope.allowed_paths))}</textarea></label>
+    <label>Forbidden Paths<textarea data-action="update-agentic-field" data-field="sandbox_execution_contract.repo_scope.forbidden_paths" data-node-id="${node.id}">${escapeAttr(agenticListValue(repoScope.forbidden_paths))}</textarea></label>
+    <h4>Runtime Scope</h4>
+    <label>Allowed Commands<textarea data-action="update-agentic-field" data-field="sandbox_execution_contract.runtime_scope.allowed_commands" data-node-id="${node.id}">${escapeAttr(agenticListValue(runtimeScope.allowed_commands))}</textarea></label>
+    <label>Network Policy<select data-action="update-agentic-field" data-field="sandbox_execution_contract.runtime_scope.network_policy" data-node-id="${node.id}">${optionList(NETWORK_POLICIES, runtimeScope.network_policy || 'blocked')}</select></label>
+    <label class="check"><input type="checkbox" data-action="update-agentic-field" data-field="sandbox_execution_contract.runtime_scope.external_network_approved" data-node-id="${node.id}" ${runtimeScope.external_network_approved ? 'checked' : ''}/>External network approved</label>
+    <label>Package Install Policy<select data-action="update-agentic-field" data-field="sandbox_execution_contract.runtime_scope.package_install_policy" data-node-id="${node.id}">${optionList(PACKAGE_INSTALL_POLICIES, runtimeScope.package_install_policy || 'disabled')}</select></label>
+    <label>Max Runtime Minutes<input type="number" min="1" step="1" data-action="update-agentic-field" data-field="sandbox_execution_contract.runtime_scope.max_runtime_minutes" data-node-id="${node.id}" value="${escapeAttr(runtimeScope.max_runtime_minutes || 30)}"/></label>
+    <h4>Secrets, Cost, Tests</h4>
+    <label>Secret Policy<select data-action="update-agentic-field" data-field="sandbox_execution_contract.secret_scope.policy" data-node-id="${node.id}">${optionList(SECRET_POLICIES, secretScope.policy || 'production_forbidden')}</select></label>
+    <label>Allowed Secret Refs<textarea data-action="update-agentic-field" data-field="sandbox_execution_contract.secret_scope.allowed_secret_refs" data-node-id="${node.id}">${escapeAttr(agenticListValue(secretScope.allowed_secret_refs))}</textarea></label>
+    <label>Cost Budget<input type="number" min="0" step="1" data-action="update-agentic-field" data-field="sandbox_execution_contract.cost_budget.amount" data-node-id="${node.id}" value="${escapeAttr(costBudget.amount || 0)}"/></label>
+    <label>Required Tests<textarea data-action="update-agentic-field" data-field="sandbox_execution_contract.acceptance_tests.required" data-node-id="${node.id}">${escapeAttr(agenticListValue(acceptanceTests.required))}</textarea></label>
+    <label>Optional Tests<textarea data-action="update-agentic-field" data-field="sandbox_execution_contract.acceptance_tests.optional" data-node-id="${node.id}">${escapeAttr(agenticListValue(acceptanceTests.optional))}</textarea></label>
+    <label>Output Evidence<textarea data-action="update-agentic-field" data-field="sandbox_execution_contract.output_required.evidence" data-node-id="${node.id}">${escapeAttr(agenticListValue(outputRequired.evidence))}</textarea></label>
+    <label>Review Gate Link<input data-action="update-agentic-field" data-field="sandbox_execution_contract.review_gate" data-node-id="${node.id}" value="${escapeAttr(contract.review_gate || node.reviewGate?.id || '')}"/></label>
+    <h4>Promotion Policy</h4>
+    <label>Target Environment<select data-action="update-agentic-field" data-field="sandbox_execution_contract.promotion_policy.target_environment" data-node-id="${node.id}">${optionList(PROMOTION_GATE_TYPES, promotionPolicy.target_environment || 'sandbox')}</select></label>
+    <label>Promotion Gates<textarea data-action="update-agentic-field" data-field="sandbox_execution_contract.promotion_policy.promotion_gates" data-node-id="${node.id}">${escapeAttr(agenticListValue(promotionPolicy.promotion_gates))}</textarea></label>
+    <label class="check"><input type="checkbox" data-action="update-agentic-field" data-field="sandbox_execution_contract.promotion_policy.human_approval_required" data-node-id="${node.id}" ${promotionPolicy.human_approval_required !== false ? 'checked' : ''}/>Human approval required</label>
+    <label class="check"><input type="checkbox" data-action="update-agentic-field" data-field="sandbox_execution_contract.promotion_policy.block_on_forbidden_paths" data-node-id="${node.id}" ${promotionPolicy.block_on_forbidden_paths !== false ? 'checked' : ''}/>Block on forbidden paths</label>
+    <label class="check"><input type="checkbox" data-action="update-agentic-field" data-field="sandbox_execution_contract.promotion_policy.agent_can_update_formal_workflow" data-node-id="${node.id}" ${promotionPolicy.agent_can_update_formal_workflow ? 'checked' : ''}/>Agent can update formal Workflow</label>
+    <label class="check"><input type="checkbox" data-action="update-agentic-field" data-field="sandbox_execution_contract.promotion_policy.production_auto_deploy_allowed" data-node-id="${node.id}" ${promotionPolicy.production_auto_deploy_allowed ? 'checked' : ''}/>Production auto deploy allowed</label>
+    <h4>Promotion Gate / Evidence</h4>
+    <label>Promotion Gate Type<select data-action="update-agentic-field" data-field="promotion_gate.gate_type" data-node-id="${node.id}">${optionList(PROMOTION_GATE_TYPES, gate.gate_type || 'review')}</select></label>
+    <label>Required Checks<textarea data-action="update-agentic-field" data-field="promotion_gate.required_checks" data-node-id="${node.id}">${escapeAttr(agenticListValue(gate.required_checks))}</textarea></label>
+    <label class="check"><input type="checkbox" data-action="update-agentic-field" data-field="promotion_gate.human_approval_required" data-node-id="${node.id}" ${gate.human_approval_required !== false ? 'checked' : ''}/>Gate requires human approval</label>
+    <label class="check"><input type="checkbox" data-action="update-agentic-field" data-field="promotion_gate.agent_auto_promote_allowed" data-node-id="${node.id}" ${gate.agent_auto_promote_allowed ? 'checked' : ''}/>Agent auto promote allowed</label>
+    <label>Evidence Template<textarea data-action="update-agentic-field" data-field="execution_evidence_template.required_items" data-node-id="${node.id}">${escapeAttr(agenticListValue(evidence.required_items))}</textarea></label>
+    <h4>Failure Handling</h4>
+    <label>On Failure<input data-action="update-agentic-field" data-field="sandbox_execution_contract.failure_handling.on_failure" data-node-id="${node.id}" value="${escapeAttr(contract.failure_handling?.on_failure || 'stop_and_report')}"/></label>
+    <label class="check"><input type="checkbox" data-action="update-agentic-field" data-field="sandbox_execution_contract.failure_handling.rollback_required" data-node-id="${node.id}" ${contract.failure_handling?.rollback_required !== false ? 'checked' : ''}/>Rollback required</label>
+  </div>`;
+}
+
 function renderNodeDetail(state, project, node) {
   if (!node) return '<div class="card panel">Select a node</div>';
   const tab = state.activeNodeDetailTab;
@@ -861,7 +944,7 @@ function renderNodeDetail(state, project, node) {
   const downstream = project.workflow.edges.filter((edge) => edge.from === node.id).map((edge) => project.workflow.nodes.find((n) => n.id === edge.to)?.name).filter(Boolean);
   const rules = state.validationResults.filter((item) => item.targetId === node.id || item.targetId === `prompt-${node.id}`);
 
-  const tabLabels = { overview: 'Overview', boundary: 'Boundary', io: 'IO', gate: 'Gate', assets: 'Assets', history: 'History' };
+  const tabLabels = { overview: 'Overview', boundary: 'Boundary', agent: 'Agent / Sandbox', io: 'IO', gate: 'Gate', assets: 'Assets', history: 'History' };
   const tabNav = Object.entries(tabLabels).map(([key, label]) => `<button class="tab ${tab === key ? 'active' : ''}" data-action="node-tab" data-tab="${key}">${label}</button>`).join('');
   const prompt = project.assets.prompts.find((item) => item.nodeId === node.id);
   const checklist = project.assets.checklists.find((item) => item.nodeId === node.id);
@@ -873,6 +956,7 @@ function renderNodeDetail(state, project, node) {
     <label>Human Owner<input data-action="update-node-field" data-field="humanOwnerRole" data-node-id="${node.id}" value="${node.humanOwnerRole}"/></label>
     <label>AI Role<input data-action="update-node-field" data-field="aiRole" data-node-id="${node.id}" value="${node.aiRole || ''}"/></label>
     <button data-action="recommend-mode" data-node-id="${node.id}">Recommend Execution Mode</button>${rules.map((r) => `<p class="inline-${r.level}">${r.title}</p>`).join('')}`,
+    agent: renderAgenticTab(state, node),
     io: `<label>Inputs<textarea data-action="update-node-field" data-field="inputs" data-node-id="${node.id}">${node.inputs.join('\n')}</textarea></label>
     <label>Outputs<textarea data-action="update-node-field" data-field="outputs" data-node-id="${node.id}">${node.outputs.join('\n')}</textarea></label>
     <h4>Artifact Contract</h4>
@@ -1351,6 +1435,78 @@ function formatAssetList(value) {
   return Array.isArray(value) ? value.join('\n') : String(value || '');
 }
 
+function optionList(options, selected, labels = {}) {
+  return options.map((option) => `<option value="${option}" ${option === selected ? 'selected' : ''}>${labels[option] || option}</option>`).join('');
+}
+
+function agenticListValue(value) {
+  return Array.isArray(value) ? value.join('\n') : String(value || '');
+}
+
+function setNestedValue(target, path, value) {
+  const parts = path.split('.');
+  let cursor = target;
+  parts.slice(0, -1).forEach((part) => {
+    cursor[part] = cursor[part] && typeof cursor[part] === 'object' ? cursor[part] : {};
+    cursor = cursor[part];
+  });
+  cursor[parts.at(-1)] = value;
+}
+
+const AGENTIC_LIST_FIELDS = new Set([
+  'sandbox_execution_contract.repo_scope.allowed_paths',
+  'sandbox_execution_contract.repo_scope.forbidden_paths',
+  'sandbox_execution_contract.runtime_scope.allowed_commands',
+  'sandbox_execution_contract.secret_scope.allowed_secret_refs',
+  'sandbox_execution_contract.acceptance_tests.required',
+  'sandbox_execution_contract.acceptance_tests.optional',
+  'sandbox_execution_contract.output_required.evidence',
+  'sandbox_execution_contract.promotion_policy.promotion_gates',
+  'promotion_gate.required_checks',
+  'execution_evidence_template.required_items',
+]);
+
+const AGENTIC_NUMBER_FIELDS = new Set([
+  'sandbox_execution_contract.runtime_scope.max_runtime_minutes',
+  'sandbox_execution_contract.cost_budget.amount',
+]);
+
+function agenticInputValue(target, fieldPath) {
+  if (target.type === 'checkbox') return target.checked;
+  if (AGENTIC_LIST_FIELDS.has(fieldPath)) return splitLines(target.value);
+  if (AGENTIC_NUMBER_FIELDS.has(fieldPath)) return Number(target.value || 0);
+  return target.value;
+}
+
+function buildAgenticPatch(node, fieldPath, value) {
+  const plan = createDefaultAgentExecutionPlan(node, readAgentExecutionPlan(node) || {});
+  const existingContract = readSandboxExecutionContract(node);
+  const contract = createDefaultSandboxExecutionContract(node, existingContract || {});
+  const gate = createDefaultPromotionGate(node, readPromotionGate(node) || {});
+  const evidence = createDefaultExecutionEvidenceTemplate(node, readExecutionEvidenceTemplate(node) || {});
+  const roots = {
+    agent_execution_plan: plan,
+    sandbox_execution_contract: contract,
+    promotion_gate: gate,
+    execution_evidence_template: evidence,
+  };
+  setNestedValue(roots, fieldPath, value);
+  if (agentExecutionLevelNumber(plan.execution_level) >= 3 && !plan.sandbox_execution_contract_id) {
+    plan.sandbox_execution_contract_id = contract.id;
+  }
+  if (fieldPath.startsWith('sandbox_execution_contract.')) {
+    plan.sandbox_execution_contract_id = contract.id;
+  }
+  plan.contract_version = contract.version || plan.contract_version || 0;
+  const includeContract = Boolean(existingContract) || fieldPath.startsWith('sandbox_execution_contract.') || (plan.enabled && agentExecutionLevelNumber(plan.execution_level) >= 3);
+  return {
+    agent_execution_plan: plan,
+    ...(includeContract ? { sandbox_execution_contract: contract } : {}),
+    promotion_gate: gate,
+    execution_evidence_template: evidence,
+  };
+}
+
 function renderAssetStatus(asset) {
   const status = asset.status || 'draft';
   return `${badge(status, status)}${asset.outdatedReason || asset.outdated_reason ? `<p class="inline-warning">Outdated: ${asset.outdatedReason || asset.outdated_reason}</p>` : ''}`;
@@ -1597,7 +1753,7 @@ function fieldSaveKeyForElement(element) {
 }
 
 function ensureFieldSaveIndicators(root = app) {
-  root.querySelectorAll('[data-action="update-node-field"], [data-action="update-artifact-contract-field"], [data-action="update-gate-field"], [data-action="update-prompt-content"]').forEach((element) => {
+  root.querySelectorAll('[data-action="update-node-field"], [data-action="update-agentic-field"], [data-action="update-artifact-contract-field"], [data-action="update-gate-field"], [data-action="update-prompt-content"]').forEach((element) => {
     const label = element.closest('label');
     if (!label || label.querySelector(':scope > .field-save-status')) return;
     const status = document.createElement('span');
@@ -1873,7 +2029,7 @@ function resolveTargetPhaseId(project, phaseId) {
 }
 
 function createWorkflowNode(id, phaseId) {
-  return {
+  return normalizeAgenticNode({
     id,
     phaseId,
     name: 'New Node',
@@ -1890,7 +2046,7 @@ function createWorkflowNode(id, phaseId) {
     promptStatus: 'draft',
     checklistStatus: 'draft',
     history: [{ at: new Date().toISOString(), action: 'Added manually' }],
-  };
+  });
 }
 
 function updateActiveProject(mutator, reason = 'Workflow updated', affectedNodeIds = []) {
@@ -3295,6 +3451,34 @@ function handleInput(event) {
         if (!draftAsset) return;
         Object.assign(draftAsset, payload, { manually_edited: true, updatedAt: new Date().toISOString() });
       }, 'Asset edited', [asset.nodeId || asset.node_id].filter(Boolean));
+    }
+  }
+
+  if (target.dataset.action === 'update-agentic-field') {
+    const nodeId = target.dataset.nodeId;
+    const st = getState();
+    const project = getActiveProject(st);
+    const node = project?.workflow?.nodes?.find((n) => n.id === nodeId);
+    if (!node) return;
+    const fieldPath = target.dataset.field;
+    const value = agenticInputValue(target, fieldPath);
+    const patch = buildAgenticPatch(node, fieldPath, value);
+    if (st.serverAvailable && project?.id) {
+      setFieldSaveStatus(target, 'saving');
+      apiClient.nodesApi.patch(project.id, nodeId, { workflow_version: project.workflow.version, ...patch })
+        .then(() => { setFieldSaveStatus(target, 'saved'); return refreshProjectRuntime(project.id); })
+        .catch((error) => { setFieldSaveStatus(target, 'failed'); setState((prev) => ({ ...prev, serverError: error.code === 'VERSION_CONFLICT' ? 'Workflow has been updated by another operation. Please refresh and try again.' : `${error.code || 'API_ERROR'}: ${error.message} (${error.requestId || 'n/a'})` })); });
+    } else {
+      updateActiveProject((draft) => {
+        const draftNode = draft.workflow.nodes.find((n) => n.id === nodeId);
+        if (!draftNode) return;
+        Object.assign(draftNode, patch);
+        draftNode.agentExecutionPlan = patch.agent_execution_plan;
+        if (patch.sandbox_execution_contract) draftNode.sandboxExecutionContract = patch.sandbox_execution_contract;
+        draftNode.promotionGate = patch.promotion_gate;
+        draftNode.executionEvidenceTemplate = patch.execution_evidence_template;
+        draftNode.history = [...(draftNode.history || []), { at: new Date().toISOString(), action: `Agent / Sandbox ${fieldPath} updated` }];
+      }, `Agent / Sandbox ${fieldPath} updated`, [nodeId]);
     }
   }
 

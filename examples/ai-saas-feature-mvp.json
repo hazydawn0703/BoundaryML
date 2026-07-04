@@ -1,12 +1,12 @@
 {
   "boundaryml_version": "v0.1",
   "project": {
-    "id": "project-1780309651843",
+    "id": "project-1783138266090",
     "workspace_id": "demo_workspace",
     "created_by": "demo_user",
     "updated_by": "demo_user",
-    "created_at": "2026-06-01T10:27:31.840Z",
-    "updated_at": "2026-06-01T10:27:31.840Z",
+    "created_at": "2026-07-04T04:11:06.087Z",
+    "updated_at": "2026-07-04T04:11:06.087Z",
     "name": "AI SaaS Feature MVP",
     "type": "AI Feature",
     "goal": "Plan and deliver an AI-assisted SaaS feature from idea to launch.",
@@ -140,10 +140,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.088Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-1",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-2",
@@ -189,10 +199,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-2",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-3",
@@ -238,10 +258,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-3",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-4",
@@ -286,10 +316,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-4",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-5",
@@ -334,10 +374,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-5",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-6",
@@ -382,10 +432,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-6",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-7",
@@ -431,10 +491,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-7",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-8",
@@ -480,10 +550,119 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-8",
+            "enabled": true,
+            "execution_level": "L3",
+            "execution_target": "codex",
+            "dispatch_mode": "manual_confirmed",
+            "sandbox_execution_contract_id": "contract-node-8",
+            "status": "ready",
+            "contract_version": 1
+          },
+          "sandbox_execution_contract": {
+            "id": "contract-node-8",
+            "node_id": "node-8",
+            "version": 1,
+            "execution_target": "codex",
+            "repo_scope": {
+              "repository": "github.com/example/ai-saas-feature",
+              "base_branch": "main",
+              "working_branch": "agent/node-8-sandbox",
+              "allowed_paths": [
+                "apps/**",
+                "packages/**",
+                "tests/**"
+              ],
+              "forbidden_paths": [
+                "infra/**",
+                "data/**"
+              ]
+            },
+            "runtime_scope": {
+              "allowed_commands": [
+                "npm test",
+                "npm run build"
+              ],
+              "network_policy": "blocked",
+              "external_network_approved": false,
+              "package_install_policy": "allow_lockfile_only",
+              "max_runtime_minutes": 45
+            },
+            "secret_scope": {
+              "policy": "production_forbidden",
+              "allowed_secret_refs": []
+            },
+            "cost_budget": {
+              "amount": 25,
+              "currency": "USD"
+            },
+            "acceptance_tests": {
+              "required": [
+                "npm test",
+                "npm run build"
+              ],
+              "optional": [
+                "npm run typecheck"
+              ]
+            },
+            "output_required": {
+              "evidence": [
+                "diff",
+                "test_report",
+                "risk_summary",
+                "cost_report",
+                "rollback_note"
+              ]
+            },
+            "review_gate": "gate-code-review",
+            "promotion_policy": {
+              "promotion_gates": [
+                "sandbox",
+                "test",
+                "review"
+              ],
+              "target_environment": "review",
+              "human_approval_required": true,
+              "agent_can_update_formal_workflow": false,
+              "production_auto_deploy_allowed": false,
+              "block_on_forbidden_paths": true
+            },
+            "failure_handling": {
+              "on_failure": "stop_and_report",
+              "rollback_required": true
+            },
+            "status": "draft"
+          },
+          "promotion_gate": {
+            "id": "promotion-review-node-8",
+            "node_id": "node-8",
+            "gate_type": "review",
+            "required_checks": [
+              "required_tests",
+              "human_review",
+              "forbidden_path_check"
+            ],
+            "human_approval_required": true,
+            "agent_auto_promote_allowed": false,
+            "status": "draft"
+          },
+          "execution_evidence_template": {
+            "id": "evidence-node-8",
+            "node_id": "node-8",
+            "required_items": [
+              "diff",
+              "test_report",
+              "risk_summary",
+              "cost_report",
+              "rollback_note"
+            ],
+            "status": "draft"
+          }
         },
         {
           "id": "node-9",
@@ -529,10 +708,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-9",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-10",
@@ -577,10 +766,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-10",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-11",
@@ -625,10 +824,20 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-11",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "draft",
+            "contract_version": 0
+          }
         },
         {
           "id": "node-12",
@@ -673,10 +882,43 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-06-01T10:27:31.842Z",
+              "at": "2026-07-04T04:11:06.089Z",
               "action": "Node created from template"
             }
-          ]
+          ],
+          "agent_execution_plan": {
+            "node_id": "node-12",
+            "enabled": false,
+            "execution_level": "L0",
+            "execution_target": "manual_handoff",
+            "dispatch_mode": "disabled",
+            "sandbox_execution_contract_id": null,
+            "status": "disabled",
+            "contract_version": 0
+          },
+          "promotion_gate": {
+            "id": "promotion-production-node-12",
+            "node_id": "node-12",
+            "gate_type": "production",
+            "required_checks": [
+              "human_approval",
+              "release_checklist",
+              "rollback_plan"
+            ],
+            "human_approval_required": true,
+            "agent_auto_promote_allowed": false,
+            "status": "draft"
+          },
+          "execution_evidence_template": {
+            "id": "evidence-node-12",
+            "node_id": "node-12",
+            "required_items": [
+              "risk_summary",
+              "rollback_note",
+              "human_approval_record"
+            ],
+            "status": "draft"
+          }
         }
       ],
       "edges": [
@@ -736,7 +978,7 @@
           "to": "node-12"
         }
       ],
-      "updated_at": "2026-06-01T10:27:31.843Z",
+      "updated_at": "2026-07-04T04:11:06.090Z",
       "template_type": "ai_feature"
     },
     "assets": {
@@ -754,7 +996,7 @@
             "Terminology aligns with project objective"
           ],
           "content": "# Role\nAI Strategy Copilot\n\n# Objective\nComplete Project Goal Clarification for AI SaaS MVP delivery\n\n# Context Required\n- Business objective\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-06-01T10:27:31.842Z",
+          "updated_at": "2026-07-04T04:11:06.090Z",
           "outdated_reason": "Node contract changed by review gate update"
         },
         {
@@ -770,7 +1012,7 @@
             "Terminology aligns with project objective"
           ],
           "content": "# Role\nContext Synthesizer\n\n# Objective\nComplete Context Pack Summary for AI SaaS MVP delivery\n\n# Context Required\n- Team roles\n- Risk constraints\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-06-01T10:27:31.842Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "prompt-node-3",
@@ -785,7 +1027,7 @@
             "Terminology aligns with project objective"
           ],
           "content": "# Role\nPRD Writer\n\n# Objective\nComplete PRD Draft Generation for AI SaaS MVP delivery\n\n# Context Required\n- Project goal\n- Context pack\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-06-01T10:27:31.842Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "prompt-node-5",
@@ -800,7 +1042,7 @@
             "Terminology aligns with project objective"
           ],
           "content": "# Role\nArchitecture Assistant\n\n# Objective\nComplete Architecture Proposal for AI SaaS MVP delivery\n\n# Context Required\n- Approved scope\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-06-01T10:27:31.842Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "prompt-node-6",
@@ -815,7 +1057,7 @@
             "Terminology aligns with project objective"
           ],
           "content": "# Role\nAPI Contract Copilot\n\n# Objective\nComplete API Contract Draft for AI SaaS MVP delivery\n\n# Context Required\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-06-01T10:27:31.842Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "prompt-node-7",
@@ -830,7 +1072,7 @@
             "Terminology aligns with project objective"
           ],
           "content": "# Role\nTask Planner\n\n# Objective\nComplete Task Breakdown for AI SaaS MVP delivery\n\n# Context Required\n- PRD\n- API contract\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-06-01T10:27:31.842Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "prompt-node-8",
@@ -845,7 +1087,7 @@
             "Terminology aligns with project objective"
           ],
           "content": "# Role\nCode Assistant\n\n# Objective\nComplete Code Generation Prompt for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "prompt-node-9",
@@ -860,7 +1102,7 @@
             "Terminology aligns with project objective"
           ],
           "content": "# Role\nQA Copilot\n\n# Objective\nComplete Test Case Generation for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- PRD\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "prompt-node-11",
@@ -875,7 +1117,7 @@
             "Terminology aligns with project objective"
           ],
           "content": "# Role\nRelease Copilot\n\n# Objective\nComplete Launch Checklist for AI SaaS MVP delivery\n\n# Context Required\n- QA sign-off\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         }
       ],
       "checklists": [
@@ -893,7 +1135,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-2",
@@ -909,7 +1151,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-3",
@@ -925,7 +1167,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-4",
@@ -941,7 +1183,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-5",
@@ -957,7 +1199,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-6",
@@ -973,7 +1215,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-7",
@@ -989,7 +1231,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-8",
@@ -1005,7 +1247,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-9",
@@ -1021,7 +1263,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-10",
@@ -1037,7 +1279,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-11",
@@ -1053,7 +1295,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         },
         {
           "id": "checklist-node-12",
@@ -1069,7 +1311,7 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-06-01T10:27:31.843Z"
+          "updated_at": "2026-07-04T04:11:06.090Z"
         }
       ],
       "artifact_templates": [
@@ -1166,7 +1408,7 @@
         "model": "mock-planning-model",
         "purpose": "workflow_generate",
         "status": "succeeded",
-        "created_at": "2026-06-01T10:27:31.843Z"
+        "created_at": "2026-07-04T04:11:06.090Z"
       }
     ],
     "execution_kit": null,
@@ -1278,10 +1520,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.088Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-1",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-2",
@@ -1327,10 +1579,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-2",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-3",
@@ -1376,10 +1638,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-3",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-4",
@@ -1424,10 +1696,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-4",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-5",
@@ -1472,10 +1754,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-5",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-6",
@@ -1520,10 +1812,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-6",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-7",
@@ -1569,10 +1871,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-7",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-8",
@@ -1618,10 +1930,119 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-8",
+          "enabled": true,
+          "execution_level": "L3",
+          "execution_target": "codex",
+          "dispatch_mode": "manual_confirmed",
+          "sandbox_execution_contract_id": "contract-node-8",
+          "status": "ready",
+          "contract_version": 1
+        },
+        "sandbox_execution_contract": {
+          "id": "contract-node-8",
+          "node_id": "node-8",
+          "version": 1,
+          "execution_target": "codex",
+          "repo_scope": {
+            "repository": "github.com/example/ai-saas-feature",
+            "base_branch": "main",
+            "working_branch": "agent/node-8-sandbox",
+            "allowed_paths": [
+              "apps/**",
+              "packages/**",
+              "tests/**"
+            ],
+            "forbidden_paths": [
+              "infra/**",
+              "data/**"
+            ]
+          },
+          "runtime_scope": {
+            "allowed_commands": [
+              "npm test",
+              "npm run build"
+            ],
+            "network_policy": "blocked",
+            "external_network_approved": false,
+            "package_install_policy": "allow_lockfile_only",
+            "max_runtime_minutes": 45
+          },
+          "secret_scope": {
+            "policy": "production_forbidden",
+            "allowed_secret_refs": []
+          },
+          "cost_budget": {
+            "amount": 25,
+            "currency": "USD"
+          },
+          "acceptance_tests": {
+            "required": [
+              "npm test",
+              "npm run build"
+            ],
+            "optional": [
+              "npm run typecheck"
+            ]
+          },
+          "output_required": {
+            "evidence": [
+              "diff",
+              "test_report",
+              "risk_summary",
+              "cost_report",
+              "rollback_note"
+            ]
+          },
+          "review_gate": "gate-code-review",
+          "promotion_policy": {
+            "promotion_gates": [
+              "sandbox",
+              "test",
+              "review"
+            ],
+            "target_environment": "review",
+            "human_approval_required": true,
+            "agent_can_update_formal_workflow": false,
+            "production_auto_deploy_allowed": false,
+            "block_on_forbidden_paths": true
+          },
+          "failure_handling": {
+            "on_failure": "stop_and_report",
+            "rollback_required": true
+          },
+          "status": "draft"
+        },
+        "promotion_gate": {
+          "id": "promotion-review-node-8",
+          "node_id": "node-8",
+          "gate_type": "review",
+          "required_checks": [
+            "required_tests",
+            "human_review",
+            "forbidden_path_check"
+          ],
+          "human_approval_required": true,
+          "agent_auto_promote_allowed": false,
+          "status": "draft"
+        },
+        "execution_evidence_template": {
+          "id": "evidence-node-8",
+          "node_id": "node-8",
+          "required_items": [
+            "diff",
+            "test_report",
+            "risk_summary",
+            "cost_report",
+            "rollback_note"
+          ],
+          "status": "draft"
+        }
       },
       {
         "id": "node-9",
@@ -1667,10 +2088,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-9",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-10",
@@ -1715,10 +2146,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-10",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-11",
@@ -1763,10 +2204,20 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-11",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "draft",
+          "contract_version": 0
+        }
       },
       {
         "id": "node-12",
@@ -1811,10 +2262,43 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-06-01T10:27:31.842Z",
+            "at": "2026-07-04T04:11:06.089Z",
             "action": "Node created from template"
           }
-        ]
+        ],
+        "agent_execution_plan": {
+          "node_id": "node-12",
+          "enabled": false,
+          "execution_level": "L0",
+          "execution_target": "manual_handoff",
+          "dispatch_mode": "disabled",
+          "sandbox_execution_contract_id": null,
+          "status": "disabled",
+          "contract_version": 0
+        },
+        "promotion_gate": {
+          "id": "promotion-production-node-12",
+          "node_id": "node-12",
+          "gate_type": "production",
+          "required_checks": [
+            "human_approval",
+            "release_checklist",
+            "rollback_plan"
+          ],
+          "human_approval_required": true,
+          "agent_auto_promote_allowed": false,
+          "status": "draft"
+        },
+        "execution_evidence_template": {
+          "id": "evidence-node-12",
+          "node_id": "node-12",
+          "required_items": [
+            "risk_summary",
+            "rollback_note",
+            "human_approval_record"
+          ],
+          "status": "draft"
+        }
       }
     ],
     "edges": [
@@ -1874,7 +2358,7 @@
         "to": "node-12"
       }
     ],
-    "updated_at": "2026-06-01T10:27:31.843Z",
+    "updated_at": "2026-07-04T04:11:06.090Z",
     "template_type": "ai_feature",
     "template_id": "template-ai-saas-feature-mvp",
     "template_version": "v1"
@@ -1894,7 +2378,7 @@
           "Terminology aligns with project objective"
         ],
         "content": "# Role\nAI Strategy Copilot\n\n# Objective\nComplete Project Goal Clarification for AI SaaS MVP delivery\n\n# Context Required\n- Business objective\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-06-01T10:27:31.842Z",
+        "updated_at": "2026-07-04T04:11:06.090Z",
         "outdated_reason": "Node contract changed by review gate update"
       },
       {
@@ -1910,7 +2394,7 @@
           "Terminology aligns with project objective"
         ],
         "content": "# Role\nContext Synthesizer\n\n# Objective\nComplete Context Pack Summary for AI SaaS MVP delivery\n\n# Context Required\n- Team roles\n- Risk constraints\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-06-01T10:27:31.842Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "prompt-node-3",
@@ -1925,7 +2409,7 @@
           "Terminology aligns with project objective"
         ],
         "content": "# Role\nPRD Writer\n\n# Objective\nComplete PRD Draft Generation for AI SaaS MVP delivery\n\n# Context Required\n- Project goal\n- Context pack\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-06-01T10:27:31.842Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "prompt-node-5",
@@ -1940,7 +2424,7 @@
           "Terminology aligns with project objective"
         ],
         "content": "# Role\nArchitecture Assistant\n\n# Objective\nComplete Architecture Proposal for AI SaaS MVP delivery\n\n# Context Required\n- Approved scope\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-06-01T10:27:31.842Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "prompt-node-6",
@@ -1955,7 +2439,7 @@
           "Terminology aligns with project objective"
         ],
         "content": "# Role\nAPI Contract Copilot\n\n# Objective\nComplete API Contract Draft for AI SaaS MVP delivery\n\n# Context Required\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-06-01T10:27:31.842Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "prompt-node-7",
@@ -1970,7 +2454,7 @@
           "Terminology aligns with project objective"
         ],
         "content": "# Role\nTask Planner\n\n# Objective\nComplete Task Breakdown for AI SaaS MVP delivery\n\n# Context Required\n- PRD\n- API contract\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-06-01T10:27:31.842Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "prompt-node-8",
@@ -1985,7 +2469,7 @@
           "Terminology aligns with project objective"
         ],
         "content": "# Role\nCode Assistant\n\n# Objective\nComplete Code Generation Prompt for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "prompt-node-9",
@@ -2000,7 +2484,7 @@
           "Terminology aligns with project objective"
         ],
         "content": "# Role\nQA Copilot\n\n# Objective\nComplete Test Case Generation for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- PRD\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "prompt-node-11",
@@ -2015,7 +2499,7 @@
           "Terminology aligns with project objective"
         ],
         "content": "# Role\nRelease Copilot\n\n# Objective\nComplete Launch Checklist for AI SaaS MVP delivery\n\n# Context Required\n- QA sign-off\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       }
     ],
     "checklists": [
@@ -2033,7 +2517,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-2",
@@ -2049,7 +2533,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-3",
@@ -2065,7 +2549,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-4",
@@ -2081,7 +2565,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-5",
@@ -2097,7 +2581,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-6",
@@ -2113,7 +2597,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-7",
@@ -2129,7 +2613,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-8",
@@ -2145,7 +2629,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-9",
@@ -2161,7 +2645,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-10",
@@ -2177,7 +2661,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-11",
@@ -2193,7 +2677,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       },
       {
         "id": "checklist-node-12",
@@ -2209,7 +2693,7 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-06-01T10:27:31.843Z"
+        "updated_at": "2026-07-04T04:11:06.090Z"
       }
     ],
     "artifact_templates": [
@@ -2325,7 +2809,7 @@
   ],
   "workflow_diffs": [
     {
-      "id": "diff-1780309651844",
+      "id": "diff-1783138266092",
       "request": "add testing nodes before launch",
       "changes": [
         {
@@ -2377,7 +2861,7 @@
             "checklist_status": "draft",
             "history": [
               {
-                "at": "2026-06-01T10:27:31.844Z",
+                "at": "2026-07-04T04:11:06.092Z",
                 "action": "Added by AI diff"
               }
             ]
@@ -2388,7 +2872,7 @@
         }
       ],
       "warnings": [],
-      "created_at": "2026-06-01T10:27:31.844Z"
+      "created_at": "2026-07-04T04:11:06.092Z"
     }
   ],
   "execution_kits": [],
@@ -2537,6 +3021,45 @@
           "modernization",
           "migration"
         ]
+      },
+      "github_visibility": "public"
+    },
+    {
+      "id": "template-custom-ai-workflow",
+      "name": "Custom AI Workflow",
+      "template_type": "built_in",
+      "version": "v1",
+      "project_type_keywords": [],
+      "description": "Provide a neutral scaffold for a domain-specific workflow generated by the configured LLM.",
+      "default_phases": [
+        "Discovery",
+        "Design",
+        "Implementation",
+        "Validation",
+        "Rollout"
+      ],
+      "recommended_execution_modes": [
+        "human_lead_ai_assist",
+        "ai_draft_human_review",
+        "ai_execute_human_approval",
+        "human_only"
+      ],
+      "content": {
+        "description": "Provide a neutral scaffold for a domain-specific workflow generated by the configured LLM.",
+        "default_phases": [
+          "Discovery",
+          "Design",
+          "Implementation",
+          "Validation",
+          "Rollout"
+        ],
+        "recommended_execution_modes": [
+          "human_lead_ai_assist",
+          "ai_draft_human_review",
+          "ai_execute_human_approval",
+          "human_only"
+        ],
+        "project_type_keywords": []
       },
       "github_visibility": "public"
     }

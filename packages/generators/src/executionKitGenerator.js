@@ -1,3 +1,12 @@
+import {
+  AGENT_EXECUTION_TARGET_LABELS,
+  deriveAgenticWorkflowObjects,
+  readAgentExecutionPlan,
+  readExecutionEvidenceTemplate,
+  readPromotionGate,
+  readSandboxExecutionContract,
+} from '../../schema/src/agentic.js';
+
 function lines(items = []) {
   return items.map((item) => `- ${item}`).join('\n');
 }
@@ -43,10 +52,103 @@ function validationSummary(validationResults) {
   return { errors: errors.length, warnings: warnings.length, suggestions: suggestions.length, blocking_final: blocking.length };
 }
 
+function nodeId(node) {
+  return node.id || node.node_id;
+}
+
+function nodePhaseId(node) {
+  return node.phaseId || node.phase_id;
+}
+
+function nodeOwner(node) {
+  return node.humanOwnerRole || node.human_owner_role || 'n/a';
+}
+
+function nodeMode(node) {
+  return node.executionMode || node.execution_mode || 'human_only';
+}
+
+function nodeRisk(node) {
+  return node.riskLevel || node.risk_level || 'medium';
+}
+
+function contractVersion(contract) {
+  return contract?.version || contract?.contract_version || contract?.contractVersion || 0;
+}
+
+function buildAgentTaskList(workflow) {
+  return [
+    '# Agent Task List',
+    '',
+    `Workflow version: ${workflow.version}`,
+    '',
+    ...(workflow.nodes || []).map((node, index) => {
+      const plan = readAgentExecutionPlan(node);
+      const contract = readSandboxExecutionContract(node);
+      const target = plan?.execution_target || plan?.executionTarget || 'manual_handoff';
+      const enabled = plan?.enabled === true ? 'enabled' : 'disabled';
+      return [
+        `## ${index + 1}. ${node.name}`,
+        '',
+        `- Node ID: ${nodeId(node)}`,
+        `- Workflow version: ${workflow.version}`,
+        `- Agent: ${enabled} ${plan?.execution_level || plan?.executionLevel || 'L0'} via ${AGENT_EXECUTION_TARGET_LABELS[target] || target}`,
+        `- Contract: ${contract?.id || 'none'} v${contractVersion(contract)}`,
+        `- Owner: ${nodeOwner(node)}`,
+        `- Required inputs: ${(node.inputs || []).join(', ') || 'none'}`,
+        `- Required outputs: ${(node.outputs || []).join(', ') || 'none'}`,
+        `- Acceptance tests: ${contract?.acceptance_tests?.required?.join(', ') || 'not declared'}`,
+        `- Evidence: ${readExecutionEvidenceTemplate(node)?.required_items?.join(', ') || contract?.output_required?.evidence?.join(', ') || 'not declared'}`,
+      ].join('\n');
+    }),
+  ].join('\n');
+}
+
+function buildEvidenceTemplatesMarkdown(workflow) {
+  const templates = (workflow.nodes || []).map((node) => ({ node, template: readExecutionEvidenceTemplate(node), contract: readSandboxExecutionContract(node) }))
+    .filter(({ template, contract }) => template || contract);
+  if (!templates.length) return '# Execution Evidence Templates\n\nNo Agent evidence templates are declared.';
+  return [
+    '# Execution Evidence Templates',
+    '',
+    ...templates.map(({ node, template, contract }) => [
+      `## ${node.name}`,
+      '',
+      `- Node ID: ${nodeId(node)}`,
+      `- Workflow version: ${workflow.version}`,
+      `- Contract version: ${contractVersion(contract)}`,
+      `- Required evidence: ${(template?.required_items || contract?.output_required?.evidence || []).join(', ') || 'none'}`,
+    ].join('\n')),
+  ].join('\n');
+}
+
+function buildBoundaryRulesReport(validationResults) {
+  return [
+    '# Boundary Rules Report',
+    '',
+    ...(validationResults || []).map((item) => [
+      `## ${item.level || 'suggestion'}: ${item.title || item.id}`,
+      '',
+      `- Rule ID: ${item.id}`,
+      `- Target: ${item.targetType || item.target_type || 'workflow'}:${item.targetId || item.target_id || ''}`,
+      `- Blocking final: ${item.blockingFinal || item.blocking_final ? 'yes' : 'no'}`,
+      `- Message: ${item.message || ''}`,
+      item.suggestedAction || item.suggested_action ? `- Suggested action: ${item.suggestedAction || item.suggested_action}` : '',
+    ].filter(Boolean).join('\n')),
+  ].join('\n');
+}
+
 function buildWorkflowSpec(workflow) {
+  const agenticObjects = deriveAgenticWorkflowObjects(workflow);
   return {
     workflow_version: workflow.version,
     status: workflow.status,
+    agentic_development: {
+      agent_execution_plans: agenticObjects.agent_execution_plans.length,
+      sandbox_execution_contracts: agenticObjects.sandbox_execution_contracts.length,
+      promotion_gates: agenticObjects.promotion_gates.length,
+      execution_evidence_templates: agenticObjects.execution_evidence_templates.length,
+    },
     phases: workflow.phases.map((phase) => ({ id: phase.id, name: phase.name, status: phase.status || 'draft' })),
     nodes: workflow.nodes.map((node) => ({
       id: node.id,
@@ -56,6 +158,9 @@ function buildWorkflowSpec(workflow) {
       risk_level: node.riskLevel || node.risk_level,
       human_owner_role: node.humanOwnerRole || node.human_owner_role,
       review_gate: node.reviewGate?.name || node.review_gate?.name || null,
+      agent_execution_plan: readAgentExecutionPlan(node),
+      sandbox_execution_contract_id: readSandboxExecutionContract(node)?.id || null,
+      promotion_gate_id: readPromotionGate(node)?.id || null,
       inputs: node.inputs || [],
       outputs: node.outputs || [],
     })),
@@ -75,19 +180,27 @@ export function generateExecutionKit(workflow, assets, validationResults, option
   const kitType = options.kit_type || options.kitType || 'draft';
   const hasBlockingError = summary.blocking_final > 0;
   const workflowSpec = buildWorkflowSpec(workflow);
-  const taskList = workflow.nodes.map((node, index) => `${index + 1}. ${node.name} (${node.humanOwnerRole || node.human_owner_role})`).join('\n');
+  const agenticObjects = deriveAgenticWorkflowObjects(workflow);
+  const taskList = buildAgentTaskList(workflow);
   const promptPack = (assets.prompts || []).map((prompt) => `## ${prompt.name}\n\nStatus: ${prompt.status || 'draft'}\n\n${prompt.content || ''}`).join('\n\n');
   const reviewChecklist = (assets.checklists || []).map((item) => `## ${item.name}\nReviewer: ${item.reviewerRole || item.reviewer_role || 'n/a'}\n${lines(item.items || [])}`).join('\n\n');
   const artifactTemplates = getArtifactTemplates(assets).map((item) => `## ${item.name}\n\nFormat: ${item.format || 'markdown'}\n\n${item.content || ''}`).join('\n\n');
-  const responsibilityMap = workflow.nodes.map((node) => `- ${node.name}: ${node.humanOwnerRole || node.human_owner_role} (${node.executionMode || node.execution_mode})`).join('\n');
+  const responsibilityMap = workflow.nodes.map((node) => `- ${node.name}: ${nodeOwner(node)} (${nodeMode(node)})`).join('\n');
   const riskReport = [
     `# Risk Report`,
     `Errors: ${summary.errors}`,
     `Warnings: ${summary.warnings}`,
     `Blocking Final: ${summary.blocking_final}`,
     '',
-    ...workflow.nodes.filter((node) => (node.riskLevel || node.risk_level) === 'high').map((node) => `- ${node.name}: gate=${node.reviewGate?.name || node.review_gate?.name || 'missing'}`),
+    ...workflow.nodes.filter((node) => nodeRisk(node) === 'high').map((node) => `- ${node.name}: gate=${node.reviewGate?.name || node.review_gate?.name || 'missing'}`),
   ].join('\n');
+  const workflowSnapshot = {
+    workflow_id: workflow.id,
+    workflow_version: workflow.version,
+    captured_at: new Date().toISOString(),
+    workflow,
+    agentic_development: agenticObjects,
+  };
 
   return {
     id: `kit-${Date.now()}`,
@@ -101,12 +214,17 @@ export function generateExecutionKit(workflow, assets, validationResults, option
     validation_summary: summary,
     files: {
       'workflow_spec.yaml': toYaml(workflowSpec),
-      'task_list.md': taskList,
+      'workflow_snapshot.json': JSON.stringify(workflowSnapshot, null, 2),
+      'agent_task_list.md': taskList,
+      'sandbox_execution_contracts.yaml': toYaml(agenticObjects.sandbox_execution_contracts),
+      'promotion_gates.yaml': toYaml(agenticObjects.promotion_gates),
+      'execution_evidence_templates.md': buildEvidenceTemplatesMarkdown(workflow),
       'prompt_pack.md': promptPack,
       'review_checklists.md': reviewChecklist,
       'artifact_templates.md': artifactTemplates,
       'responsibility_map.md': responsibilityMap,
       'risk_report.md': riskReport,
+      'boundary_rules_report.md': buildBoundaryRulesReport(validationResults || []),
     },
   };
 }

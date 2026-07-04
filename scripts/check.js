@@ -5,7 +5,7 @@ import { listPublicTemplates, selectTemplateForProject } from '../packages/core/
 import { validateWorkflow } from '../packages/rules/src/validationEngine.js';
 import { generateExecutionKit } from '../packages/generators/src/executionKitGenerator.js';
 import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/diff.js';
-import { validateBoundaryMLProjectSpec, validateNode, validateTemplate } from '../packages/schema/src/schema.js';
+import { validateAgentExecutionPlan, validateBoundaryMLProjectSpec, validateNode, validateSandboxExecutionContract, validateTemplate } from '../packages/schema/src/schema.js';
 import { FileStorage } from '../packages/storage/src/fileStorage.js';
 import { exportExampleExecutionKit } from './export-example.js';
 import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus } from '../packages/core/src/engine.js';
@@ -68,6 +68,14 @@ async function main() {
   assert(validSpec.ok, `example spec should be valid: ${validSpec.errors.join(', ')}`);
   assert(validateBoundaryMLProjectSpec(internalToolSpec).ok, 'internal tool example spec should be valid');
   assert(validateBoundaryMLProjectSpec(legacySpec).ok, 'legacy modernization example spec should be valid');
+  const aiSaasL3Node = (exampleSpec.workflow.nodes || []).find((node) => node.agent_execution_plan?.execution_level === 'L3');
+  const aiSaasProductionNode = (exampleSpec.workflow.nodes || []).find((node) => /production/i.test(node.name || ''));
+  assert(aiSaasL3Node?.sandbox_execution_contract, 'AI SaaS example should include an L3 Sandbox node with contract');
+  assert(validateAgentExecutionPlan(aiSaasL3Node.agent_execution_plan).ok, 'L3 agent execution plan schema should be valid');
+  assert(validateSandboxExecutionContract(aiSaasL3Node.sandbox_execution_contract).ok, 'L3 sandbox execution contract schema should be valid');
+  assert(aiSaasProductionNode?.agent_execution_plan?.execution_level === 'L0', 'AI SaaS example should include an L0 Production node');
+  assert((internalToolSpec.workflow.nodes || []).every((node) => node.agent_execution_plan?.enabled === false), 'internal tool example should keep Agentic fields disabled');
+  assert((legacySpec.workflow.nodes || []).some((node) => node.agent_execution_plan?.execution_level === 'L2'), 'legacy modernization example should include conservative L2 Agent planning');
   assert((internalToolSpec.workflow.nodes || []).length >= 6, 'internal tool example should include generated workflow nodes');
   assert((legacySpec.assets.prompts || []).length >= 1, 'legacy modernization example should include generated assets');
   assert(validSpec.warnings.length >= 1, 'example spec should contain at least one warning');
@@ -99,16 +107,43 @@ async function main() {
   const outdated = makeBrokenProject((p) => { p.assets.prompts[0].status = 'outdated'; });
   assert(hasRule(validateWorkflow(outdated.workflow, outdated.assets), 'outdated_prompt_warning', 'warning'), 'outdated prompt warning should trigger');
 
+  const l3WithoutContract = makeBrokenProject((p) => {
+    const n = p.workflow.nodes.find((x) => x.id === 'node-8');
+    n.agent_execution_plan = { ...n.agent_execution_plan, enabled: true, execution_level: 'L3', sandbox_execution_contract_id: null };
+    delete n.sandbox_execution_contract;
+  });
+  assert(hasRule(validateWorkflow(l3WithoutContract.workflow, l3WithoutContract.assets), 'l3_agent_requires_sandbox_contract'), 'L3 Agent without sandbox contract should block final export');
+
+  const networkWithoutApproval = makeBrokenProject((p) => {
+    const n = p.workflow.nodes.find((x) => x.id === 'node-8');
+    n.sandbox_execution_contract.runtime_scope.network_policy = 'restricted';
+    n.sandbox_execution_contract.runtime_scope.external_network_approved = false;
+  });
+  assert(hasRule(validateWorkflow(networkWithoutApproval.workflow, networkWithoutApproval.assets), 'external_network_requires_approval'), 'external network without approval should trigger');
+
+  const productionAutoDeploy = makeBrokenProject((p) => {
+    const n = p.workflow.nodes.find((x) => x.id === 'node-12');
+    n.promotion_gate.agent_auto_promote_allowed = true;
+  });
+  assert(hasRule(validateWorkflow(productionAutoDeploy.workflow, productionAutoDeploy.assets), 'production_agent_auto_deploy_forbidden'), 'production auto deploy by Agent should trigger');
+
   const project = createExampleProject();
   const diff = generateWorkflowDiff('add testing nodes before launch', project.workflow, project.assets);
   const appliedProject = applyWorkflowDiff(project, diff, false);
   assert(appliedProject.workflow.version === project.workflow.version + 1, 'applyWorkflowDiff should increase version');
+
+  const agenticDiff = generateWorkflowDiff('把开发阶段的代码生成节点改成 L3 Sandbox，禁止访问 infra 目录。', project.workflow, project.assets);
+  assert(agenticDiff.changes.some((change) => change.field === 'agentExecutionPlan'), 'workflow agent diff should include Agent Execution Plan changes');
+  assert(agenticDiff.changes.some((change) => change.field === 'sandboxExecutionContract'), 'workflow agent diff should include Sandbox Contract changes');
 
   const corePatched = applyWorkflowPatch(project.workflow, { status: 'reviewed' });
   assert(corePatched.version === project.workflow.version + 1, 'applyWorkflowPatch should increment workflow version');
 
   const coreDiffApplied = applyDiff(project.workflow, diff, diff.changes.filter((c) => c.selected).map((c) => c.id));
   assert(coreDiffApplied.version === project.workflow.version + 1, 'core applyDiff should increment version');
+  const coreAgentDiffApplied = applyDiff(project.workflow, agenticDiff, agenticDiff.changes.filter((c) => c.selected).map((c) => c.id));
+  const appliedAgentNode = coreAgentDiffApplied.nodes.find((node) => node.agent_execution_plan?.execution_level === 'L3' && node.sandbox_execution_contract);
+  assert(Boolean(appliedAgentNode), 'core applyDiff should apply Agent / Sandbox node fields');
 
   const validation = validateWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
   const status = calculateWorkflowValidationStatus(validation);
@@ -120,6 +155,12 @@ async function main() {
   const kit = generateExecutionKit(project.workflow, project.assets, validation);
   assert(Boolean(kit), 'execution kit should be generated');
   assert(Object.keys(kit.files || {}).includes('workflow_spec.yaml'), 'execution kit should expose v1 file names');
+  assert(Object.keys(kit.files || {}).includes('agent_task_list.md'), 'execution kit should expose agent task list');
+  assert(Object.keys(kit.files || {}).includes('sandbox_execution_contracts.yaml'), 'execution kit should expose sandbox contracts');
+  assert(Object.keys(kit.files || {}).includes('promotion_gates.yaml'), 'execution kit should expose promotion gates');
+  assert(Object.keys(kit.files || {}).includes('execution_evidence_templates.md'), 'execution kit should expose evidence templates');
+  assert(Object.keys(kit.files || {}).includes('boundary_rules_report.md'), 'execution kit should expose boundary rules report');
+  JSON.parse(kit.files['workflow_snapshot.json']);
   assert(typeof kit.files['workflow_spec.yaml'] === 'string' && kit.files['workflow_spec.yaml'].includes('workflow_version'), 'workflow_spec.yaml should be yaml text');
 
   const fsStorage = new FileStorage('.tmp-storage-check');
