@@ -1,12 +1,12 @@
 {
   "boundaryml_version": "v0.1",
   "project": {
-    "id": "project-1783138266090",
+    "id": "project-1783143741091",
     "workspace_id": "demo_workspace",
     "created_by": "demo_user",
     "updated_by": "demo_user",
-    "created_at": "2026-07-04T04:11:06.087Z",
-    "updated_at": "2026-07-04T04:11:06.087Z",
+    "created_at": "2026-07-04T05:42:21.086Z",
+    "updated_at": "2026-07-04T05:42:21.086Z",
     "name": "AI SaaS Feature MVP",
     "type": "AI Feature",
     "goal": "Plan and deliver an AI-assisted SaaS feature from idea to launch.",
@@ -140,7 +140,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.088Z",
+              "at": "2026-07-04T05:42:21.088Z",
               "action": "Node created from template"
             }
           ],
@@ -199,7 +199,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -258,7 +258,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -316,7 +316,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -374,7 +374,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -432,7 +432,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -491,7 +491,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -550,7 +550,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -708,7 +708,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -766,7 +766,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -824,7 +824,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -882,7 +882,7 @@
           "checklist_status": "draft",
           "history": [
             {
-              "at": "2026-07-04T04:11:06.089Z",
+              "at": "2026-07-04T05:42:21.089Z",
               "action": "Node created from template"
             }
           ],
@@ -978,7 +978,7 @@
           "to": "node-12"
         }
       ],
-      "updated_at": "2026-07-04T04:11:06.090Z",
+      "updated_at": "2026-07-04T05:42:21.091Z",
       "template_type": "ai_feature"
     },
     "assets": {
@@ -995,8 +995,20 @@
             "Output is complete and addresses node goal",
             "Terminology aligns with project objective"
           ],
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "prompt",
+            "node_id": "node-1",
+            "phase_id": "phase-1",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
           "content": "# Role\nAI Strategy Copilot\n\n# Objective\nComplete Project Goal Clarification for AI SaaS MVP delivery\n\n# Context Required\n- Business objective\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-07-04T04:11:06.090Z",
+          "updated_at": "2026-07-04T05:42:21.091Z",
           "outdated_reason": "Node contract changed by review gate update"
         },
         {
@@ -1011,8 +1023,20 @@
             "Output is complete and addresses node goal",
             "Terminology aligns with project objective"
           ],
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "prompt",
+            "node_id": "node-2",
+            "phase_id": "phase-1",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
           "content": "# Role\nContext Synthesizer\n\n# Objective\nComplete Context Pack Summary for AI SaaS MVP delivery\n\n# Context Required\n- Team roles\n- Risk constraints\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "prompt-node-3",
@@ -1026,8 +1050,20 @@
             "Output is complete and addresses node goal",
             "Terminology aligns with project objective"
           ],
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "prompt",
+            "node_id": "node-3",
+            "phase_id": "phase-2",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
           "content": "# Role\nPRD Writer\n\n# Objective\nComplete PRD Draft Generation for AI SaaS MVP delivery\n\n# Context Required\n- Project goal\n- Context pack\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "prompt-node-5",
@@ -1041,8 +1077,20 @@
             "Output is complete and addresses node goal",
             "Terminology aligns with project objective"
           ],
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "prompt",
+            "node_id": "node-5",
+            "phase_id": "phase-3",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
           "content": "# Role\nArchitecture Assistant\n\n# Objective\nComplete Architecture Proposal for AI SaaS MVP delivery\n\n# Context Required\n- Approved scope\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "prompt-node-6",
@@ -1056,8 +1104,20 @@
             "Output is complete and addresses node goal",
             "Terminology aligns with project objective"
           ],
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "prompt",
+            "node_id": "node-6",
+            "phase_id": "phase-3",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
           "content": "# Role\nAPI Contract Copilot\n\n# Objective\nComplete API Contract Draft for AI SaaS MVP delivery\n\n# Context Required\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "prompt-node-7",
@@ -1071,8 +1131,20 @@
             "Output is complete and addresses node goal",
             "Terminology aligns with project objective"
           ],
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "prompt",
+            "node_id": "node-7",
+            "phase_id": "phase-4",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
           "content": "# Role\nTask Planner\n\n# Objective\nComplete Task Breakdown for AI SaaS MVP delivery\n\n# Context Required\n- PRD\n- API contract\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "prompt-node-8",
@@ -1086,8 +1158,20 @@
             "Output is complete and addresses node goal",
             "Terminology aligns with project objective"
           ],
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "prompt",
+            "node_id": "node-8",
+            "phase_id": "phase-4",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": "contract-node-8",
+            "contract_version": 1,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
           "content": "# Role\nCode Assistant\n\n# Objective\nComplete Code Generation Prompt for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "prompt-node-9",
@@ -1101,8 +1185,20 @@
             "Output is complete and addresses node goal",
             "Terminology aligns with project objective"
           ],
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "prompt",
+            "node_id": "node-9",
+            "phase_id": "phase-5",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
           "content": "# Role\nQA Copilot\n\n# Objective\nComplete Test Case Generation for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- PRD\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "prompt-node-11",
@@ -1116,8 +1212,20 @@
             "Output is complete and addresses node goal",
             "Terminology aligns with project objective"
           ],
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "prompt",
+            "node_id": "node-11",
+            "phase_id": "phase-6",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
           "content": "# Role\nRelease Copilot\n\n# Objective\nComplete Launch Checklist for AI SaaS MVP delivery\n\n# Context Required\n- QA sign-off\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "updated_at": "2026-07-04T05:42:21.091Z"
         }
       ],
       "checklists": [
@@ -1135,7 +1243,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-1",
+            "phase_id": "phase-1",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-2",
@@ -1151,7 +1271,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-2",
+            "phase_id": "phase-1",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-3",
@@ -1167,7 +1299,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-3",
+            "phase_id": "phase-2",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-4",
@@ -1183,7 +1327,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-4",
+            "phase_id": "phase-2",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-5",
@@ -1199,7 +1355,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-5",
+            "phase_id": "phase-3",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-6",
@@ -1215,7 +1383,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-6",
+            "phase_id": "phase-3",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-7",
@@ -1231,7 +1411,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-7",
+            "phase_id": "phase-4",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-8",
@@ -1247,7 +1439,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-8",
+            "phase_id": "phase-4",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": "contract-node-8",
+            "contract_version": 1,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-9",
@@ -1263,7 +1467,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-9",
+            "phase_id": "phase-5",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-10",
@@ -1279,7 +1495,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-10",
+            "phase_id": "phase-5",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-11",
@@ -1295,7 +1523,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-11",
+            "phase_id": "phase-6",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         },
         {
           "id": "checklist-node-12",
@@ -1311,7 +1551,19 @@
             "Risk controls present",
             "Verify pass condition: All required criteria are met"
           ],
-          "updated_at": "2026-07-04T04:11:06.090Z"
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "checklist",
+            "node_id": "node-12",
+            "phase_id": "phase-6",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          },
+          "updated_at": "2026-07-04T05:42:21.091Z"
         }
       ],
       "artifact_templates": [
@@ -1320,84 +1572,228 @@
           "node_id": "node-1",
           "name": "Project Goal Clarification Artifact Template",
           "content": "# Project Goal Clarification\n\n## Goal\nComplete Project Goal Clarification for AI SaaS MVP delivery\n\n## Required Output\n- Clarified project goal",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-1",
+            "phase_id": "phase-1",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-2",
           "node_id": "node-2",
           "name": "Context Pack Summary Artifact Template",
           "content": "# Context Pack Summary\n\n## Goal\nComplete Context Pack Summary for AI SaaS MVP delivery\n\n## Required Output\n- Context summary",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-2",
+            "phase_id": "phase-1",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-3",
           "node_id": "node-3",
           "name": "PRD Draft Generation Artifact Template",
           "content": "# PRD Draft Generation\n\n## Goal\nComplete PRD Draft Generation for AI SaaS MVP delivery\n\n## Required Output\n- PRD draft",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-3",
+            "phase_id": "phase-2",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-4",
           "node_id": "node-4",
           "name": "Scope Review Artifact Template",
           "content": "# Scope Review\n\n## Goal\nComplete Scope Review for AI SaaS MVP delivery\n\n## Required Output\n- Approved scope",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-4",
+            "phase_id": "phase-2",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-5",
           "node_id": "node-5",
           "name": "Architecture Proposal Artifact Template",
           "content": "# Architecture Proposal\n\n## Goal\nComplete Architecture Proposal for AI SaaS MVP delivery\n\n## Required Output\n- Architecture proposal",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-5",
+            "phase_id": "phase-3",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-6",
           "node_id": "node-6",
           "name": "API Contract Draft Artifact Template",
           "content": "# API Contract Draft\n\n## Goal\nComplete API Contract Draft for AI SaaS MVP delivery\n\n## Required Output\n- API contract",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-6",
+            "phase_id": "phase-3",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-7",
           "node_id": "node-7",
           "name": "Task Breakdown Artifact Template",
           "content": "# Task Breakdown\n\n## Goal\nComplete Task Breakdown for AI SaaS MVP delivery\n\n## Required Output\n- Implementation task list",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-7",
+            "phase_id": "phase-4",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-8",
           "node_id": "node-8",
           "name": "Code Generation Prompt Artifact Template",
           "content": "# Code Generation Prompt\n\n## Goal\nComplete Code Generation Prompt for AI SaaS MVP delivery\n\n## Required Output\n- Code prompt pack",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-8",
+            "phase_id": "phase-4",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-9",
           "node_id": "node-9",
           "name": "Test Case Generation Artifact Template",
           "content": "# Test Case Generation\n\n## Goal\nComplete Test Case Generation for AI SaaS MVP delivery\n\n## Required Output\n- Test case suite",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-9",
+            "phase_id": "phase-5",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-10",
           "node_id": "node-10",
           "name": "QA Review Artifact Template",
           "content": "# QA Review\n\n## Goal\nComplete QA Review for AI SaaS MVP delivery\n\n## Required Output\n- QA sign-off",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-10",
+            "phase_id": "phase-5",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-11",
           "node_id": "node-11",
           "name": "Launch Checklist Artifact Template",
           "content": "# Launch Checklist\n\n## Goal\nComplete Launch Checklist for AI SaaS MVP delivery\n\n## Required Output\n- Launch checklist",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-11",
+            "phase_id": "phase-6",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         },
         {
           "id": "artifact-template-node-12",
           "node_id": "node-12",
           "name": "Production Approval Artifact Template",
           "content": "# Production Approval\n\n## Goal\nComplete Production Approval for AI SaaS MVP delivery\n\n## Required Output\n- Production approval",
-          "status": "draft"
+          "status": "draft",
+          "generated_from": {
+            "type": "node_contract",
+            "asset_type": "artifact_template",
+            "node_id": "node-12",
+            "phase_id": "phase-6",
+            "workflow_id": "workflow-1",
+            "workflow_version": 1,
+            "context_pack_version": 1,
+            "sandbox_execution_contract_id": null,
+            "contract_version": 0,
+            "generated_at": "2026-07-04T05:42:21.091Z"
+          }
         }
       ]
     },
@@ -1408,7 +1804,7 @@
         "model": "mock-planning-model",
         "purpose": "workflow_generate",
         "status": "succeeded",
-        "created_at": "2026-07-04T04:11:06.090Z"
+        "created_at": "2026-07-04T05:42:21.091Z"
       }
     ],
     "execution_kit": null,
@@ -1520,7 +1916,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.088Z",
+            "at": "2026-07-04T05:42:21.088Z",
             "action": "Node created from template"
           }
         ],
@@ -1579,7 +1975,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -1638,7 +2034,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -1696,7 +2092,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -1754,7 +2150,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -1812,7 +2208,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -1871,7 +2267,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -1930,7 +2326,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -2088,7 +2484,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -2146,7 +2542,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -2204,7 +2600,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -2262,7 +2658,7 @@
         "checklist_status": "draft",
         "history": [
           {
-            "at": "2026-07-04T04:11:06.089Z",
+            "at": "2026-07-04T05:42:21.089Z",
             "action": "Node created from template"
           }
         ],
@@ -2358,7 +2754,7 @@
         "to": "node-12"
       }
     ],
-    "updated_at": "2026-07-04T04:11:06.090Z",
+    "updated_at": "2026-07-04T05:42:21.091Z",
     "template_type": "ai_feature",
     "template_id": "template-ai-saas-feature-mvp",
     "template_version": "v1"
@@ -2377,8 +2773,20 @@
           "Output is complete and addresses node goal",
           "Terminology aligns with project objective"
         ],
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "prompt",
+          "node_id": "node-1",
+          "phase_id": "phase-1",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
         "content": "# Role\nAI Strategy Copilot\n\n# Objective\nComplete Project Goal Clarification for AI SaaS MVP delivery\n\n# Context Required\n- Business objective\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-07-04T04:11:06.090Z",
+        "updated_at": "2026-07-04T05:42:21.091Z",
         "outdated_reason": "Node contract changed by review gate update"
       },
       {
@@ -2393,8 +2801,20 @@
           "Output is complete and addresses node goal",
           "Terminology aligns with project objective"
         ],
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "prompt",
+          "node_id": "node-2",
+          "phase_id": "phase-1",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
         "content": "# Role\nContext Synthesizer\n\n# Objective\nComplete Context Pack Summary for AI SaaS MVP delivery\n\n# Context Required\n- Team roles\n- Risk constraints\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "prompt-node-3",
@@ -2408,8 +2828,20 @@
           "Output is complete and addresses node goal",
           "Terminology aligns with project objective"
         ],
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "prompt",
+          "node_id": "node-3",
+          "phase_id": "phase-2",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
         "content": "# Role\nPRD Writer\n\n# Objective\nComplete PRD Draft Generation for AI SaaS MVP delivery\n\n# Context Required\n- Project goal\n- Context pack\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "prompt-node-5",
@@ -2423,8 +2855,20 @@
           "Output is complete and addresses node goal",
           "Terminology aligns with project objective"
         ],
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "prompt",
+          "node_id": "node-5",
+          "phase_id": "phase-3",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
         "content": "# Role\nArchitecture Assistant\n\n# Objective\nComplete Architecture Proposal for AI SaaS MVP delivery\n\n# Context Required\n- Approved scope\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "prompt-node-6",
@@ -2438,8 +2882,20 @@
           "Output is complete and addresses node goal",
           "Terminology aligns with project objective"
         ],
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "prompt",
+          "node_id": "node-6",
+          "phase_id": "phase-3",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
         "content": "# Role\nAPI Contract Copilot\n\n# Objective\nComplete API Contract Draft for AI SaaS MVP delivery\n\n# Context Required\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "prompt-node-7",
@@ -2453,8 +2909,20 @@
           "Output is complete and addresses node goal",
           "Terminology aligns with project objective"
         ],
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "prompt",
+          "node_id": "node-7",
+          "phase_id": "phase-4",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
         "content": "# Role\nTask Planner\n\n# Objective\nComplete Task Breakdown for AI SaaS MVP delivery\n\n# Context Required\n- PRD\n- API contract\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "prompt-node-8",
@@ -2468,8 +2936,20 @@
           "Output is complete and addresses node goal",
           "Terminology aligns with project objective"
         ],
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "prompt",
+          "node_id": "node-8",
+          "phase_id": "phase-4",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": "contract-node-8",
+          "contract_version": 1,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
         "content": "# Role\nCode Assistant\n\n# Objective\nComplete Code Generation Prompt for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- Architecture proposal\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "prompt-node-9",
@@ -2483,8 +2963,20 @@
           "Output is complete and addresses node goal",
           "Terminology aligns with project objective"
         ],
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "prompt",
+          "node_id": "node-9",
+          "phase_id": "phase-5",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
         "content": "# Role\nQA Copilot\n\n# Objective\nComplete Test Case Generation for AI SaaS MVP delivery\n\n# Context Required\n- Task list\n- PRD\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "prompt-node-11",
@@ -2498,8 +2990,20 @@
           "Output is complete and addresses node goal",
           "Terminology aligns with project objective"
         ],
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "prompt",
+          "node_id": "node-11",
+          "phase_id": "phase-6",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
         "content": "# Role\nRelease Copilot\n\n# Objective\nComplete Launch Checklist for AI SaaS MVP delivery\n\n# Context Required\n- QA sign-off\n\n# Input Materials\n- Context Pack\n- Upstream artifacts\n\n# Output Format\nStructured Markdown with headings and bullets\n\n# Constraints\n- Follow boundary rules\n- Escalate ambiguity\n\n# Acceptance Criteria\n- Output is complete and addresses node goal\n- Terminology aligns with project objective\n\n# Failure Handling\n- Report blockers\n- Request human review",
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "updated_at": "2026-07-04T05:42:21.091Z"
       }
     ],
     "checklists": [
@@ -2517,7 +3021,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-1",
+          "phase_id": "phase-1",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-2",
@@ -2533,7 +3049,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-2",
+          "phase_id": "phase-1",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-3",
@@ -2549,7 +3077,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-3",
+          "phase_id": "phase-2",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-4",
@@ -2565,7 +3105,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-4",
+          "phase_id": "phase-2",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-5",
@@ -2581,7 +3133,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-5",
+          "phase_id": "phase-3",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-6",
@@ -2597,7 +3161,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-6",
+          "phase_id": "phase-3",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-7",
@@ -2613,7 +3189,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-7",
+          "phase_id": "phase-4",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-8",
@@ -2629,7 +3217,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-8",
+          "phase_id": "phase-4",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": "contract-node-8",
+          "contract_version": 1,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-9",
@@ -2645,7 +3245,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-9",
+          "phase_id": "phase-5",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-10",
@@ -2661,7 +3273,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-10",
+          "phase_id": "phase-5",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-11",
@@ -2677,7 +3301,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-11",
+          "phase_id": "phase-6",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       },
       {
         "id": "checklist-node-12",
@@ -2693,7 +3329,19 @@
           "Risk controls present",
           "Verify pass condition: All required criteria are met"
         ],
-        "updated_at": "2026-07-04T04:11:06.090Z"
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "checklist",
+          "node_id": "node-12",
+          "phase_id": "phase-6",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        },
+        "updated_at": "2026-07-04T05:42:21.091Z"
       }
     ],
     "artifact_templates": [
@@ -2702,84 +3350,228 @@
         "node_id": "node-1",
         "name": "Project Goal Clarification Artifact Template",
         "content": "# Project Goal Clarification\n\n## Goal\nComplete Project Goal Clarification for AI SaaS MVP delivery\n\n## Required Output\n- Clarified project goal",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-1",
+          "phase_id": "phase-1",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-2",
         "node_id": "node-2",
         "name": "Context Pack Summary Artifact Template",
         "content": "# Context Pack Summary\n\n## Goal\nComplete Context Pack Summary for AI SaaS MVP delivery\n\n## Required Output\n- Context summary",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-2",
+          "phase_id": "phase-1",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-3",
         "node_id": "node-3",
         "name": "PRD Draft Generation Artifact Template",
         "content": "# PRD Draft Generation\n\n## Goal\nComplete PRD Draft Generation for AI SaaS MVP delivery\n\n## Required Output\n- PRD draft",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-3",
+          "phase_id": "phase-2",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-4",
         "node_id": "node-4",
         "name": "Scope Review Artifact Template",
         "content": "# Scope Review\n\n## Goal\nComplete Scope Review for AI SaaS MVP delivery\n\n## Required Output\n- Approved scope",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-4",
+          "phase_id": "phase-2",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-5",
         "node_id": "node-5",
         "name": "Architecture Proposal Artifact Template",
         "content": "# Architecture Proposal\n\n## Goal\nComplete Architecture Proposal for AI SaaS MVP delivery\n\n## Required Output\n- Architecture proposal",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-5",
+          "phase_id": "phase-3",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-6",
         "node_id": "node-6",
         "name": "API Contract Draft Artifact Template",
         "content": "# API Contract Draft\n\n## Goal\nComplete API Contract Draft for AI SaaS MVP delivery\n\n## Required Output\n- API contract",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-6",
+          "phase_id": "phase-3",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-7",
         "node_id": "node-7",
         "name": "Task Breakdown Artifact Template",
         "content": "# Task Breakdown\n\n## Goal\nComplete Task Breakdown for AI SaaS MVP delivery\n\n## Required Output\n- Implementation task list",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-7",
+          "phase_id": "phase-4",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-8",
         "node_id": "node-8",
         "name": "Code Generation Prompt Artifact Template",
         "content": "# Code Generation Prompt\n\n## Goal\nComplete Code Generation Prompt for AI SaaS MVP delivery\n\n## Required Output\n- Code prompt pack",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-8",
+          "phase_id": "phase-4",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-9",
         "node_id": "node-9",
         "name": "Test Case Generation Artifact Template",
         "content": "# Test Case Generation\n\n## Goal\nComplete Test Case Generation for AI SaaS MVP delivery\n\n## Required Output\n- Test case suite",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-9",
+          "phase_id": "phase-5",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-10",
         "node_id": "node-10",
         "name": "QA Review Artifact Template",
         "content": "# QA Review\n\n## Goal\nComplete QA Review for AI SaaS MVP delivery\n\n## Required Output\n- QA sign-off",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-10",
+          "phase_id": "phase-5",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-11",
         "node_id": "node-11",
         "name": "Launch Checklist Artifact Template",
         "content": "# Launch Checklist\n\n## Goal\nComplete Launch Checklist for AI SaaS MVP delivery\n\n## Required Output\n- Launch checklist",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-11",
+          "phase_id": "phase-6",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       },
       {
         "id": "artifact-template-node-12",
         "node_id": "node-12",
         "name": "Production Approval Artifact Template",
         "content": "# Production Approval\n\n## Goal\nComplete Production Approval for AI SaaS MVP delivery\n\n## Required Output\n- Production approval",
-        "status": "draft"
+        "status": "draft",
+        "generated_from": {
+          "type": "node_contract",
+          "asset_type": "artifact_template",
+          "node_id": "node-12",
+          "phase_id": "phase-6",
+          "workflow_id": "workflow-1",
+          "workflow_version": 1,
+          "context_pack_version": 1,
+          "sandbox_execution_contract_id": null,
+          "contract_version": 0,
+          "generated_at": "2026-07-04T05:42:21.091Z"
+        }
       }
     ]
   },
@@ -2809,7 +3601,7 @@
   ],
   "workflow_diffs": [
     {
-      "id": "diff-1783138266092",
+      "id": "diff-1783143741100",
       "request": "add testing nodes before launch",
       "changes": [
         {
@@ -2861,7 +3653,7 @@
             "checklist_status": "draft",
             "history": [
               {
-                "at": "2026-07-04T04:11:06.092Z",
+                "at": "2026-07-04T05:42:21.100Z",
                 "action": "Added by AI diff"
               }
             ]
@@ -2872,7 +3664,7 @@
         }
       ],
       "warnings": [],
-      "created_at": "2026-07-04T04:11:06.092Z"
+      "created_at": "2026-07-04T05:42:21.100Z"
     }
   ],
   "execution_kits": [],

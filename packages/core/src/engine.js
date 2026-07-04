@@ -28,24 +28,31 @@ export function markAffectedAssetsOutdated(changeSet, assets) {
   const affectedNodeIds = changeSet
     .filter((change) => change.target_type === 'node' || change.targetType === 'node')
     .map((change) => change.target_id || change.targetId);
+  const markOutdated = (asset) => {
+    if (!affectedNodeIds.includes(asset.node_id || asset.nodeId)) return asset;
+    return {
+      ...asset,
+      status: 'outdated',
+      outdated_reason: 'Node contract changed',
+      outdatedReason: asset.outdatedReason || 'Node contract changed',
+      generated_from: {
+        ...(asset.generated_from || asset.generatedFrom || {}),
+        stale: true,
+        stale_reason: 'Node contract changed',
+        stale_since_workflow_version: changeSet.find((change) => change.workflow_version || change.workflowVersion)?.workflow_version
+          || changeSet.find((change) => change.workflow_version || change.workflowVersion)?.workflowVersion
+          || null,
+      },
+    };
+  };
 
+  const artifactTemplates = (assets.artifact_templates || assets.artifactTemplates || []).map(markOutdated);
   return {
     ...assets,
-    prompts: (assets.prompts || []).map((asset) => (
-      affectedNodeIds.includes(asset.node_id || asset.nodeId)
-        ? { ...asset, status: 'outdated', outdated_reason: 'Node contract changed' }
-        : asset
-    )),
-    checklists: (assets.checklists || []).map((asset) => (
-      affectedNodeIds.includes(asset.node_id || asset.nodeId)
-        ? { ...asset, status: 'outdated', outdated_reason: 'Node contract changed' }
-        : asset
-    )),
-    artifact_templates: (assets.artifact_templates || assets.artifactTemplates || []).map((asset) => (
-      affectedNodeIds.includes(asset.node_id || asset.nodeId)
-        ? { ...asset, status: 'outdated', outdated_reason: 'Node contract changed' }
-        : asset
-    )),
+    prompts: (assets.prompts || []).map(markOutdated),
+    checklists: (assets.checklists || []).map(markOutdated),
+    artifact_templates: artifactTemplates,
+    artifactTemplates,
   };
 }
 

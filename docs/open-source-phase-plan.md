@@ -39,14 +39,14 @@ BoundaryML Community Core 的目标不是做通用流程图、项目管理工具
 - `packages/schema`、`packages/core`、`packages/rules`、`packages/generators`、`packages/exporter`、`packages/storage` 已具备 Community Core 的基础模块；
 - 当前 `package-lock.json` 的 workspace link 补齐了 `packages/examples` 和 `packages/exporter`，应作为工程卫生改动进入本规划 PR。
 
-仍需补齐的关键差距：
+本轮开源 Community Core 已补齐的关键差距：
 
-- Agentic Development 场景对象尚未完整进入 Schema、Rules、Studio 编辑和 Export；
-- Context Pack 仍偏基础表单，缺少更完整的摘要确认、影响分析和安全边界；
-- Jobs 仍是同步任务记录，不是真正异步队列；
-- Model Call Log、Project Agent Session、Workflow Edit Session 的持久化与可追踪性仍需强化；
-- Execution Kit 还缺 Agent-ready 文件与 Sandbox Contract / Evidence / Promotion 结构；
-- Workflow Agent 仍存在 deterministic fallback，需把 LLM 输出契约、repair、trace 和 fallback 标识做得更清楚。
+- Agentic Development 场景对象已进入 Schema、Rules、Studio 编辑和 Export；
+- Context Pack 已补 server-backed 摘要确认、影响分析和安全边界；
+- Jobs 已补 P0 阶段历史、可重试 handler、output ref 和取消状态；跨进程异步 worker queue 不进入 Community Core P0；
+- Model Call Log 已从内存列表强化为本地文件持久化，Project Agent Session 与 Workflow Edit Session 继续按本地 project/session 存储可追踪；
+- Execution Kit 已补 Agent-ready files、Sandbox Contract、Evidence / Promotion 结构；
+- Workflow Agent 已强化 LLM 输出契约、repair、trace 和 fallback 标识。
 
 ---
 
@@ -270,12 +270,12 @@ Tab 字段：
 
 | Area | Done | Needs completion |
 | --- | --- | --- |
-| Project / Workflow / Canvas | 已有主链路 | Agent / Sandbox fields enter Node Detail |
-| Context Pack | 基础可保存 | 摘要确认、影响分析、安全边界 |
-| Model Access | OpenAI-compatible 基础可用 | 输出契约、修复、日志持久化 |
-| Workflow Agent | Diff Review 基础可用 | Agent / Sandbox diff、fallback 透明化 |
-| Execution Assets | Prompt / Checklist / Template 可编辑 | generated_from、version、contract linkage |
-| Execution Kit | 基础 files 可导出 | Agent-ready files、Sandbox Contract、Evidence |
-| Validation | P0 workflow rules 可用 | Agentic Development P0 rules |
-| Jobs / History | 基础记录可用 | 更真实的阶段状态、恢复与持久化 |
-| Examples / Docs | Phase 0-9 基础说明 | Agentic Development P0 示例与验收 |
+| Project / Workflow / Canvas | 已有主链路，Agent / Sandbox fields 已进入 Node Detail | 后续仅保留交互细节优化 |
+| Context Pack | 基础保存、摘要确认、影响分析、安全边界已可用 | 后续可接入更高级模型摘要 |
+| Model Access | OpenAI-compatible、输出契约、修复、summary log、本地持久化已可用 | 后续可扩展 provider presets |
+| Workflow Agent | Diff Review、Agent / Sandbox diff、fallback 透明化已可用 | 后续可扩展更多自然语言意图 |
+| Execution Assets | Prompt / Checklist / Template 可编辑，generated_from / version / contract linkage 已可用 | 后续可增加批量再生成 |
+| Execution Kit | Agent-ready files、Sandbox Contract、Evidence、Promotion 已可导出 | 后续 adapter 不进入 P0 |
+| Validation | P0 workflow rules 与 Agentic Development P0 rules 已可用 | 后续可增加组织规则包 |
+| Jobs / History | 阶段历史、恢复、重试、取消、本地持久化已可用 | 跨进程异步 worker queue 不进入 Community Core P0 |
+| Examples / Docs | Phase 0-9、Agentic Development P0 示例与验收已覆盖 | 后续保持 release 更新 |

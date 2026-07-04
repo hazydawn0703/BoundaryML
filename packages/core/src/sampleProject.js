@@ -159,15 +159,17 @@ export function createExampleProject() {
     ['node-9', 'node-10'], ['node-10', 'node-11'], ['node-11', 'node-12'],
   ].map(([from, to], index) => ({ id: `edge-${index + 1}`, from, to }));
 
+  const workflowRef = { id: 'workflow-1', version: 1 };
+  const contextPackRef = { version: 1 };
   const prompts = nodes
     .filter((node) => node.executionMode !== 'human_only')
-    .map((node) => generatePrompt(node));
+    .map((node) => generatePrompt(node, { workflow: workflowRef, contextPack: contextPackRef }));
   if (prompts[0]) {
     prompts[0].status = 'outdated';
     prompts[0].outdatedReason = 'Contract updated after review gate change';
   }
 
-  const checklists = nodes.map((node) => generateChecklist(node.reviewGate, node));
+  const checklists = nodes.map((node) => generateChecklist(node.reviewGate, node, { workflow: workflowRef, contextPack: contextPackRef }));
 
   return {
     id: 'project-ai-saas-feature-mvp',
@@ -213,6 +215,18 @@ export function createExampleProject() {
         name: `${node.name} Artifact Template`,
         content: `# ${node.name}\n\n## Goal\n${node.goal}\n\n## Required Output\n- ${node.outputs.join('\n- ')}`,
         status: 'draft',
+        generated_from: {
+          type: 'node_contract',
+          asset_type: 'artifact_template',
+          node_id: node.id,
+          phase_id: node.phaseId,
+          workflow_id: workflowRef.id,
+          workflow_version: workflowRef.version,
+          context_pack_version: contextPackRef.version,
+          sandbox_execution_contract_id: node.sandboxExecutionContract?.id || node.agentExecutionPlan?.sandbox_execution_contract_id || null,
+          contract_version: node.sandboxExecutionContract?.version || node.agentExecutionPlan?.contract_version || 0,
+          generated_at: now(),
+        },
       })),
     },
     model_call_logs: [{
