@@ -747,9 +747,36 @@ function renderCreatePage() {
   </section>`;
 }
 
+function renderSummaryList(items) {
+  const list = Array.isArray(items) ? items : [];
+  return list.length ? `<ul>${list.map((x) => `<li>${x}</li>`).join('')}</ul>` : '<p class="muted">None</p>';
+}
+
+function renderSecurityBoundary(boundary) {
+  if (!boundary) return '';
+  return `<h4>Security Boundary</h4><ul>
+    <li>Secrets: ${boundary.secretPolicy || boundary.secret_policy || 'n/a'}</li>
+    <li>Network: ${boundary.networkPolicy || boundary.network_policy || 'n/a'}</li>
+    <li>Agent boundary: ${boundary.agentBoundary || boundary.agent_boundary || 'n/a'}</li>
+  </ul>`;
+}
+
+function renderContextImpact(impact) {
+  if (!impact) return '';
+  const nodes = impact.affectedNodes || impact.affected_nodes || [];
+  const assets = impact.affectedAssets || impact.affected_assets || [];
+  return `<h4>Impact Analysis</h4><ul>
+    <li>Affected nodes: ${nodes.length}</li>
+    <li>Affected assets: ${assets.length}</li>
+    <li>Context version: ${impact.contextPackVersion || impact.context_pack_version || 'n/a'}</li>
+  </ul>`;
+}
+
 function renderContextPage(state) {
   const project = getActiveProject(state);
   const summary = project?.contextPack?.summary;
+  const impact = project?.contextPack?.impactAnalysis || project?.contextPack?.impact_analysis || summary?.impactPreview || summary?.impact_preview;
+  const boundary = summary?.securityBoundary || summary?.security_boundary || impact?.securityBoundary || impact?.security_boundary;
   return `<section class="page"><h2>Context Pack</h2>
   <div class="split-2"><form class="card form" data-form="context-pack">
     <label>Team Roles<textarea name="teamRoles">${project?.contextPack?.teamRoles?.join(', ') || ''}</textarea></label>
@@ -757,13 +784,15 @@ function renderContextPage(state) {
     <label>Tool Stack<textarea name="toolStack">${project?.contextPack?.toolStack?.join(', ') || ''}</textarea></label>
     <label>Risk Constraints<textarea name="riskConstraints">${project?.contextPack?.riskConstraints?.join(', ') || ''}</textarea></label>
     <label>Historical Process Materials<textarea name="historicalProcessMaterials">${project?.contextPack?.historicalProcessMaterials || ''}</textarea></label>
-    <div class="actions"><button type="button" data-action="build-context-summary">Generate / Refresh Summary</button><button type="submit" class="primary">Generate Workflow Draft</button></div>
+    <div class="actions"><button type="button" data-action="build-context-summary">Generate / Refresh Summary</button><button type="button" data-action="refresh-context-impact">Refresh Impact</button><button type="submit" class="primary">Generate Workflow Draft</button></div>
   </form>
   <article class="card panel"><h3>Context Summary</h3>
-    ${summary ? `<h4>Recognized Roles</h4><ul>${summary.recognizedRoles.map((x) => `<li>${x}</li>`).join('')}</ul>
-    <h4>Suggested Review Gates</h4><ul>${summary.suggestedReviewGates.map((x) => `<li>${x}</li>`).join('')}</ul>
-    <h4>Missing Context</h4><ul>${summary.missingContext.map((x) => `<li>${x}</li>`).join('')}</ul>
-    <h4>Risk Warnings</h4><ul>${summary.riskWarnings.map((x) => `<li>${x}</li>`).join('')}</ul>` : '<p class="muted">No summary yet.</p>'}
+    ${summary ? `<h4>Recognized Roles</h4>${renderSummaryList(summary.recognizedRoles || summary.recognized_roles)}
+    <h4>Suggested Review Gates</h4>${renderSummaryList(summary.suggestedReviewGates || summary.suggested_review_gates)}
+    <h4>Missing Context</h4>${renderSummaryList(summary.missingContext || summary.missing_context)}
+    <h4>Risk Warnings</h4>${renderSummaryList(summary.riskWarnings || summary.risk_warnings)}
+    ${renderSecurityBoundary(boundary)}
+    ${renderContextImpact(impact)}` : '<p class="muted">No summary yet.</p>'}
   </article></div></section>`;
 }
 
@@ -3092,9 +3121,31 @@ function handleAction(event) {
   if (action === 'set-kit-type') setState((prev) => ({ ...prev, exportKitType: target.value }));
 
   if (action === 'build-context-summary') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (st.serverAvailable && project?.id) {
+      apiClient.contextPackApi.summarize(project.id)
+        .then(() => loadProjectRuntime(project.id, { navigate: false }))
+        .then(() => showToast('Context summary refreshed.', 'success'))
+        .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to refresh context summary' })));
+      return;
+    }
     updateActiveProject((draft) => {
       draft.contextPack.summary = buildContextSummary(draft.contextPack);
     }, 'Context summary refreshed');
+  }
+
+  if (action === 'refresh-context-impact') {
+    const st = getState();
+    const project = getActiveProject(st);
+    if (!st.serverAvailable || !project?.id) {
+      showToast('Context impact analysis requires Local Server mode.', 'error');
+      return;
+    }
+    apiClient.contextPackApi.refreshImpact(project.id)
+      .then(() => loadProjectRuntime(project.id, { navigate: false }))
+      .then(() => showToast('Context impact refreshed.', 'success'))
+      .catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to refresh context impact' })));
   }
 
   if (action === 'recommend-mode') {

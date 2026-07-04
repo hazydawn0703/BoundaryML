@@ -24,7 +24,31 @@ const dataDir = process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || pr
 if (storageAdapter === 'file') mkdirSync(dataDir, { recursive: true });
 const storage = storageAdapter === 'file' ? new FileStorage(dataDir) : new MemoryStorage();
 const ACTIVE_JOB_STATUS = new Set(['queued', 'running', 'succeeded']);
-const modelCalls = [];
+const RETRYABLE_JOB_TYPES = new Set(['summarize_context_pack', 'generate_prompt', 'generate_checklist', 'generate_execution_kit_preview', 'generate_execution_kit']);
+const modelCallsPath = `${dataDir}/model-calls.json`;
+function loadModelCalls() {
+  if (storageAdapter !== 'file' || !existsSync(modelCallsPath)) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(modelCallsPath, 'utf-8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function persistModelCalls() {
+  if (storageAdapter !== 'file') return;
+  try {
+    writeFileSync(modelCallsPath, JSON.stringify(modelCalls.slice(0, 100), null, 2));
+  } catch {}
+}
+const modelCalls = loadModelCalls();
+const persistModelCallUnshift = modelCalls.unshift.bind(modelCalls);
+modelCalls.unshift = (...items) => {
+  const result = persistModelCallUnshift(...items);
+  modelCalls.splice(100);
+  persistModelCalls();
+  return result;
+};
 const AI_CONVERSATION_LIMIT = 20;
 const EDIT_SESSION_LIMIT = 10;
 const DEFAULT_EDIT_SESSION_BATCH_SIZE = 4;
@@ -1256,15 +1280,218 @@ function asList(value, fallback = []) {
 }
 
 function createContextPack(input = {}) {
+  const sourceMaterials = input.source_materials || input.sourceMaterials;
   return {
-    request_sources: asList(input.request_sources || input.requestSources),
-    team_roles: asList(input.team_roles || input.teamRoles),
-    approval_process: asList(input.approval_process || input.approvalProcess),
+    request_sources: asList(input.request_sources || input.requestSources || input.request_sources_list),
+    team_roles: asList(input.team_roles || input.teamRoles || input.roles),
+    approval_process: asList(input.approval_process || input.approvalProcess || input.approval_processes || input.approvalProcesses),
     tool_stack: asList(input.tool_stack || input.toolStack),
     risk_constraints: asList(input.risk_constraints || input.riskConstraints),
-    historical_process_materials: input.historical_process_materials || input.historicalProcessMaterials || '',
+    historical_process_materials: input.historical_process_materials
+      || input.historicalProcessMaterials
+      || (Array.isArray(sourceMaterials) ? sourceMaterials.map((item) => item?.content || item).filter(Boolean).join('\n') : '')
+      || '',
     summary: null,
     version: 1,
+  };
+}
+
+function hasAnyField(input, fields) {
+  return fields.some((field) => Object.hasOwn(input, field));
+}
+
+function normalizeContextPackPatch(input = {}) {
+  const patch = {};
+  if (hasAnyField(input, ['request_sources', 'requestSources', 'request_sources_list'])) patch.request_sources = asList(input.request_sources || input.requestSources || input.request_sources_list);
+  if (hasAnyField(input, ['team_roles', 'teamRoles', 'roles'])) patch.team_roles = asList(input.team_roles || input.teamRoles || input.roles);
+  if (hasAnyField(input, ['approval_process', 'approvalProcess', 'approval_processes', 'approvalProcesses'])) patch.approval_process = asList(input.approval_process || input.approvalProcess || input.approval_processes || input.approvalProcesses);
+  if (hasAnyField(input, ['tool_stack', 'toolStack'])) patch.tool_stack = asList(input.tool_stack || input.toolStack);
+  if (hasAnyField(input, ['risk_constraints', 'riskConstraints'])) patch.risk_constraints = asList(input.risk_constraints || input.riskConstraints);
+  if (hasAnyField(input, ['historical_process_materials', 'historicalProcessMaterials', 'source_materials', 'sourceMaterials'])) {
+    const sourceMaterials = input.source_materials || input.sourceMaterials;
+    patch.historical_process_materials = input.historical_process_materials
+      || input.historicalProcessMaterials
+      || (Array.isArray(sourceMaterials) ? sourceMaterials.map((item) => item?.content || item).filter(Boolean).join('\n') : '')
+      || '';
+  }
+  for (const field of ['summary', 'security_boundary', 'impact_analysis']) {
+    if (Object.hasOwn(input, field)) patch[field] = input[field];
+  }
+  return patch;
+}
+
+function readContextList(contextPack, snakeKey, camelKey) {
+  return asList(contextPack?.[snakeKey] || contextPack?.[camelKey]);
+}
+
+function readNodeField(node, snakeKey, camelKey, fallback = undefined) {
+  return node?.[snakeKey] ?? node?.[camelKey] ?? fallback;
+}
+
+function buildGeneratedFrom(node, workflow, contextPack, assetType) {
+  const plan = readNodeField(node, 'agent_execution_plan', 'agentExecutionPlan', {});
+  const contract = readNodeField(node, 'sandbox_execution_contract', 'sandboxExecutionContract', {});
+  return {
+    type: 'node_contract',
+    asset_type: assetType,
+    node_id: readNodeField(node, 'id', 'id'),
+    phase_id: readNodeField(node, 'phase_id', 'phaseId', null),
+    workflow_id: workflow?.id || null,
+    workflow_version: workflow?.version ?? null,
+    context_pack_version: contextPack?.version ?? workflow?.context_pack_version ?? null,
+    sandbox_execution_contract_id: contract?.id || plan?.sandbox_execution_contract_id || plan?.sandboxExecutionContractId || null,
+    contract_version: contract?.version || plan?.contract_version || plan?.contractVersion || 0,
+    generated_at: new Date().toISOString(),
+  };
+}
+
+function attachGeneratedFrom(asset, node, workflow, contextPack, assetType) {
+  return {
+    ...asset,
+    generated_from: buildGeneratedFrom(node, workflow, contextPack, assetType),
+  };
+}
+
+function buildContextSecurityBoundary(contextPack, workflow) {
+  const risks = readContextList(contextPack, 'risk_constraints', 'riskConstraints');
+  const tools = readContextList(contextPack, 'tool_stack', 'toolStack');
+  const riskText = risks.join(' ').toLowerCase();
+  const hasSensitiveData = /secret|token|key|credential|customer|privacy|pii|生产|密钥|客户|隐私|个人信息|敏感/.test(riskText);
+  const hasProduction = /production|prod|release|deploy|上线|发布|生产/.test(riskText);
+  const agentNodes = (workflow?.nodes || []).filter((node) => readNodeField(node, 'agent_execution_plan', 'agentExecutionPlan')?.enabled);
+  return {
+    secret_policy: hasSensitiveData ? 'sandbox_only_no_production_secrets' : 'least_privilege',
+    network_policy: hasSensitiveData ? 'blocked_by_default' : 'explicit_approval_required',
+    human_approval_required_for: [
+      ...(hasProduction ? ['production release'] : []),
+      ...(hasSensitiveData ? ['sensitive data access'] : []),
+      ...readContextList(contextPack, 'approval_process', 'approvalProcess'),
+    ],
+    forbidden_areas: risks.filter((item) => /forbid|禁止|不能|no /.test(String(item).toLowerCase())),
+    external_systems: tools,
+    agent_boundary: agentNodes.length
+      ? `${agentNodes.length} agent-enabled node${agentNodes.length === 1 ? '' : 's'} must obey node-level Sandbox Execution Contracts.`
+      : 'No agent-enabled nodes are currently declared.',
+  };
+}
+
+function buildContextPackSummary(project) {
+  const contextPack = project.context_pack || {};
+  const workflow = project.workflow || {};
+  const teamRoles = readContextList(contextPack, 'team_roles', 'teamRoles');
+  const approvalProcess = readContextList(contextPack, 'approval_process', 'approvalProcess');
+  const toolStack = readContextList(contextPack, 'tool_stack', 'toolStack');
+  const riskConstraints = readContextList(contextPack, 'risk_constraints', 'riskConstraints');
+  const historical = contextPack.historical_process_materials || contextPack.historicalProcessMaterials || '';
+  const ownerRoles = [...new Set((workflow.nodes || []).map((node) => readNodeField(node, 'human_owner_role', 'humanOwnerRole')).filter(Boolean))];
+  const highRiskNodes = (workflow.nodes || []).filter((node) => readNodeField(node, 'risk_level', 'riskLevel') === 'high');
+  const suggestedGates = [
+    ...approvalProcess,
+    ...(highRiskNodes.length ? ['High-risk node review before execution'] : []),
+    ...(riskConstraints.length ? ['Risk constraint confirmation before final kit export'] : []),
+  ].filter(Boolean);
+  return {
+    recognized_roles: [...new Set([...teamRoles, ...ownerRoles])],
+    suggested_review_gates: suggestedGates.length ? [...new Set(suggestedGates)] : ['Project owner review before execution'],
+    missing_context: [
+      teamRoles.length ? null : 'Team roles are not specified.',
+      approvalProcess.length ? null : 'Approval process is not specified.',
+      toolStack.length ? null : 'Tool stack is not specified.',
+      riskConstraints.length ? null : 'Risk constraints are not specified.',
+      historical ? null : 'Historical process materials are not attached.',
+    ].filter(Boolean),
+    risk_warnings: riskConstraints.length
+      ? riskConstraints.map((item) => `Confirm boundary rule coverage for: ${item}`)
+      : ['No explicit risk constraints set.'],
+    security_boundary: buildContextSecurityBoundary(contextPack, workflow),
+    confirmation: {
+      status: 'needs_review',
+      required_confirmations: ['roles', 'approval_process', 'risk_constraints', 'security_boundary'],
+      message: 'Review and confirm the Context Pack summary before generating final execution assets.',
+    },
+    impact_preview: deriveContextPackImpact(project, { markAssets: false }),
+    summary_source: 'deterministic_context_policy',
+    context_pack_version: contextPack.version || 1,
+    generated_at: new Date().toISOString(),
+  };
+}
+
+function assetNodeId(asset) {
+  return asset.node_id || asset.nodeId;
+}
+
+function markContextAssetsOutdated(project, affectedNodeIds, reason) {
+  const affected = [];
+  const mark = (asset, assetType) => {
+    if (!affectedNodeIds.has(assetNodeId(asset))) return asset;
+    affected.push({ id: asset.id, type: assetType, node_id: assetNodeId(asset) });
+    return {
+      ...asset,
+      status: 'outdated',
+      outdated_reason: reason,
+      outdatedReason: asset.outdatedReason || reason,
+      generated_from: {
+        ...(asset.generated_from || asset.generatedFrom || {}),
+        stale: true,
+        stale_reason: reason,
+        stale_since_context_pack_version: project.context_pack?.version || null,
+        stale_since_workflow_version: project.workflow?.version || null,
+      },
+    };
+  };
+  project.assets ||= { prompts: [], checklists: [], artifact_templates: [], artifactTemplates: [] };
+  project.assets.prompts = (project.assets.prompts || []).map((asset) => mark(asset, 'prompt'));
+  project.assets.checklists = (project.assets.checklists || []).map((asset) => mark(asset, 'checklist'));
+  const templates = (project.assets.artifact_templates || project.assets.artifactTemplates || []).map((asset) => mark(asset, 'artifact_template'));
+  project.assets.artifact_templates = templates;
+  project.assets.artifactTemplates = templates;
+  return affected;
+}
+
+function deriveContextPackImpact(project, { markAssets = false } = {}) {
+  const contextPack = project.context_pack || {};
+  const workflow = project.workflow || {};
+  const contextVersion = contextPack.version || 1;
+  const previousWorkflowContextVersion = workflow.context_pack_version || 1;
+  const contextChanged = Number(contextVersion) !== Number(previousWorkflowContextVersion);
+  const risks = readContextList(contextPack, 'risk_constraints', 'riskConstraints');
+  const tools = readContextList(contextPack, 'tool_stack', 'toolStack');
+  const roles = readContextList(contextPack, 'team_roles', 'teamRoles');
+  const affectedNodes = (workflow.nodes || []).filter((node) => {
+    const mode = readNodeField(node, 'execution_mode', 'executionMode');
+    const risk = readNodeField(node, 'risk_level', 'riskLevel');
+    const owner = readNodeField(node, 'human_owner_role', 'humanOwnerRole', '');
+    const agentPlan = readNodeField(node, 'agent_execution_plan', 'agentExecutionPlan', {});
+    return contextChanged
+      || risk === 'high'
+      || mode !== 'human_only'
+      || agentPlan?.enabled
+      || roles.some((role) => owner.toLowerCase().includes(String(role).toLowerCase()));
+  });
+  const affectedNodeIds = new Set(affectedNodes.map((node) => readNodeField(node, 'id', 'id')));
+  const reason = `Context Pack v${contextVersion} changed; regenerate assets that depend on roles, tools, risks, or approvals.`;
+  const affectedAssets = markAssets ? markContextAssetsOutdated(project, affectedNodeIds, reason) : [
+    ...(project.assets?.prompts || []).filter((asset) => affectedNodeIds.has(assetNodeId(asset))).map((asset) => ({ id: asset.id, type: 'prompt', node_id: assetNodeId(asset) })),
+    ...(project.assets?.checklists || []).filter((asset) => affectedNodeIds.has(assetNodeId(asset))).map((asset) => ({ id: asset.id, type: 'checklist', node_id: assetNodeId(asset) })),
+    ...(project.assets?.artifact_templates || project.assets?.artifactTemplates || []).filter((asset) => affectedNodeIds.has(assetNodeId(asset))).map((asset) => ({ id: asset.id, type: 'artifact_template', node_id: assetNodeId(asset) })),
+  ];
+  return {
+    context_pack_version: contextVersion,
+    previous_workflow_context_pack_version: previousWorkflowContextVersion,
+    affected_nodes: affectedNodes.map((node) => ({
+      id: readNodeField(node, 'id', 'id'),
+      name: readNodeField(node, 'name', 'name'),
+      risk_level: readNodeField(node, 'risk_level', 'riskLevel'),
+      reason: contextChanged ? 'Context Pack version changed' : 'Node depends on roles, risks, approvals, tools, or agent boundaries',
+    })),
+    affected_assets: affectedAssets,
+    security_boundary: buildContextSecurityBoundary(contextPack, workflow),
+    changed_dimensions: {
+      roles: roles.length,
+      tools: tools.length,
+      risk_constraints: risks.length,
+    },
+    mark_assets_outdated: markAssets,
   };
 }
 
@@ -2107,10 +2334,10 @@ function normalizeGeneratedWorkflow(project, selectedTemplate, modelOutput) {
   };
 }
 
-function buildAssetsForWorkflow(workflow, modelName = 'configured-planning-model') {
+function buildAssetsForWorkflow(workflow, contextPack = {}, modelName = 'configured-planning-model') {
   const prompts = workflow.nodes
     .filter((node) => node.execution_mode !== 'human_only')
-    .map((node) => ({
+    .map((node) => attachGeneratedFrom({
       id: `prompt-${node.id}`,
       node_id: node.id,
       phase_id: node.phase_id,
@@ -2121,8 +2348,8 @@ function buildAssetsForWorkflow(workflow, modelName = 'configured-planning-model
       acceptance_criteria: node.artifact_contract?.acceptance_criteria || [],
       content: `# Role\n${node.ai_role || 'AI Assistant'}\n\n# Objective\n${node.goal}\n\n# Context Required\n${node.inputs.map((item) => `- ${item}`).join('\n')}\n\n# Output Format\n${node.artifact_contract?.output_format || 'Structured markdown'}\n\n# Acceptance Criteria\n${(node.artifact_contract?.acceptance_criteria || ['Meets node contract']).map((item) => `- ${item}`).join('\n')}`,
       updated_at: new Date().toISOString(),
-    }));
-  const checklists = workflow.nodes.map((node) => ({
+    }, node, workflow, contextPack, 'prompt'));
+  const checklists = workflow.nodes.map((node) => attachGeneratedFrom({
     id: `checklist-${node.id}`,
     node_id: node.id,
     phase_id: node.phase_id,
@@ -2135,14 +2362,14 @@ function buildAssetsForWorkflow(workflow, modelName = 'configured-planning-model
       `Verify pass condition: ${node.review_gate?.pass_condition || 'manual approval required'}`,
     ],
     updated_at: new Date().toISOString(),
-  }));
-  const artifact_templates = workflow.nodes.map((node) => ({
+  }, node, workflow, contextPack, 'checklist'));
+  const artifact_templates = workflow.nodes.map((node) => attachGeneratedFrom({
     id: `artifact-template-${node.id}`,
     node_id: node.id,
     name: `${node.name} Artifact Template`,
     content: `# ${node.name}\n\n## Goal\n${node.goal}\n\n## Required Output\n- ${node.outputs.join('\n- ')}`,
     status: 'draft',
-  }));
+  }, node, workflow, contextPack, 'artifact_template'));
   return { prompts, checklists, artifact_templates, artifactTemplates: artifact_templates };
 }
 
@@ -2221,7 +2448,7 @@ async function prepareWorkflowGeneration(ctx, project, selectedTemplate) {
 
   try {
     const workflow = normalizeGeneratedWorkflow(project, selectedTemplate, modelResult.output);
-    const assets = buildAssetsForWorkflow(workflow, modelResult.model);
+    const assets = buildAssetsForWorkflow(workflow, project.context_pack, modelResult.model);
     const schema = validateWorkflow(workflow);
     if (!schema.ok) throw new Error(`MODEL_WORKFLOW_SCHEMA_INVALID: ${schema.errors.join('; ')}`);
     const validation = validateRulesWorkflow(workflow, assets, { forGeneration: true, modelConfig: getModelStatus() });
@@ -2339,8 +2566,10 @@ function createJob(ctx, project, type, inputSnapshot, idempotencyKey = null, ret
     output_ref: null,
     error: null,
     progress: { stage: 'queued', message: 'Waiting to start generation.' },
+    stage_history: [{ stage: 'queued', message: 'Waiting to start generation.', at: now }],
     idempotency_key: idempotencyKey,
     retry_of: retryOf,
+    attempt: retryOf ? ((project.generation_jobs.find((j) => j.id === retryOf)?.attempt || 1) + 1) : 1,
     cancel_requested: false,
   };
   const v = validateGenerationJob(job);
@@ -2353,11 +2582,13 @@ function createJob(ctx, project, type, inputSnapshot, idempotencyKey = null, ret
 function setJobProgress(job, stage, message) {
   job.progress = { stage, message };
   job.updated_at = new Date().toISOString();
+  job.stage_history = [...(job.stage_history || []), { stage, message, at: job.updated_at }].slice(-20);
 }
 
 function runJob(ctx, project, job, fn) {
   if (job.status === 'cancelled') return;
   job.status = 'running';
+  job.started_at = job.started_at || new Date().toISOString();
   setJobProgress(job, 'preparing_input', 'Preparing generation input.');
   try {
     const outputRef = fn((stage, message) => setJobProgress(job, stage, message));
@@ -2367,6 +2598,7 @@ function runJob(ctx, project, job, fn) {
     } else {
       job.output_ref = outputRef;
       job.status = 'succeeded';
+      job.completed_at = new Date().toISOString();
       setJobProgress(job, 'completed', 'Generation completed.');
     }
   } catch (e) {
@@ -2376,6 +2608,77 @@ function runJob(ctx, project, job, fn) {
   }
   job.updated_at = new Date().toISOString();
   storage.saveProject(ctx.workspace_id, project);
+}
+
+function upsertPromptAsset(project, node, prompt) {
+  const asset = attachGeneratedFrom(prompt, node, project.workflow, project.context_pack, 'prompt');
+  project.assets.prompts = (project.assets.prompts || []).filter((item) => (item.node_id || item.nodeId) !== node.id).concat(asset);
+  return asset;
+}
+
+function upsertChecklistAsset(project, node, checklist) {
+  const asset = attachGeneratedFrom(checklist, node, project.workflow, project.context_pack, 'checklist');
+  project.assets.checklists = (project.assets.checklists || []).filter((item) => (item.node_id || item.nodeId) !== node.id).concat(asset);
+  return asset;
+}
+
+function runRetryableJob(ctx, project, original, progress) {
+  if (!RETRYABLE_JOB_TYPES.has(original.type)) {
+    throw new Error(`JOB_RETRY_UNSUPPORTED: ${original.type} cannot be retried from persisted input yet.`);
+  }
+  if (original.type === 'summarize_context_pack') {
+    progress('analyzing_context', 'Rebuilding Context Pack summary from the persisted snapshot.');
+    project.context_pack.summary = buildContextPackSummary(project);
+    project.context_pack.updated_at = new Date().toISOString();
+    storage.saveProject(ctx.workspace_id, project);
+    return { type: 'context_pack_summary', project_id: project.id, context_pack_version: project.context_pack.version || 1 };
+  }
+  if (original.type === 'generate_prompt') {
+    const nodeId = original.input_snapshot?.node_id || original.input_snapshot?.node?.id;
+    const node = (project.workflow.nodes || []).find((item) => item.id === nodeId);
+    if (!node) throw new Error(`NODE_NOT_FOUND: Cannot retry prompt generation for missing node ${nodeId}`);
+    progress('calling_model', 'Regenerating prompt from node contract.');
+    const prompt = generatePrompt(node, { workflow: project.workflow, contextPack: project.context_pack, model: getModelStatus().prompt_model });
+    if (!prompt) throw new Error('HUMAN_ONLY_NO_PROMPT: Human-only node cannot generate AI prompt.');
+    const asset = upsertPromptAsset(project, node, prompt);
+    project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
+    storage.saveProject(ctx.workspace_id, project);
+    return { type: 'prompt_asset', asset_id: asset.id };
+  }
+  if (original.type === 'generate_checklist') {
+    const nodeId = original.input_snapshot?.node_id || original.input_snapshot?.node?.id;
+    const node = (project.workflow.nodes || []).find((item) => item.id === nodeId);
+    if (!node) throw new Error(`NODE_NOT_FOUND: Cannot retry checklist generation for missing node ${nodeId}`);
+    progress('calling_model', 'Regenerating checklist from review gate.');
+    const checklist = generateChecklist(node.review_gate, node, { workflow: project.workflow, contextPack: project.context_pack });
+    const asset = upsertChecklistAsset(project, node, checklist);
+    project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
+    storage.saveProject(ctx.workspace_id, project);
+    return { type: 'checklist_asset', asset_id: asset.id };
+  }
+  if (original.type === 'generate_execution_kit_preview') {
+    progress('generating_files', 'Regenerating Execution Kit preview files.');
+    const kitType = original.input_snapshot?.kit_type || original.input_snapshot?.kitType || 'draft';
+    const validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    project.validation = validation;
+    const kit = generateExecutionKit(project.workflow, project.assets, validation, { kit_type: kitType });
+    project.execution_kit = exportExecutionKit(kit);
+    storage.saveProject(ctx.workspace_id, project);
+    return { type: 'execution_kit_preview', project_id: project.id, kit_type: kit.kit_type };
+  }
+  if (original.type === 'generate_execution_kit') {
+    progress('generating_files', 'Regenerating Execution Kit files.');
+    const kitType = original.input_snapshot?.kit_type || original.input_snapshot?.kitType || 'draft';
+    const validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    project.validation = validation;
+    const kit = generateExecutionKit(project.workflow, project.assets, validation, { kit_type: kitType });
+    if (kitType === 'final' && !kit.canExportFinal) throw new Error('FINAL_KIT_BLOCKED: Final Kit cannot be generated while blocking validation errors exist.');
+    const rec = { id: `kit_${Date.now()}`, project_id: project.id, workspace_id: project.workspace_id, created_by: ctx.user_id, updated_by: ctx.user_id, workflow_snapshot_version: project.workflow.version, status: kit.kit_type === 'final' ? 'generated_final' : 'generated', kit_type: kit.kit_type, files: kit.files, validation_summary: kit.validation_summary, generated_at: new Date().toISOString(), input_snapshot: { workflow_version: project.workflow.version } };
+    project.execution_kits = (project.execution_kits || []).concat(rec);
+    storage.saveProject(ctx.workspace_id, project);
+    return { type: 'execution_kit', kit_id: rec.id };
+  }
+  throw new Error(`JOB_RETRY_UNSUPPORTED: ${original.type}`);
 }
 
 const server = createServer(async (req, res) => {
@@ -2550,7 +2853,7 @@ const server = createServer(async (req, res) => {
     if (method === 'GET') return ok(res, ctx, project.context_pack || project.contextPack || {});
     if (method === 'PUT') {
       const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
-      project.context_pack = { ...(project.context_pack || {}), ...body, updated_at: new Date().toISOString(), version: ((project.context_pack?.version) || 0) + 1 };
+      project.context_pack = { ...(project.context_pack || {}), ...normalizeContextPackPatch(body), updated_at: new Date().toISOString(), version: ((project.context_pack?.version) || 0) + 1 };
       project.updated_by = ctx.user_id; project.updated_at = new Date().toISOString(); storage.saveProject(ctx.workspace_id, project); return ok(res, ctx, project.context_pack);
     }
   }
@@ -2559,17 +2862,24 @@ const server = createServer(async (req, res) => {
   if (method === 'POST' && cpSumm) {
     const project = getProject(ctx, cpSumm[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     const job = createJob(ctx, project, 'summarize_context_pack', { context_pack: structuredClone(project.context_pack || {}) }, readIdempotencyKey(req));
-    runJob(ctx, project, job, (progress) => { progress('calling_model', 'Summarizing context pack'); project.context_pack.summary = { recognized_roles: project.context_pack.team_roles || [], risk_warnings: ['mock_summary_warning'] }; return { type: 'context_pack_summary', project_id: project.id }; });
-    return ok(res, ctx, { job_id: job.id, status: job.status, output_ref: job.output_ref });
+    runJob(ctx, project, job, (progress) => {
+      progress('analyzing_context', 'Summarizing roles, approvals, risks, and security boundaries.');
+      project.context_pack.summary = buildContextPackSummary(project);
+      project.context_pack.updated_at = new Date().toISOString();
+      return { type: 'context_pack_summary', project_id: project.id, context_pack_version: project.context_pack.version || 1 };
+    });
+    return ok(res, ctx, { job_id: job.id, status: job.status, output_ref: job.output_ref, summary: project.context_pack.summary, context_pack: project.context_pack });
   }
   const cpImpact = path.match(/^\/api\/projects\/([^/]+)\/context-pack\/refresh-impact$/);
   if (method === 'POST' && cpImpact) {
     const project = getProject(ctx, cpImpact[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
     recordUndoSnapshot(ctx, project, 'context_refresh');
+    const impact = deriveContextPackImpact(project, { markAssets: true });
+    project.context_pack.impact_analysis = impact;
     project.workflow = applyWorkflowPatch(project.workflow, { context_pack_version: project.context_pack?.version || 1 });
     project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
     storage.saveProject(ctx.workspace_id, project);
-    return ok(res, ctx, { affected_nodes: [], affected_assets: [], note: 'skeleton', workflow_version: project.workflow.version });
+    return ok(res, ctx, { ...impact, workflow_version: project.workflow.version, context_pack: project.context_pack, validation_results: project.validation });
   }
 
   const wfRoute = path.match(/^\/api\/projects\/([^/]+)\/workflow$/);
@@ -2698,11 +3008,11 @@ const server = createServer(async (req, res) => {
     const job = createJob(ctx, project, 'generate_prompt', { node_id: node.id, node: structuredClone(node) }, readIdempotencyKey(req));
     runJob(ctx, project, job, (progress) => {
       progress('calling_model', 'Generating prompt');
-      const prompt = generatePrompt(node);
-      project.assets.prompts = project.assets.prompts.filter((p) => p.nodeId !== node.id).concat(prompt);
+      const prompt = generatePrompt(node, { workflow: project.workflow, contextPack: project.context_pack, model: getModelStatus().prompt_model });
+      const asset = upsertPromptAsset(project, node, prompt);
       project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
       storage.saveProject(ctx.workspace_id, project);
-      return { type: 'prompt_asset', asset_id: prompt.id };
+      return { type: 'prompt_asset', asset_id: asset.id };
     });
     return ok(res, ctx, { job_id: job.id, status: job.status });
   }
@@ -2714,11 +3024,11 @@ const server = createServer(async (req, res) => {
     const job = createJob(ctx, project, 'generate_checklist', { node_id: node.id, review_gate: structuredClone(node.reviewGate || {}) }, readIdempotencyKey(req));
     runJob(ctx, project, job, (progress) => {
       progress('calling_model', 'Generating checklist');
-      const checklist = generateChecklist(node.reviewGate, node);
-      project.assets.checklists = project.assets.checklists.filter((c) => c.nodeId !== node.id).concat(checklist);
+      const checklist = generateChecklist(node.review_gate || node.reviewGate, node, { workflow: project.workflow, contextPack: project.context_pack });
+      const asset = upsertChecklistAsset(project, node, checklist);
       project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
       storage.saveProject(ctx.workspace_id, project);
-      return { type: 'checklist_asset', asset_id: checklist.id };
+      return { type: 'checklist_asset', asset_id: asset.id };
     });
     return ok(res, ctx, { job_id: job.id, status: job.status });
   }
@@ -3311,9 +3621,37 @@ const server = createServer(async (req, res) => {
   const assetRegen = path.match(/^\/api\/projects\/([^/]+)\/assets\/([^/]+)\/regenerate$/);
   if (method === 'POST' && assetRegen) {
     const project = getProject(ctx, assetRegen[1]); if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
-    const prompt = project.assets.prompts.find((p) => p.id === assetRegen[2]);
-    if (prompt?.manually_edited) return fail(res, ctx, 400, 'ASSET_MANUAL_EDIT_WARNING', 'Prompt was manually edited, confirm before regenerate');
-    return ok(res, ctx, { regenerated: true, warning: null });
+    const assetId = assetRegen[2];
+    const prompt = (project.assets.prompts || []).find((p) => p.id === assetId);
+    const checklist = (project.assets.checklists || []).find((c) => c.id === assetId);
+    const template = (project.assets.artifact_templates || project.assets.artifactTemplates || []).find((t) => t.id === assetId);
+    const asset = prompt || checklist || template;
+    if (!asset) return fail(res, ctx, 404, 'ASSET_NOT_FOUND', 'Asset not found');
+    if (asset.manually_edited) return fail(res, ctx, 400, 'ASSET_MANUAL_EDIT_WARNING', 'Asset was manually edited, confirm before regenerate');
+    const nodeId = asset.node_id || asset.nodeId;
+    const node = (project.workflow.nodes || []).find((item) => item.id === nodeId);
+    if (!node) return fail(res, ctx, 404, 'NODE_NOT_FOUND', 'Asset node not found');
+    let regenerated;
+    if (prompt) {
+      regenerated = upsertPromptAsset(project, node, generatePrompt(node, { workflow: project.workflow, contextPack: project.context_pack, model: getModelStatus().prompt_model }));
+    } else if (checklist) {
+      regenerated = upsertChecklistAsset(project, node, generateChecklist(node.review_gate || node.reviewGate, node, { workflow: project.workflow, contextPack: project.context_pack }));
+    } else {
+      regenerated = attachGeneratedFrom({
+        ...template,
+        content: `# ${node.name}\n\n## Goal\n${node.goal}\n\n## Required Output\n- ${(node.outputs || []).join('\n- ')}`,
+        status: 'draft',
+        outdated_reason: '',
+        outdatedReason: '',
+        updated_at: new Date().toISOString(),
+      }, node, project.workflow, project.context_pack, 'artifact_template');
+      const templates = (project.assets.artifact_templates || project.assets.artifactTemplates || []).map((item) => (item.id === assetId ? regenerated : item));
+      project.assets.artifact_templates = templates;
+      project.assets.artifactTemplates = templates;
+    }
+    project.validation = validateRulesWorkflow(project.workflow, project.assets, { forGeneration: false, modelConfig: {} });
+    storage.saveProject(ctx.workspace_id, project);
+    return ok(res, ctx, { regenerated: true, asset: regenerated, assets: project.assets, validation_results: project.validation });
   }
 
   const kitPreview = path.match(/^\/api\/projects\/([^/]+)\/execution-kits\/preview$/);
@@ -3325,6 +3663,7 @@ const server = createServer(async (req, res) => {
     const job = createJob(ctx, project, 'generate_execution_kit_preview', { workflow: structuredClone(project.workflow), assets: structuredClone(project.assets), kit_type: body.kit_type || 'draft' }, readIdempotencyKey(req));
     runJob(ctx, project, job, (progress) => { progress('generating_files', 'Generating preview files'); return { type: 'execution_kit_preview', project_id: project.id }; });
     const preview = exportExecutionKit(generateExecutionKit(project.workflow, project.assets, validation, { kit_type: body.kit_type || 'draft' }));
+    project.execution_kit = preview;
     storage.saveProject(ctx.workspace_id, project);
     return ok(res, ctx, { job_id: job.id, preview, execution_kit: preview, validation_results: validation });
   }
@@ -3428,8 +3767,9 @@ const server = createServer(async (req, res) => {
     const original = project.generation_jobs.find((j) => j.id === jobsRetry[2]);
     if (!original) return fail(res, ctx, 404, 'JOB_NOT_FOUND', 'Job not found');
     if (!original.input_snapshot) return fail(res, ctx, 400, 'JOB_NOT_RETRYABLE', 'Job has no input snapshot');
+    if (!RETRYABLE_JOB_TYPES.has(original.type)) return fail(res, ctx, 400, 'JOB_NOT_RETRYABLE', `${original.type} jobs cannot be retried from persisted input yet.`);
     const retried = createJob(ctx, project, original.type, structuredClone(original.input_snapshot), null, original.id);
-    runJob(ctx, project, retried, () => ({ type: 'retry_placeholder', source_job_id: original.id }));
+    runJob(ctx, project, retried, (progress) => runRetryableJob(ctx, project, original, progress));
     return ok(res, ctx, retried);
   }
   const jobsCancel = path.match(/^\/api\/projects\/([^/]+)\/jobs\/([^/]+)\/cancel$/);

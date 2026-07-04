@@ -8,7 +8,7 @@ import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/di
 import { validateAgentExecutionPlan, validateBoundaryMLProjectSpec, validateNode, validateSandboxExecutionContract, validateTemplate } from '../packages/schema/src/schema.js';
 import { FileStorage } from '../packages/storage/src/fileStorage.js';
 import { exportExampleExecutionKit } from './export-example.js';
-import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus } from '../packages/core/src/engine.js';
+import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus, markAffectedAssetsOutdated } from '../packages/core/src/engine.js';
 import './studio-workflow-edit-check.js';
 
 function assert(condition, message) {
@@ -78,6 +78,9 @@ async function main() {
   assert((legacySpec.workflow.nodes || []).some((node) => node.agent_execution_plan?.execution_level === 'L2'), 'legacy modernization example should include conservative L2 Agent planning');
   assert((internalToolSpec.workflow.nodes || []).length >= 6, 'internal tool example should include generated workflow nodes');
   assert((legacySpec.assets.prompts || []).length >= 1, 'legacy modernization example should include generated assets');
+  assert((exampleSpec.assets.prompts || []).every((asset) => asset.generated_from?.node_id && asset.generated_from?.workflow_version), 'example prompts should link generated_from node and workflow version');
+  assert((exampleSpec.assets.checklists || []).every((asset) => asset.generated_from?.node_id && asset.generated_from?.workflow_version), 'example checklists should link generated_from node and workflow version');
+  assert((exampleSpec.assets.artifact_templates || []).every((asset) => asset.generated_from?.node_id && asset.generated_from?.workflow_version), 'example artifact templates should link generated_from node and workflow version');
   assert(validSpec.warnings.length >= 1, 'example spec should contain at least one warning');
   assert(validSpec.suggestions.length >= 1, 'validateBoundaryMLProjectSpec should return suggestion');
 
@@ -144,6 +147,8 @@ async function main() {
   const coreAgentDiffApplied = applyDiff(project.workflow, agenticDiff, agenticDiff.changes.filter((c) => c.selected).map((c) => c.id));
   const appliedAgentNode = coreAgentDiffApplied.nodes.find((node) => node.agent_execution_plan?.execution_level === 'L3' && node.sandbox_execution_contract);
   assert(Boolean(appliedAgentNode), 'core applyDiff should apply Agent / Sandbox node fields');
+  const staleAssets = markAffectedAssetsOutdated([{ target_type: 'node', target_id: project.assets.prompts[0].nodeId || project.assets.prompts[0].node_id }], project.assets);
+  assert(staleAssets.prompts.some((asset) => asset.status === 'outdated' && asset.generated_from?.stale === true), 'core diff should mark affected generated assets stale');
 
   const validation = validateWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
   const status = calculateWorkflowValidationStatus(validation);
