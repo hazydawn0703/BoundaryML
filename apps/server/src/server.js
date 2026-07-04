@@ -1,6 +1,8 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { applyWorkflowPatch, applyDiff, createWorkflowSnapshot, markAffectedAssetsOutdated, normalizeWorkflowSpec } from '../../../packages/core/src/engine.js';
 import { getTemplateById, listPublicTemplates, selectTemplateForProject } from '../../../packages/core/src/templates.js';
 import { generatePrompt } from '../../../packages/generators/src/promptGenerator.js';
@@ -20,16 +22,22 @@ import { detectSchemaVersion, migrateObjectIfNeeded } from '../../../packages/sc
 const port = Number(process.env.BOUNDARYML_SERVER_PORT || process.env.PORT || 8787);
 const runtimeMode = 'local_server';
 const storageAdapter = process.env.BOUNDARYML_STORAGE_ADAPTER || process.env.STORAGE_MODE || 'file';
-const dataDir = process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || './data';
+const repoRoot = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
+const defaultDataDir = resolve(repoRoot, 'data');
+const dataDir = process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || defaultDataDir;
 if (storageAdapter === 'file') mkdirSync(dataDir, { recursive: true });
 const storage = storageAdapter === 'file' ? new FileStorage(dataDir) : new MemoryStorage();
 const ACTIVE_JOB_STATUS = new Set(['queued', 'running', 'succeeded']);
 const RETRYABLE_JOB_TYPES = new Set(['summarize_context_pack', 'generate_prompt', 'generate_checklist', 'generate_execution_kit_preview', 'generate_execution_kit']);
+const AI_EXECUTION_MODES = new Set(['human_lead_ai_assist', 'ai_draft_human_review', 'ai_execute_human_approval', 'ai_autonomous']);
+function readJsonFile(filePath) {
+  return JSON.parse(readFileSync(filePath, 'utf-8').replace(/^\uFEFF/, ''));
+}
 const modelCallsPath = `${dataDir}/model-calls.json`;
 function loadModelCalls() {
   if (storageAdapter !== 'file' || !existsSync(modelCallsPath)) return [];
   try {
-    const parsed = JSON.parse(readFileSync(modelCallsPath, 'utf-8'));
+    const parsed = readJsonFile(modelCallsPath);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -1263,6 +1271,32 @@ function seedIfEmpty(ctx) {
 function listScopedProjects(ctx) { return storage.listProjects(ctx.workspace_id).filter((p) => !p.deleted_at); }
 function getProject(ctx, projectId) { const p = storage.getProject(ctx.workspace_id, projectId); return (p && !p.deleted_at) ? p : null; }
 
+function projectWorkflowStats(project) {
+  const nodes = Array.isArray(project?.workflow?.nodes) ? project.workflow.nodes : [];
+  return {
+    nodes: nodes.length,
+    ai_nodes: nodes.filter((node) => AI_EXECUTION_MODES.has(node.execution_mode || node.executionMode)).length,
+    gates: nodes.filter((node) => (node.review_gate || node.reviewGate)?.required).length,
+  };
+}
+
+function projectListSummary(project) {
+  const executionKit = project.execution_kit || project.executionKit || null;
+  return {
+    id: project.id,
+    name: project.name,
+    workspace_id: project.workspace_id,
+    project_type: project.project_type || project.type || '',
+    type: project.type || project.project_type || '',
+    risk_level: project.risk_level || project.riskLevel || 'medium',
+    current_stage: project.current_stage || project.currentStage || '',
+    updated_at: project.updated_at,
+    workflow: { status: project.workflow?.status || 'draft' },
+    workflow_stats: projectWorkflowStats(project),
+    execution_kit: executionKit ? { status: executionKit.status || 'generated' } : null,
+  };
+}
+
 function writeOwnership(ctx, obj, isCreate = false) {
   const now = new Date().toISOString();
   return { ...obj, workspace_id: ctx.workspace_id, created_by: isCreate ? ctx.user_id : (obj.created_by || ctx.user_id), updated_by: ctx.user_id, created_at: isCreate ? now : (obj.created_at || now), updated_at: now, boundaryml_version: obj.boundaryml_version || 'v0.1', schema_version: obj.schema_version || 'boundaryml-schema-v0.1' };
@@ -2165,7 +2199,7 @@ function buildProjectCreationSession(ctx, requestText, patch = {}) {
 function loadProjectCreationSessions() {
   if (storageAdapter !== 'file' || !existsSync(projectCreationSessionsPath)) return;
   try {
-    const raw = JSON.parse(readFileSync(projectCreationSessionsPath, 'utf-8'));
+    const raw = readJsonFile(projectCreationSessionsPath);
     const sessions = Array.isArray(raw?.sessions) ? raw.sessions : [];
     projectCreationSessions.clear();
     sessions
@@ -2697,7 +2731,7 @@ const server = createServer(async (req, res) => {
     return ok(res, ctx, template);
   }
 
-  if (method === 'GET' && path === '/api/projects') return ok(res, ctx, listScopedProjects(ctx).map((p) => ({ id: p.id, name: p.name, workspace_id: p.workspace_id, updated_at: p.updated_at })));
+  if (method === 'GET' && path === '/api/projects') return ok(res, ctx, listScopedProjects(ctx).map(projectListSummary));
 
   if (method === 'POST' && path === '/api/project-agent/messages') {
     const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');

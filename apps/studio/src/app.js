@@ -390,6 +390,124 @@ const ZH_HANS_REPLACEMENTS = [
   ['n/a', '不适用'],
   ['missing', '缺失'],
   ['complete', '完成'],
+  ['N/A', '不适用'],
+  ['risk', '风险'],
+  ['not generated', '未生成'],
+  ['Close History', '关闭历史'],
+  ['Close', '关闭'],
+  ['Save Current Version', '保存当前版本'],
+  ['View Version', '查看版本'],
+  ['Restore', '恢复'],
+  ['No saved versions yet', '暂无保存的版本'],
+  ['No history yet', '暂无历史'],
+  ['Filters', '筛选'],
+  ['Refresh', '刷新'],
+  ['Refresh Jobs', '刷新任务'],
+  ['Refresh Impact', '刷新影响'],
+  ['Impact Analysis', '影响分析'],
+  ['Affected nodes', '受影响节点'],
+  ['Affected assets', '受影响资产'],
+  ['Context version', '上下文版本'],
+  ['Security Boundary', '安全边界'],
+  ['Secrets', '密钥'],
+  ['Network', '网络'],
+  ['Agent boundary', 'Agent 边界'],
+  ['In', '输入'],
+  ['Out', '输出'],
+  ['Preview phase', '预览阶段'],
+  ['Preview node from AI diff', '来自 AI Diff 的预览节点'],
+  ['No preview yet.', '暂无预览。'],
+  ['Saving...', '正在保存...'],
+  ['Saved', '已保存'],
+  ['Failed', '失败'],
+  ['Model configuration saved.', '模型配置已保存。'],
+  ['Model test completed.', '模型测试完成。'],
+  ['Model test failed.', '模型测试失败。'],
+  ['Model status refreshed.', '模型状态已刷新。'],
+  ['Asset copied to clipboard.', '资产已复制到剪贴板。'],
+  ['Asset edited', '资产已编辑'],
+  ['Execution kit preview generated', '执行包预览已生成'],
+  ['Execution kit generated', '执行包已生成'],
+  ['Select at least one diff change to apply.', '请至少选择一个 Diff 变更后再应用。'],
+  ['No active edit session to continue.', '没有可继续的编辑会话。'],
+  ['Failed to load history', '加载历史失败'],
+  ['Failed to save context pack', '保存上下文包失败'],
+  ['Failed to refresh context summary', '刷新上下文摘要失败'],
+  ['Failed to refresh context impact', '刷新上下文影响失败'],
+  ['Failed to refresh jobs', '刷新任务失败'],
+  ['Failed to cancel job', '取消任务失败'],
+  ['Failed to retry job', '重试任务失败'],
+  ['Failed to rename project', '重命名项目失败'],
+  ['Failed to delete project', '删除项目失败'],
+  ['Failed to add phase', '添加阶段失败'],
+  ['Failed to rename phase', '重命名阶段失败'],
+  ['Failed to delete phase', '删除阶段失败'],
+  ['Failed to add node', '添加节点失败'],
+  ['Failed to delete node', '删除节点失败'],
+  ['Failed to update prompt content', '更新提示词内容失败'],
+  ['Failed to edit asset prompt', '编辑资产提示词失败'],
+  ['Failed to save model configuration', '保存模型配置失败'],
+  ['Failed to test model configuration', '测试模型配置失败'],
+  ['Failed to start a new conversation.', '开启新对话失败。'],
+  ['Server disconnected', '服务已断开'],
+  ['Artifact contract updated', '产物契约已更新'],
+  ['Review gate updated', '审核门禁已更新'],
+  ['Review gate changed', '审核门禁已变更'],
+  ['Execution mode updated', '执行模式已更新'],
+  ['Execution mode recommended by mock model', '已由 Mock 模型推荐执行模式'],
+  ['Diff applied', 'Diff 已应用'],
+  ['Added manually', '手动添加'],
+  ['Describe node goal', '描述节点目标'],
+  ['Base Branch', '基准分支'],
+  ['Working Branch', '工作分支'],
+  ['Repository Scope', '仓库范围'],
+  ['Repository', '仓库'],
+  ['Allowed Paths', '允许路径'],
+  ['Forbidden Paths', '禁止路径'],
+  ['Runtime Scope', '运行时范围'],
+  ['Allowed Commands', '允许命令'],
+  ['Network Policy', '网络策略'],
+  ['External network approved', '外部网络已批准'],
+  ['Package Install Policy', '包安装策略'],
+  ['Max Runtime Minutes', '最长运行分钟数'],
+  ['Secrets, Cost, Tests', '密钥、成本、测试'],
+  ['Secret Policy', '密钥策略'],
+  ['Allowed Secret Refs', '允许密钥引用'],
+  ['Cost Budget', '成本预算'],
+  ['Required Tests', '必需测试'],
+  ['Optional Tests', '可选测试'],
+  ['Output Evidence', '输出证据'],
+  ['Review Gate Link', '审核门禁链接'],
+  ['Promotion Policy', '晋级策略'],
+  ['Target Environment', '目标环境'],
+  ['Promotion Gates', '晋级门禁'],
+  ['Human approval required', '需要人工批准'],
+  ['Block on forbidden paths', '遇到禁止路径时阻断'],
+  ['Agent can update formal Workflow', 'Agent 可更新正式工作流'],
+  ['Production auto deploy allowed', '允许生产自动部署'],
+  ['Promotion Gate / Evidence', '晋级门禁 / 证据'],
+  ['Promotion Gate Type', '晋级门禁类型'],
+  ['Required Checks', '必需检查'],
+  ['Gate requires human approval', '门禁需要人工批准'],
+  ['Agent auto promote allowed', '允许 Agent 自动晋级'],
+  ['Evidence Template', '证据模板'],
+  ['Failure Handling', '失败处理'],
+  ['On Failure', '失败时处理'],
+  ['Rollback required', '需要回滚'],
+  ['Dispatch Mode', '派发模式'],
+  ['Execution Target', '执行目标'],
+  ['LLM repaired changes', 'LLM 修复后的变更'],
+  ['Deterministic repaired changes', '确定性修复后的变更'],
+  ['Deterministic repair after mock model', 'Mock 模型后的确定性修复'],
+  ['Deterministic repair after empty model response', '模型空响应后的确定性修复'],
+  ['Deterministic replanned changes', '确定性重规划后的变更'],
+  ['LLM replanned changes', 'LLM 重规划后的变更'],
+  ['Deterministic replan after mock model', 'Mock 模型后的确定性重规划'],
+  ['Deterministic replan after empty model response', '模型空响应后的确定性重规划'],
+  ['Deterministic replan after model failure', '模型失败后的确定性重规划'],
+  ['Structured slot fallback', '结构化槽位兜底'],
+  ['Paste API key', '粘贴 API key'],
+  ['Structured Output', '结构化输出'],
 ];
 
 const TRANSLATION_SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'PRE', 'CODE']);
@@ -495,7 +613,15 @@ function commitWorkflowViewport(viewport, delay = 0) {
 }
 
 function countProjectStats(project) {
-  const nodes = project.workflow?.nodes || [];
+  const nodes = project.workflow?.nodes || null;
+  const summary = project.workflowStats || project.workflow_stats || {};
+  if (!Array.isArray(nodes)) {
+    return {
+      nodes: Number(project.nodeCount ?? project.node_count ?? summary.nodes ?? summary.nodeCount ?? 0),
+      aiNodes: Number(project.aiNodeCount ?? project.ai_node_count ?? summary.aiNodes ?? summary.ai_nodes ?? 0),
+      gates: Number(project.reviewGateCount ?? project.review_gate_count ?? summary.gates ?? summary.reviewGates ?? summary.review_gates ?? 0),
+    };
+  }
   return {
     nodes: nodes.length,
     aiNodes: nodes.filter((node) => EXECUTION_MODES[node.executionMode]?.ai).length,
@@ -613,7 +739,7 @@ function renderTopbar(state) {
   const languageSwitcher = `<label class="language-switcher"><span>Language</span><select data-action="set-language" aria-label="Language">${Object.entries(UI_LANGUAGES).map(([id, label]) => `<option value="${id}" ${language === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
   const canGenerateExecutionKit = Boolean(project?.id) && ['context', 'studio', 'assets', 'export'].includes(state.currentPage);
   const executionKitAction = canGenerateExecutionKit ? '<button class="primary" data-action="goto" data-page="export">Generate Execution Kit</button>' : '';
-  const studioActions = isStudioPage ? `${renderCanvasTool('toggle-history', 'History', ICONS.history)}${renderCanvasTool('validate', 'Validate', ICONS.validate)}` : '';
+  const studioActions = isStudioPage ? `${renderCanvasTool('toggle-history', 'History', ICONS.history, Boolean(state.workflowHistoryOpen))}${renderCanvasTool('validate', 'Validate', ICONS.validate)}` : '';
   const backAction = isStudioPage ? `<button class="topbar-back" data-action="goto" data-page="projects" aria-label="Back to Projects"><span class="canvas-tool-icon">${ICONS.back}</span><span>Back</span></button>` : '';
   return `<header class="topbar">${backAction}<div class="topbar-title"><h1>${title}${titleBadge}</h1><p>${subtitle}</p></div>
   <div class="row">${studioActions}${runtimeBadge}${languageSwitcher}${executionKitAction}</div></header>`;
@@ -627,9 +753,41 @@ function renderProjects(state) {
   <div data-project-results>${renderProjectGrid(state)}</div></section>`;
 }
 
+function normalizeProjectSearchValue(value) {
+  return String(value ?? '').normalize('NFKC').toLocaleLowerCase();
+}
+
+function projectSearchFields(project, language = 'en') {
+  const fields = [
+    project.name,
+    project.project_name,
+    project.projectName,
+    project.goal,
+    project.project_type,
+    project.type,
+    project.current_stage,
+    project.currentStage,
+    project.workflow?.status,
+    project.execution_kit?.status,
+    project.executionKit?.status,
+  ].filter((field) => field !== undefined && field !== null);
+  const languages = new Set([language, 'zh-Hans']);
+  return fields.flatMap((field) => {
+    const raw = String(field);
+    return [raw, ...[...languages].map((lang) => translateText(raw, lang))];
+  });
+}
+
+function projectMatchesSearch(project, query, language = 'en') {
+  const normalizedQuery = normalizeProjectSearchValue(query).trim();
+  if (!normalizedQuery) return true;
+  return projectSearchFields(project, language)
+    .some((field) => normalizeProjectSearchValue(field).includes(normalizedQuery));
+}
+
 function renderProjectGrid(state) {
-  const query = (state.projectSearch || '').trim().toLowerCase();
-  const projects = query ? state.projects.filter((project) => String(project.name || '').toLowerCase().includes(query)) : state.projects;
+  const query = (state.projectSearch || '').trim();
+  const projects = query ? state.projects.filter((project) => projectMatchesSearch(project, query, state.language || 'en')) : state.projects;
   if (!projects.length) return '<div class="card panel"><p>No projects match your search.</p></div>';
   return `<div class="project-grid">${projects.map((project) => {
     const stats = countProjectStats(project);
@@ -638,7 +796,7 @@ function renderProjectGrid(state) {
       <div class="kv-row"><span>Nodes ${stats.nodes}</span><span>AI ${stats.aiNodes}</span><span>Gates ${stats.gates}</span></div>
       <div class="kv-row"><span>Stage</span><strong>${project.current_stage || project.currentStage || 'n/a'}</strong></div>
       <div class="kv-row"><span>Execution Kit</span><strong>${project.execution_kit?.status || project.executionKit?.status || 'not generated'}</strong></div>
-      <div class="actions"><button data-action="open-project" data-project-id="${project.id}">Open Studio</button><button data-action="open-project-page" data-page="context" data-project-id="${project.id}">Context Management</button><button data-action="open-project-page" data-page="assets" data-project-id="${project.id}">Execution Assets</button></div></article>`;
+      <div class="actions"><button class="primary" data-action="open-project" data-project-id="${project.id}">Open Studio</button><button data-action="open-project-page" data-page="context" data-project-id="${project.id}">Context Management</button><button data-action="open-project-page" data-page="assets" data-project-id="${project.id}">Execution Assets</button></div></article>`;
   }).join('')}</div>`;
 }
 
@@ -1017,8 +1175,8 @@ function renderNodeDetail(state, project, node) {
   return `<article class="card panel"><h3>Node Detail</h3><div class="tabs">${tabNav}</div><div class="tab-body">${body[tab]}</div></article>`;
 }
 
-function renderCanvasTool(action, label, icon) {
-  return `<button class="canvas-tool-button" data-action="${action}" aria-label="${label}" title="${label}"><span class="canvas-tool-icon">${icon}</span><span class="canvas-tool-tip">${label}</span></button>`;
+function renderCanvasTool(action, label, icon, active = false) {
+  return `<button class="canvas-tool-button ${active ? 'active' : ''}" data-action="${action}" aria-label="${label}" title="${label}" aria-expanded="${active ? 'true' : 'false'}"><span class="canvas-tool-icon">${icon}</span><span class="canvas-tool-tip">${label}</span></button>`;
 }
 
 function renderWorkflowCanvasTools(viewport) {
@@ -1078,16 +1236,17 @@ function renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewpo
   </div>`;
 }
 
+function renderWorkflowHistoryModal(state) {
+  const history = state.workflowHistory || [];
+  return `<div class="workflow-history-backdrop"><div class="workflow-history-panel card panel" role="dialog" aria-modal="true" aria-label="History"><div class="toolbar"><h3>History</h3><div class="row"><button data-action="save-workflow-history">Save Current Version</button><button class="icon-button" data-action="close-history" aria-label="Close History" title="Close">${ICONS.close}</button></div></div><ul>${history.length ? history.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('') : '<li>No saved versions yet</li>'}</ul></div></div>`;
+}
+
 function renderStudio(state) {
   const project = getActiveProject(state);
   if (!hasProjectRuntime(project)) return renderProjectLoading(state, 'Loading Studio');
   const nodes = filteredNodes(state, project);
   const viewport = getWorkflowViewport(state);
   const selectedNode = (project.workflow.nodes || []).find((node) => node.id === state.selectedNodeId) || null;
-  const historyOpen = state.workflowHistoryOpen || (state.workflowHistory || []).length > 0;
-  const historyPanel = historyOpen
-    ? `<div class="workflow-history-panel card panel"><div class="toolbar"><h3>History</h3><button data-action="save-workflow-history">Save Current Version</button></div><ul>${(state.workflowHistory || []).length ? state.workflowHistory.slice().reverse().map((h) => `<li>v${h.version} · ${h.created_at || h.createdAt || ''} · ${h.change_source || h.changeSource || ''} · ${h.summary || ''} · ${h.created_by || h.createdBy || ''} ${h.diff_id ? `· diff:${h.diff_id}` : ''}<div class="row"><button data-action="view-version" data-version="${h.version}">View Version</button><button data-action="restore-version" data-version="${h.version}">Restore</button></div></li>`).join('') : '<li>No saved versions yet</li>'}</ul></div>`
-    : '';
   const emptyWorkflow = (project.workflow.nodes || []).length === 0;
 
   return `<section class="page studio-page">
@@ -1097,7 +1256,6 @@ function renderStudio(state) {
       ${renderWorkflowCanvasTools(viewport)}
       ${renderWorkflowCanvasFilters(state)}
       ${renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport)}
-      ${historyPanel}
       ${renderAiEdit(state, project, selectedNode)}
       ${renderAiComposer(state, project, selectedNode)}
       ${selectedNode ? `<div class="workflow-detail">${renderNodeDetail(state, project, selectedNode)}</div>` : ''}
@@ -1769,8 +1927,9 @@ function render() {
   const isStudioPage = state.currentPage === 'studio';
   const isCreatePage = state.currentPage === 'create';
   const theme = UI_THEMES[state.theme] ? state.theme : 'open-source';
+  const historyLayer = isStudioPage && state.workflowHistoryOpen ? renderWorkflowHistoryModal(state) : '';
   document.documentElement.dataset.theme = theme;
-  app.innerHTML = `<div class="app-shell ${isStudioPage ? 'studio-shell' : ''} ${isCreatePage ? 'create-shell' : ''}" data-theme="${theme}">${isStudioPage ? '' : renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${renderToasts(state)}`;
+  app.innerHTML = `<div class="app-shell ${isStudioPage ? 'studio-shell' : ''} ${isCreatePage ? 'create-shell' : ''}" data-theme="${theme}">${isStudioPage ? '' : renderSidebar(state)}<div class="main">${renderTopbar(state)}<main>${renderPage(state)}</main></div></div>${historyLayer}${renderToasts(state)}`;
   localizeDom(state.language || 'en');
   autoResizeAiComposer();
   ensureFieldSaveIndicators();
@@ -1797,8 +1956,9 @@ function setFieldSaveStatus(element, status) {
   const label = element?.closest?.('label');
   const target = label?.querySelector(':scope > .field-save-status') || app.querySelector(`.field-save-status[data-save-key="${CSS.escape(key)}"]`);
   if (!target) return;
+  const language = getState().language || 'en';
   target.className = `field-save-status ${status}`;
-  target.textContent = status === 'saving' ? 'Saving...' : (status === 'saved' ? 'Saved' : (status === 'failed' ? 'Failed' : ''));
+  target.textContent = translateText(status === 'saving' ? 'Saving...' : (status === 'saved' ? 'Saved' : (status === 'failed' ? 'Failed' : '')), language);
 }
 
 function refreshSidebar() {
@@ -1882,7 +2042,17 @@ function refreshWorkflowSummary() {
   if (!summary) return;
   const errors = state.validationResults.filter((x) => x.level === 'error').length;
   const warnings = state.validationResults.filter((x) => x.level === 'warning').length;
-  summary.textContent = `Validation: ${errors} errors, ${warnings} warnings`;
+  summary.textContent = translateText(`Validation: ${errors} errors, ${warnings} warnings`, state.language || 'en');
+  localizeDom(state.language || 'en');
+}
+
+function refreshTopbar() {
+  const state = getState();
+  const topbar = app.querySelector('.topbar');
+  if (!topbar) return;
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = renderTopbar(state);
+  topbar.replaceWith(wrapper.firstElementChild);
   localizeDom(state.language || 'en');
 }
 
@@ -1970,6 +2140,7 @@ function handleWorkflowPointerDown(event) {
     && !closestElement(event.target, '.workflow-detail')
     && !closestElement(event.target, '.workflow-canvas-tools')
     && !closestElement(event.target, '.workflow-filter-popover')
+    && !closestElement(event.target, '.workflow-history-backdrop')
     && !closestElement(event.target, '.workflow-history-panel')
     && !closestElement(event.target, '.ai-conversation-drawer')
     && !closestElement(event.target, '.ai-composer')
@@ -2114,6 +2285,7 @@ async function loadProjectRuntime(projectId, { navigate = true, projectSummaries
     currentPage: navigate ? 'studio' : prev.currentPage,
     jobs: withCamelAliases(jobsResult.data?.jobs || jobsResult.data || []),
     workflowHistory: withCamelAliases(historyResult.data || []),
+    workflowHistoryOpen: prev.activeProjectId === projectId ? Boolean(prev.workflowHistoryOpen) : false,
     validationResults: withCamelAliases(workflowPayload.validation || workflowPayload.validation_results || prev.validationResults),
     selectedNodeId: merged.workflow?.nodes?.some((node) => node.id === prev.selectedNodeId) ? prev.selectedNodeId : null,
     aiEdit: restoredSession ? { ...prev.aiEdit, open: true, pending: false, diff: restoredDiff ? withCamelAliases(restoredDiff) : null } : prev.aiEdit,
@@ -2303,17 +2475,31 @@ function handleAction(event) {
     const project = getActiveProject();
     if (!project?.id) return;
     apiClient.workflowApi.validate(project.id)
-      .then(({ data }) => setState((prev) => ({ ...prev, validationResults: data.validation || data.results || [] })))
+      .then(({ data }) => {
+        updateUiStateSilently((state) => {
+          state.validationResults = withCamelAliases(data.validation || data.results || []);
+        });
+        refreshTopbar();
+      })
       .catch((error) => setState((prev) => ({ ...prev, serverError: `${error.code || 'VALIDATION_ERROR'} (${error.requestId || 'n/a'}): ${error.message || 'Validation failed'}` })));
+    return;
+  }
+  if (action === 'close-history') {
+    setState((prev) => ({ ...prev, workflowHistoryOpen: false }));
     return;
   }
   if (action === 'toggle-history') {
     const project = getActiveProject();
     if (!project?.id) return;
+    if (getState().workflowHistoryOpen) {
+      setState((prev) => ({ ...prev, workflowHistoryOpen: false }));
+      return;
+    }
     apiClient.workflowApi.history(project.id).then(({ data }) => {
-      const latest = (data || []).slice(-1)[0];
-      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.change_source}` : 'No history yet';
-      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: data || [], workflowHistoryOpen: true }));
+      const history = withCamelAliases(data || []);
+      const latest = history.slice(-1)[0];
+      const msg = latest ? `History latest: v${latest.version} ${latest.summary || latest.changeSource || latest.change_source}` : 'No history yet';
+      setState((prev) => ({ ...prev, serverError: msg, workflowHistory: history, workflowHistoryOpen: true }));
     }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to load history' })));
     return;
   }
@@ -2321,7 +2507,7 @@ function handleAction(event) {
     const project = getActiveProject();
     if (!project?.id) return;
     apiClient.workflowApi.saveHistory(project.id, { workflow_version: project.workflow.version, summary: `Saved workflow version ${project.workflow.version}.` }).then(({ data }) => {
-      setState((prev) => ({ ...prev, serverError: `Saved workflow version ${project.workflow.version}.`, workflowHistory: data.history || [], workflowHistoryOpen: true }));
+      setState((prev) => ({ ...prev, serverError: `Saved workflow version ${project.workflow.version}.`, workflowHistory: withCamelAliases(data.history || []), workflowHistoryOpen: true }));
     }).catch((error) => setState((prev) => ({ ...prev, serverError: error.message || 'Failed to save workflow history' })));
     return;
   }
@@ -3732,6 +3918,11 @@ function handleSubmit(event) {
 }
 
 function handleDocumentOverlayClick(event) {
+  if (closestElement(event.target, '.workflow-history-backdrop') && !closestElement(event.target, '.workflow-history-panel')) {
+    setState((prev) => ({ ...prev, workflowHistoryOpen: false }));
+    return;
+  }
+  if (closestElement(event.target, '.workflow-history-panel')) return;
   if (closestElement(event.target, '.workflow-canvas-tools') || closestElement(event.target, '.workflow-filter-popover')) return;
   closeWorkflowFilters();
   if (closestElement(event.target, '.project-menu-control')) return;

@@ -23,6 +23,7 @@ function initialState() {
     settingsNavOpen: false,
     projectSearch: '',
     jobSearch: '',
+    workflowHistoryOpen: false,
     activeProjectMenuId: null,
     activePhaseRenameId: null,
     studioFilter: { mode: 'all', risk: 'all' },
@@ -42,7 +43,10 @@ function initialState() {
 function loadUiState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const persisted = raw ? JSON.parse(raw) : {};
+    delete persisted.runtimeMode;
+    delete persisted.serverAvailable;
+    return persisted;
   } catch {
     return {};
   }
@@ -61,8 +65,6 @@ function persistUiState() {
     workflowViewport: state.workflowViewport,
     assetsFilter: state.assetsFilter,
     activeNodeDetailTab: state.activeNodeDetailTab,
-    runtimeMode: state.runtimeMode,
-    serverAvailable: state.serverAvailable,
     language: state.language || 'en',
     theme: state.theme || 'open-source',
     projectAgent: {

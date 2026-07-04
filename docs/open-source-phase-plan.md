@@ -32,12 +32,12 @@ BoundaryML Community Core 的目标不是做通用流程图、项目管理工具
 
 ## 2. Current Baseline
 
-当前代码已经完成了 Phase 0-9 的大部分基础链路：
+当前代码已经完成了 Phase 0-9 的开源 Community Core 链路：
 
 - `apps/server` 已提供 Local Server API、FileStorage、Model Access、Project Agent、Workflow Agent、Diff、Assets、Execution Kit、Jobs 和 History 入口；
 - `apps/studio` 已提供 Projects、Create Project Agent、Workflow Canvas、Node Detail、AI Assisted Edit、Execution Assets、Export、Jobs、Settings / Model Access、Theme Settings；
 - `packages/schema`、`packages/core`、`packages/rules`、`packages/generators`、`packages/exporter`、`packages/storage` 已具备 Community Core 的基础模块；
-- 当前 `package-lock.json` 的 workspace link 补齐了 `packages/examples` 和 `packages/exporter`，应作为工程卫生改动进入本规划 PR。
+- 当前 `package-lock.json` 的 workspace link 已补齐 `packages/examples` 和 `packages/exporter`。
 
 本轮开源 Community Core 已补齐的关键差距：
 
@@ -54,16 +54,16 @@ BoundaryML Community Core 的目标不是做通用流程图、项目管理工具
 
 | Phase | Name | Scope | Current status | Completion target |
 | --- | --- | --- | --- | --- |
-| Phase 0 | Spec / Schema / Core / Rules | BoundaryML Spec、基础 Schema、Workflow Core、Diff、Validation Rules | 基本完成 | 补 Agentic Development 场景对象 schema 与 rules |
-| Phase 1 | Server API / Communication Layer | HTTP JSON API、response envelope、server-first data flow | 基本完成 | 新增 Agent / Sandbox 字段读写 API |
-| Phase 2 | Storage / Version / Jobs / History | FileStorage、workspace scope、workflow version、history、jobs | 基本完成 | Agent / Sandbox 配置随 snapshot/version 保存 |
-| Phase 3 | Studio Server Data Integration | Studio 通过 API 访问 Server，减少 localStorage 正式数据 | 完成 | 随 Agent / Sandbox Tab 扩展刷新和错误处理 |
-| Phase 4 | Workflow Canvas / Node Detail | Canvas、phase lane、node detail、direct edit、undo、filters | 基本完成 | Node Detail 增加完整 Agent / Sandbox Tab |
-| Phase 5 | Execution Assets | Prompt、Checklist、Artifact Template 的查看、编辑、复制、过期状态 | 基本完成 | 资产与 Agent Contract 的 outdated / generated_from 关系 |
-| Phase 6 | Execution Kit Export | Draft / Final Kit、Preview、Generate、Download | 部分完成 | 补 Agent-ready files、Sandbox Contract、Evidence Template |
-| Phase 7 | Model Access Layer | OpenAI-compatible config、structured output、model status、mock fallback | 基本完成 | 强化 schema validation、summary log、failure repair |
-| Phase 8 | AI Assisted Edit / Workflow Agent | Natural language edit、context plan、focused subgraph、Diff Review | 进行中 | 支持自然语言修改 Agent / Sandbox 字段 |
-| Phase 9 | Templates / Examples / Release Hardening | Built-in templates、examples、README、smoke/checks | 部分完成 | 示例和测试覆盖 Agentic Development P0 |
+| Phase 0 | Spec / Schema / Core / Rules | BoundaryML Spec、基础 Schema、Workflow Core、Diff、Validation Rules | 完成 | Agentic Development 场景对象 schema 与 rules 已补齐 |
+| Phase 1 | Server API / Communication Layer | HTTP JSON API、response envelope、server-first data flow | 完成 | Agent / Sandbox 字段读写 API 已补齐 |
+| Phase 2 | Storage / Version / Jobs / History | FileStorage、workspace scope、workflow version、history、jobs | 完成 | Agent / Sandbox 配置已随 snapshot/version 保存 |
+| Phase 3 | Studio Server Data Integration | Studio 通过 API 访问 Server，减少 localStorage 正式数据 | 完成 | Agent / Sandbox Tab 的刷新和错误处理已接入 |
+| Phase 4 | Workflow Canvas / Node Detail | Canvas、phase lane、node detail、direct edit、undo、filters | 完成 | Node Detail 已增加完整 Agent / Sandbox Tab |
+| Phase 5 | Execution Assets | Prompt、Checklist、Artifact Template 的查看、编辑、复制、过期状态 | 完成 | 资产与 Agent Contract 的 outdated / generated_from 关系已补齐 |
+| Phase 6 | Execution Kit Export | Draft / Final Kit、Preview、Generate、Download | 完成 | Agent-ready files、Sandbox Contract、Evidence Template 已补齐 |
+| Phase 7 | Model Access Layer | OpenAI-compatible config、structured output、model status、mock fallback | 完成 | schema validation、summary log、failure repair 已强化 |
+| Phase 8 | AI Assisted Edit / Workflow Agent | Natural language edit、context plan、focused subgraph、Diff Review | 完成 | 已支持自然语言修改 Agent / Sandbox 字段 |
+| Phase 9 | Templates / Examples / Release Hardening | Built-in templates、examples、README、smoke/checks | 完成 | 示例和测试已覆盖 Agentic Development P0 |
 
 ---
 

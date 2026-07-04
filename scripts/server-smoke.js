@@ -199,6 +199,10 @@ async function main() {
     assert(workflow.body.data.nodes.length === 0, 'new projects should start from an empty workflow before generation');
     const generated = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/generate`, { method: 'POST' });
     assert(generated.body.data.workflow.nodes.length > 0, 'workflow generation should create project-specific nodes');
+    const generatedProjectList = await apiFetch(baseUrl, '/api/projects');
+    const generatedProjectSummary = generatedProjectList.body.data.find((project) => project.id === projectId);
+    assert(generatedProjectSummary.workflow_stats?.nodes === generated.body.data.workflow.nodes.length, 'project list should expose node counts before Studio runtime is opened');
+    assert(generatedProjectSummary.workflow_stats?.ai_nodes >= 0 && generatedProjectSummary.workflow_stats?.gates >= 0, 'project list should expose AI node and review gate counts');
     const contextSummary = await apiFetch(baseUrl, `/api/projects/${projectId}/context-pack/summarize`, { method: 'POST' });
     assert(contextSummary.body.data.summary.security_boundary.secret_policy, 'context summary should include a security boundary');
     assert(!(contextSummary.body.data.summary.risk_warnings || []).includes('mock_summary_warning'), 'context summary should not use mock warning placeholder');
