@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const defaultConfig = {
   provider: process.env.BOUNDARYML_LLM_PROVIDER || process.env.LLM_PROVIDER || 'mock',
@@ -15,14 +16,16 @@ const defaultConfig = {
   log_level: process.env.BOUNDARYML_LLM_LOG_LEVEL || 'summary',
 };
 
-const configPath = resolve(process.env.BOUNDARYML_MODEL_CONFIG_PATH || process.env.BOUNDARYML_LLM_CONFIG_PATH || `${process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || './data'}/model-config.json`);
+const repoRoot = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
+const defaultDataDir = resolve(repoRoot, 'data');
+const configPath = resolve(process.env.BOUNDARYML_MODEL_CONFIG_PATH || process.env.BOUNDARYML_LLM_CONFIG_PATH || `${process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || defaultDataDir}/model-config.json`);
 const editableFields = new Set(['provider', 'api_base_url', 'api_key', 'default_model', 'planning_model', 'prompt_model', 'diff_model', 'timeout_ms', 'structured_output_enabled', 'allow_mock', 'log_level']);
 const config = { ...defaultConfig, ...loadPersistedConfig() };
 
 function loadPersistedConfig() {
   if (!existsSync(configPath)) return {};
   try {
-    return normalizeConfig(JSON.parse(readFileSync(configPath, 'utf-8')), { keepExistingApiKey: false });
+    return normalizeConfig(JSON.parse(readFileSync(configPath, 'utf-8').replace(/^\uFEFF/, '')), { keepExistingApiKey: false });
   } catch {
     return {};
   }

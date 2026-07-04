@@ -5,10 +5,11 @@ const isWindows = process.platform === 'win32';
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const serverDir = fileURLToPath(new URL('../apps/server', import.meta.url));
 const studioDir = fileURLToPath(new URL('../apps/studio', import.meta.url));
+const dataDir = process.env.BOUNDARYML_DATA_DIR || fileURLToPath(new URL('../data', import.meta.url));
 const serverBaseUrl = process.env.BOUNDARYML_API_BASE_URL || `http://localhost:${process.env.BOUNDARYML_SERVER_PORT || 8787}`;
 
 const processes = [
-  { name: 'server', color: '\x1b[36m', command: process.execPath, args: ['--watch', 'src/server.js'], cwd: serverDir, healthUrl: `${serverBaseUrl}/api/health` },
+  { name: 'server', color: '\x1b[36m', command: process.execPath, args: ['--watch', 'src/server.js'], cwd: serverDir, healthUrl: `${serverBaseUrl}/api/health`, env: { BOUNDARYML_DATA_DIR: dataDir } },
   { name: 'studio', color: '\x1b[35m', command: process.execPath, args: ['../../scripts/dev-studio.js'], cwd: studioDir },
 ];
 
@@ -56,7 +57,7 @@ for (const proc of processes) {
 
   const child = spawn(proc.command, proc.args, {
     cwd: proc.cwd || rootDir,
-    env: process.env,
+    env: { ...process.env, ...(proc.env || {}) },
     shell: false,
     stdio: ['inherit', 'pipe', 'pipe'],
     windowsHide: true,

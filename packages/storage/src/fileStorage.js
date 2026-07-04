@@ -1,6 +1,30 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, renameSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
+function readJsonFile(filePath) {
+  return JSON.parse(readFileSync(filePath, 'utf-8').replace(/^\uFEFF/, ''));
+}
+
+function waitSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function replaceFileWithRetry(tempPath, filePath) {
+  let lastError;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      renameSync(tempPath, filePath);
+      return;
+    } catch (e) {
+      lastError = e;
+      if (!['EACCES', 'EBUSY', 'EPERM'].includes(e.code) || attempt === 4) throw e;
+      try { if (existsSync(filePath)) unlinkSync(filePath); } catch {}
+      waitSync(25 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
 export class FileStorage {
   constructor(baseDir = '.boundaryml-data') {
     this.baseDir = baseDir;
@@ -24,7 +48,7 @@ export class FileStorage {
     const tempPath = `${filePath}.tmp-${Date.now()}`;
     try {
       writeFileSync(tempPath, JSON.stringify(data, null, 2));
-      renameSync(tempPath, filePath);
+      replaceFileWithRetry(tempPath, filePath);
     } catch (e) {
       try { if (existsSync(tempPath)) unlinkSync(tempPath); } catch {}
       const err = new Error(e.message || 'Storage write failed');
@@ -39,14 +63,14 @@ export class FileStorage {
     return readdirSync(dir)
       .filter((name) => name.endsWith('.json'))
       .map((name) => {
-        try { return JSON.parse(readFileSync(join(dir, name), 'utf-8')); } catch (e) { const err = new Error('Storage object corrupted'); err.code = 'STORAGE_OBJECT_CORRUPTED'; throw err; }
+        try { return readJsonFile(join(dir, name)); } catch (e) { const err = new Error('Storage object corrupted'); err.code = 'STORAGE_OBJECT_CORRUPTED'; throw err; }
       });
   }
 
   getProject(workspace_id, project_id) {
     const file = this.projectFile(workspace_id, project_id);
     if (!existsSync(file)) return null;
-    try { return JSON.parse(readFileSync(file, 'utf-8')); } catch (e) { const err = new Error('Storage object corrupted'); err.code = 'STORAGE_OBJECT_CORRUPTED'; throw err; }
+    try { return readJsonFile(file); } catch (e) { const err = new Error('Storage object corrupted'); err.code = 'STORAGE_OBJECT_CORRUPTED'; throw err; }
   }
 
   saveProject(workspace_id, project) {

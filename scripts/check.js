@@ -57,6 +57,13 @@ async function main() {
   const internalToolSpec = JSON.parse(readFileSync(new URL('../examples/internal-ai-tool.json', import.meta.url), 'utf-8'));
   const legacySpec = JSON.parse(readFileSync(new URL('../examples/legacy-system-ai-modernization.json', import.meta.url), 'utf-8'));
   const templatesSpec = JSON.parse(readFileSync(new URL('../examples/templates.json', import.meta.url), 'utf-8'));
+  const phasePlan = readFileSync(new URL('../docs/open-source-phase-plan.md', import.meta.url), 'utf-8');
+  const openSourcePhaseRows = [...phasePlan.matchAll(/^\| Phase (\d+) \|[^|]*\|[^|]*\|\s*([^|]+?)\s*\|/gm)]
+    .map((match) => ({ phase: Number(match[1]), status: match[2].trim() }))
+    .filter((row) => row.phase >= 0 && row.phase <= 9);
+  assert(openSourcePhaseRows.length === 10, 'open-source phase plan should list Phase 0 through Phase 9');
+  const incompleteOpenSourcePhases = openSourcePhaseRows.filter((row) => row.status !== '完成');
+  assert(incompleteOpenSourcePhases.length === 0, `Phase 0-9 Current status should all be 完成: ${JSON.stringify(incompleteOpenSourcePhases)}`);
   const templates = listPublicTemplates();
   assert(templates.length >= 3, 'MVP should expose at least 3 public templates');
   assert((templatesSpec.templates || []).length >= 3, 'public template examples should be generated');
