@@ -19,8 +19,9 @@ BoundaryML 的第一个重点落地场景是 **Agentic Development**：将模糊
 - Phase 5：Execution Assets 完整化（Prompt / Checklist / Artifact Template）。
 - Phase 6：Execution Kit Export 完整化（Draft / Final Kit、Preview / Generate / Download）。
 - Phase 7：Model Access Layer 基础能力（OpenAI-compatible、structured output、mock fallback）。
-- Phase 8：AI Assisted Edit + server-backed Diff Review 基础链路；Studio 支持底部自然语言输入、上下文范围选择、左侧对话抽屉和 reviewed workflow diff apply。
-- Phase 9：MVP Templates / Examples / README / Release Hardening。
+- Agentic Development P0：Agent Execution Plan、Sandbox Execution Contract、Promotion Gate、Evidence Template、Node Detail 的 Agent / Sandbox Tab，以及 Agent-ready Execution Kit files。
+- Phase 8：AI Assisted Edit + server-backed Diff Review；Studio 支持自然语言生成 reviewed workflow diff，并可修改 Agent / Sandbox 字段。
+- Phase 9：MVP Templates / Examples / README / Release Hardening，覆盖 Agentic Development P0。
 
 Phase 10–14（Pro Template System、Enterprise Organization Templates、Enterprise Rules & Governance、Enterprise Privacy / Model Policy、SaaS Platform / Billing）属于商业化闭源路线，不在本公开仓库发布。
 
@@ -101,6 +102,8 @@ Server 公开只读模板 API：`GET /api/templates` 与 `GET /api/templates/:te
 
 这些示例均为 BoundaryML Spec，包含 workflow、assets、validation、diff 示例与模板引用。
 
+`ai-saas-feature-mvp.json` 包含一个 L3 Sandbox Coding Agent 节点和一个 L0 Production 节点；`internal-ai-tool.json` 默认禁用 Agentic Development 字段；`legacy-system-ai-modernization.json` 使用更保守的 L2 Agent 计划。
+
 当前公开示例以软件开发和 AI 转型项目为主，但 BoundaryML Spec 本身并不限定于 Coding Agent 场景，后续可扩展到 GEO 运营、内容生产、企业审批、数据分析、咨询交付和多 Agent 业务流程治理。
 
 ## 关键文档
@@ -132,7 +135,7 @@ npm run check
 node scripts/generate-example.js
 ```
 
-`npm run check` 会覆盖 schema/rules/core/storage/server smoke，并运行 Studio server-first 路径检查。
+`npm run check` 会覆盖 schema/rules/core/storage/server smoke、Agent / Sandbox 保存、Agent-ready kit export，并运行 Studio server-first 路径检查。
 
 ## 数据与安全边界
 

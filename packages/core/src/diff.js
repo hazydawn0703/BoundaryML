@@ -1,4 +1,15 @@
 import { generatePrompt } from '../../generators/src/promptGenerator.js';
+import {
+  createDefaultAgentExecutionPlan,
+  createDefaultExecutionEvidenceTemplate,
+  createDefaultPromotionGate,
+  createDefaultSandboxExecutionContract,
+  normalizeAgenticNode,
+  readAgentExecutionPlan,
+  readExecutionEvidenceTemplate,
+  readPromotionGate,
+  readSandboxExecutionContract,
+} from '../../schema/src/agentic.js';
 
 function safeDiffId(value, fallback) {
   const id = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -25,6 +36,14 @@ const NODE_FIELD_ALIASES = {
   artifactContract: 'artifactContract',
   review_gate: 'reviewGate',
   reviewGate: 'reviewGate',
+  agent_execution_plan: 'agentExecutionPlan',
+  agentExecutionPlan: 'agentExecutionPlan',
+  sandbox_execution_contract: 'sandboxExecutionContract',
+  sandboxExecutionContract: 'sandboxExecutionContract',
+  promotion_gate: 'promotionGate',
+  promotionGate: 'promotionGate',
+  execution_evidence_template: 'executionEvidenceTemplate',
+  executionEvidenceTemplate: 'executionEvidenceTemplate',
   prompt_status: 'promptStatus',
   promptStatus: 'promptStatus',
   checklist_status: 'checklistStatus',
@@ -44,6 +63,10 @@ const EDITABLE_NODE_FIELDS = [
   'outputs',
   'artifactContract',
   'reviewGate',
+  'agentExecutionPlan',
+  'sandboxExecutionContract',
+  'promotionGate',
+  'executionEvidenceTemplate',
   'promptStatus',
   'checklistStatus',
 ];
@@ -110,6 +133,10 @@ function readNodeField(node, field) {
     outputs: readNodeOutputs,
     reviewGate: readNodeReviewGate,
     artifactContract: readNodeArtifactContract,
+    agentExecutionPlan: readAgentExecutionPlan,
+    sandboxExecutionContract: readSandboxExecutionContract,
+    promotionGate: readPromotionGate,
+    executionEvidenceTemplate: readExecutionEvidenceTemplate,
     promptStatus: (item) => item?.prompt_status || item?.promptStatus,
     checklistStatus: (item) => item?.checklist_status || item?.checklistStatus,
   };
@@ -321,6 +348,16 @@ export function generateWorkflowContextPlan(userRequest, workflowIndex) {
     'owner',
     'inputs',
     'outputs',
+    'agent',
+    'sandbox',
+    'promotion',
+    'production gate',
+    'network',
+    'forbidden paths',
+    'allowed commands',
+    'codex',
+    'cursor',
+    'github issue',
     '\u4fee\u6539',
     '\u66f4\u65b0',
     '\u8bbe\u7f6e',
@@ -332,6 +369,11 @@ export function generateWorkflowContextPlan(userRequest, workflowIndex) {
     '\u8d1f\u8d23\u4eba',
     '\u8f93\u5165',
     '\u8f93\u51fa',
+    '\u667a\u80fd\u4f53',
+    '\u6c99\u7bb1',
+    '\u4e0a\u7ebf',
+    '\u7981\u6b62\u8054\u7f51',
+    '\u7981\u6b62\u8bbf\u95ee',
   ])) operationScope.push('update_node');
   if (includesAny(request, ['review gate', '\u5ba1\u6838\u95e8\u7981', '\u4eba\u5de5\u5ba1\u6838'])) operationScope.push('add_review_gate');
   if (includesAny(request, ['conservative', '\u4fdd\u5b88'])) operationScope.push('update_execution_mode');
@@ -427,14 +469,15 @@ export function workflowDiffOutputContract() {
     allowed_target_types: ['phase', 'node', 'edge', 'prompt', 'checklist', 'artifact_template'],
     allowed_change_types: ['added', 'updated', 'deleted'],
     editable_node_fields: EDITABLE_NODE_FIELDS,
-    node_field_aliases: ['name', 'goal', 'phaseId', 'phase_id', 'status', 'executionMode', 'execution_mode', 'mode', 'riskLevel', 'risk_level', 'risk', 'humanOwnerRole', 'human_owner_role', 'owner', 'aiRole', 'ai_role', 'inputs', 'outputs', 'reviewGate', 'review_gate', 'artifactContract', 'artifact_contract', 'promptStatus', 'prompt_status', 'checklistStatus', 'checklist_status'],
+    node_field_aliases: ['name', 'goal', 'phaseId', 'phase_id', 'status', 'executionMode', 'execution_mode', 'mode', 'riskLevel', 'risk_level', 'risk', 'humanOwnerRole', 'human_owner_role', 'owner', 'aiRole', 'ai_role', 'inputs', 'outputs', 'reviewGate', 'review_gate', 'artifactContract', 'artifact_contract', 'agentExecutionPlan', 'agent_execution_plan', 'sandboxExecutionContract', 'sandbox_execution_contract', 'promotionGate', 'promotion_gate', 'executionEvidenceTemplate', 'execution_evidence_template', 'promptStatus', 'prompt_status', 'checklistStatus', 'checklist_status'],
     node_edit_contract: {
       scalar_fields: ['name', 'goal', 'phaseId', 'status', 'riskLevel', 'executionMode', 'humanOwnerRole', 'aiRole', 'promptStatus', 'checklistStatus'],
       list_fields: ['inputs', 'outputs'],
-      object_fields: ['artifactContract', 'reviewGate'],
+      object_fields: ['artifactContract', 'reviewGate', 'agentExecutionPlan', 'sandboxExecutionContract', 'promotionGate', 'executionEvidenceTemplate'],
       examples: [
         { type: 'updated', targetType: 'node', targetId: 'node-10', field: 'riskLevel', before: 'high', after: 'medium' },
         { type: 'updated', targetType: 'node', targetId: 'node-10', field: 'inputs', before: ['Old input'], after: ['New input'] },
+        { type: 'updated', targetType: 'node', targetId: 'node-8', field: 'agentExecutionPlan', before: { enabled: false, execution_level: 'L0' }, after: { enabled: true, execution_level: 'L3', execution_target: 'codex' } },
       ],
     },
     instruction: 'Return reviewable diffs only. Do not rewrite the entire workflow. For node detail edits, emit one updated node change per edited field using editable_node_fields. Use existing ids for updates/deletes and stable ids for added phases/nodes/edges.',
@@ -801,6 +844,295 @@ function buildNodeFieldUpdateChanges(userRequest, workflow) {
   }];
 }
 
+function workflowPhaseNameForNode(workflow, node) {
+  return lower((workflow.phases || []).find((phase) => phase.id === readNodePhaseId(node))?.name || '');
+}
+
+function requestMentionsAgenticSandbox(request) {
+  return includesAny(request, ['agent', 'sandbox', 'l3', 'codex', 'cursor', 'claude code', '\u667a\u80fd\u4f53', '\u6c99\u7bb1']);
+}
+
+function extractForbiddenPaths(userRequest) {
+  const paths = [];
+  if (includesAny(userRequest, ['infra', '\u57fa\u7840\u8bbe\u65bd'])) paths.push('infra/**');
+  if (includesAny(userRequest, ['data directory', 'data folder', '\u6570\u636e\u76ee\u5f55'])) paths.push('data/**');
+  const quoted = [...String(userRequest || '').matchAll(/(?:forbid|forbidden|deny|禁止访问|禁止)\s+["']?([a-z0-9_./*-]+)["']?/gi)]
+    .map((match) => match[1])
+    .filter(Boolean);
+  quoted.forEach((path) => paths.push(path.includes('*') ? path : `${path.replace(/\/$/, '')}/**`));
+  return unique(paths);
+}
+
+function buildAgenticSandboxChanges(userRequest, workflow) {
+  if (!requestMentionsAgenticSandbox(userRequest)) return [];
+  const request = lower(userRequest);
+  const targets = findMatchingNodes(userRequest, workflow);
+  const developmentNodes = (workflow.nodes || []).filter((node) => {
+    const phaseName = workflowPhaseNameForNode(workflow, node);
+    const nodeName = lower(node.name);
+    if (targets.length) return targets.includes(node);
+    if (includesAny(request, ['development', '\u5f00\u53d1'])) return phaseName.includes('development') || phaseName.includes('\u5f00\u53d1') || /code|task|api/i.test(node.name || '');
+    return /code|implementation|development|\u4ee3\u7801|\u5f00\u53d1/.test(nodeName);
+  });
+  const nodes = targets.length ? targets : developmentNodes;
+  const forbiddenPaths = extractForbiddenPaths(userRequest);
+  const changes = [];
+
+  nodes.forEach((node) => {
+    const nodeId = node.id || node.node_id;
+    const existingContract = readSandboxExecutionContract(node);
+    const contract = createDefaultSandboxExecutionContract(node, {
+      ...(existingContract || {}),
+      id: existingContract?.id || `contract-${nodeId}`,
+      execution_target: 'codex',
+      repo_scope: {
+        ...(existingContract?.repo_scope || existingContract?.repoScope || {}),
+        allowed_paths: ['apps/**', 'packages/**', 'tests/**'],
+        forbidden_paths: unique([...(existingContract?.repo_scope?.forbidden_paths || existingContract?.repoScope?.forbiddenPaths || []), ...forbiddenPaths]),
+      },
+      runtime_scope: {
+        ...(existingContract?.runtime_scope || existingContract?.runtimeScope || {}),
+        allowed_commands: ['npm test', 'npm run build'],
+        network_policy: includesAny(userRequest, ['allow network', '\u5141\u8bb8\u8054\u7f51']) ? 'approved_only' : 'blocked',
+        external_network_approved: includesAny(userRequest, ['approved network', '\u660e\u786e\u6279\u51c6\u8054\u7f51']),
+        package_install_policy: 'allow_lockfile_only',
+        max_runtime_minutes: 45,
+      },
+      acceptance_tests: { required: ['npm test', 'npm run build'], optional: [] },
+      output_required: { evidence: ['diff', 'test_report', 'risk_summary', 'cost_report', 'rollback_note'] },
+      review_gate: readNodeReviewGate(node)?.id || null,
+      promotion_policy: {
+        promotion_gates: ['sandbox', 'test', 'review'],
+        target_environment: 'review',
+        human_approval_required: true,
+        agent_can_update_formal_workflow: false,
+        production_auto_deploy_allowed: false,
+        block_on_forbidden_paths: true,
+      },
+    });
+    const plan = createDefaultAgentExecutionPlan(node, {
+      ...(readAgentExecutionPlan(node) || {}),
+      enabled: true,
+      execution_level: includesAny(userRequest, ['l4', 'L4']) ? 'L4' : 'L3',
+      execution_target: 'codex',
+      dispatch_mode: 'manual_confirmed',
+      sandbox_execution_contract_id: contract.id,
+      status: 'ready',
+      contract_version: contract.version,
+    });
+    const evidence = createDefaultExecutionEvidenceTemplate(node, {
+      ...(readExecutionEvidenceTemplate(node) || {}),
+      required_items: ['diff', 'test_report', 'risk_summary', 'cost_report', 'rollback_note'],
+    });
+    changes.push({
+      id: `change-agent-plan-${safeDiffId(nodeId, `${Date.now()}`)}`,
+      type: 'updated',
+      targetType: 'node',
+      targetId: nodeId,
+      field: 'agentExecutionPlan',
+      before: readAgentExecutionPlan(node),
+      after: plan,
+      reason: 'Configure node for Agentic Development sandbox execution',
+      impact: 'enables reviewed Agent execution without directly changing the formal workflow',
+      selected: true,
+    }, {
+      id: `change-sandbox-contract-${safeDiffId(nodeId, `${Date.now()}`)}`,
+      type: 'updated',
+      targetType: 'node',
+      targetId: nodeId,
+      field: 'sandboxExecutionContract',
+      before: existingContract,
+      after: contract,
+      reason: 'Add sandbox boundaries, tests, allowed commands, and forbidden paths',
+      impact: 'makes downstream coding-agent work auditable and promotion-gated',
+      selected: true,
+    }, {
+      id: `change-evidence-template-${safeDiffId(nodeId, `${Date.now()}`)}`,
+      type: 'updated',
+      targetType: 'node',
+      targetId: nodeId,
+      field: 'executionEvidenceTemplate',
+      before: readExecutionEvidenceTemplate(node),
+      after: evidence,
+      reason: 'Require evidence collection for Agent output review',
+      impact: 'requires diff, test, risk, cost, and rollback evidence before promotion',
+      selected: true,
+    });
+  });
+  return changes;
+}
+
+function buildHighRiskAgentPolicyChanges(userRequest, workflow) {
+  if (!includesAny(userRequest, ['high-risk', 'high risk', '\u9ad8\u98ce\u9669'])) return [];
+  if (!includesAny(userRequest, ['l2', 'review gate', 'manual review', '\u4eba\u5de5 review', '\u4eba\u5de5\u5ba1\u6838'])) return [];
+  const changes = [];
+  (workflow.nodes || []).forEach((node) => {
+    if (readNodeRisk(node) !== 'high') return;
+    const nodeId = node.id || node.node_id;
+    const plan = readAgentExecutionPlan(node);
+    if (plan && agentPlanLevel(plan) > 2) {
+      changes.push({
+        id: `change-high-risk-l2-${safeDiffId(nodeId, `${Date.now()}`)}`,
+        type: 'updated',
+        targetType: 'node',
+        targetId: nodeId,
+        field: 'agentExecutionPlan',
+        before: plan,
+        after: { ...plan, execution_level: 'L2', sandbox_execution_contract_id: null, status: 'review_required' },
+        reason: 'High-risk nodes are capped at L2 by policy',
+        impact: 'prevents high-risk work from entering sandbox execution without explicit redesign',
+        selected: true,
+      });
+    }
+    if (!readNodeReviewGate(node)?.required) {
+      changes.push({
+        id: `change-high-risk-gate-${safeDiffId(nodeId, `${Date.now()}`)}`,
+        type: 'updated',
+        targetType: 'node',
+        targetId: nodeId,
+        field: 'reviewGate',
+        before: readNodeReviewGate(node),
+        after: {
+          id: `gate-${nodeId}-manual-review`,
+          name: 'Manual Review Gate',
+          reviewerRole: readNodeOwner(node),
+          criteria: ['High-risk output reviewed', 'Agent boundary checked'],
+          passCondition: 'Human reviewer approves',
+          rejectCondition: 'Boundary or quality issue remains',
+          allowAiRevision: false,
+          required: true,
+        },
+        reason: 'High-risk Agent work requires human review',
+        impact: 'adds a blocking review gate before final export',
+        selected: true,
+      });
+    }
+  });
+  return changes;
+}
+
+function agentPlanLevel(plan) {
+  const level = String(plan?.execution_level || plan?.executionLevel || 'L0').toUpperCase();
+  return Number(level.replace('L', '')) || 0;
+}
+
+function buildTestingSandboxCommandChanges(userRequest, workflow) {
+  if (!includesAny(userRequest, ['npm test', 'npm run build'])) return [];
+  const testingNodes = (workflow.nodes || []).filter((node) => {
+    const phaseName = workflowPhaseNameForNode(workflow, node);
+    return phaseName.includes('testing') || phaseName.includes('\u6d4b\u8bd5') || /test|qa/i.test(node.name || '');
+  });
+  return testingNodes.flatMap((node) => {
+    const nodeId = node.id || node.node_id;
+    const existingContract = readSandboxExecutionContract(node);
+    const contract = createDefaultSandboxExecutionContract(node, {
+      ...(existingContract || {}),
+      id: existingContract?.id || `contract-${nodeId}`,
+      runtime_scope: {
+        ...(existingContract?.runtime_scope || existingContract?.runtimeScope || {}),
+        allowed_commands: ['npm test', 'npm run build'],
+        network_policy: includesAny(userRequest, ['no network', 'ban network', '\u7981\u6b62\u8054\u7f51']) ? 'blocked' : 'approved_only',
+        external_network_approved: false,
+        package_install_policy: 'disabled',
+        max_runtime_minutes: 30,
+      },
+      acceptance_tests: { required: ['npm test', 'npm run build'], optional: [] },
+      promotion_policy: {
+        promotion_gates: ['sandbox', 'test', 'review'],
+        target_environment: 'test',
+        human_approval_required: true,
+        agent_can_update_formal_workflow: false,
+        production_auto_deploy_allowed: false,
+        block_on_forbidden_paths: true,
+      },
+    });
+    const plan = createDefaultAgentExecutionPlan(node, {
+      ...(readAgentExecutionPlan(node) || {}),
+      enabled: true,
+      execution_level: 'L3',
+      execution_target: 'codex',
+      dispatch_mode: 'manual_confirmed',
+      sandbox_execution_contract_id: contract.id,
+      status: 'ready',
+    });
+    return [{
+      id: `change-test-agent-${safeDiffId(nodeId, `${Date.now()}`)}`,
+      type: 'updated',
+      targetType: 'node',
+      targetId: nodeId,
+      field: 'agentExecutionPlan',
+      before: readAgentExecutionPlan(node),
+      after: plan,
+      reason: 'Allow test node to run controlled sandbox commands',
+      impact: 'enables test execution while preserving manual confirmation',
+      selected: true,
+    }, {
+      id: `change-test-contract-${safeDiffId(nodeId, `${Date.now()}`)}`,
+      type: 'updated',
+      targetType: 'node',
+      targetId: nodeId,
+      field: 'sandboxExecutionContract',
+      before: existingContract,
+      after: contract,
+      reason: 'Declare allowed commands and block external network access',
+      impact: 'keeps test execution reproducible and offline',
+      selected: true,
+    }];
+  });
+}
+
+function buildProductionGateChanges(userRequest, workflow) {
+  if (!includesAny(userRequest, ['production gate', 'production', 'launch', 'release', '\u4e0a\u7ebf', '\u53d1\u5e03'])) return [];
+  if (!includesAny(userRequest, ['gate', 'approval', 'auto', 'automatic', '\u4e0d\u80fd\u7531 agent', '\u4eba\u5de5', '\u5ba1\u6279'])) return [];
+  const launchNodes = (workflow.nodes || []).filter((node) => {
+    const phaseName = workflowPhaseNameForNode(workflow, node);
+    return phaseName.includes('launch') || phaseName.includes('\u4e0a\u7ebf') || /launch|production|release/i.test(node.name || '');
+  });
+  return launchNodes.flatMap((node) => {
+    const nodeId = node.id || node.node_id;
+    const plan = createDefaultAgentExecutionPlan(node, {
+      ...(readAgentExecutionPlan(node) || {}),
+      enabled: false,
+      execution_level: 'L0',
+      execution_target: 'manual_handoff',
+      dispatch_mode: 'disabled',
+      sandbox_execution_contract_id: null,
+      status: 'disabled',
+    });
+    const gate = createDefaultPromotionGate(node, {
+      ...(readPromotionGate(node) || {}),
+      id: `promotion-production-${nodeId}`,
+      gate_type: 'production',
+      required_checks: ['human_approval', 'required_tests', 'rollback_plan'],
+      human_approval_required: true,
+      agent_auto_promote_allowed: false,
+    });
+    return [{
+      id: `change-production-agent-l0-${safeDiffId(nodeId, `${Date.now()}`)}`,
+      type: 'updated',
+      targetType: 'node',
+      targetId: nodeId,
+      field: 'agentExecutionPlan',
+      before: readAgentExecutionPlan(node),
+      after: plan,
+      reason: 'Production work must stay L0 manual handoff',
+      impact: 'prevents Agent auto deploy or direct production updates',
+      selected: true,
+    }, {
+      id: `change-production-gate-${safeDiffId(nodeId, `${Date.now()}`)}`,
+      type: 'updated',
+      targetType: 'node',
+      targetId: nodeId,
+      field: 'promotionGate',
+      before: readPromotionGate(node),
+      after: gate,
+      reason: 'Add production promotion gate with human approval',
+      impact: 'blocks production promotion until human approval and rollback plan exist',
+      selected: true,
+    }];
+  });
+}
+
 function buildNodeDeleteChanges(userRequest, workflow) {
   const request = String(userRequest || '');
   const deleteIntent = includesAny(request, ['delete node', 'remove node', 'delete step', 'remove step', '\u5220\u9664\u8282\u70b9', '\u79fb\u9664\u8282\u70b9', '\u5220\u6389\u8282\u70b9'])
@@ -839,6 +1171,10 @@ export function generateWorkflowDiff(userRequest, workflow, assets) {
   changes.push(...buildNodeDeleteChanges(userRequest, workflow));
   changes.push(...buildRequestedNodeAddChanges(userRequest, workflow));
   changes.push(...buildNodeFieldUpdateChanges(userRequest, workflow));
+  changes.push(...buildAgenticSandboxChanges(userRequest, workflow));
+  changes.push(...buildTestingSandboxCommandChanges(userRequest, workflow));
+  changes.push(...buildHighRiskAgentPolicyChanges(userRequest, workflow));
+  changes.push(...buildProductionGateChanges(userRequest, workflow));
 
   if (isReviewGateForHighRiskRequest(userRequest)) {
     (workflow.nodes || []).forEach((node) => {
@@ -990,12 +1326,23 @@ export function applyWorkflowDiff(project, diff, applySelectedOnly = true) {
       }
     }
 
+    if (change.targetType === 'node') {
+      const field = normalizeNodeDiffField(change.field);
+      if (field !== 'node' && !['reviewGate', 'executionMode'].includes(field) && EDITABLE_NODE_FIELDS.includes(field)) {
+        const node = updated.workflow.nodes.find((item) => item.id === change.targetId);
+        if (node) {
+          node[field] = change.after;
+          node.history = [...(node.history || []), { at: new Date().toISOString(), action: `Diff applied: ${change.reason}` }];
+        }
+      }
+    }
+
     if (change.targetType === 'prompt' && change.field === 'prompt') {
       updated.assets.prompts.push(change.after);
     }
 
     if (change.targetType === 'node' && change.field === 'node') {
-      updated.workflow.nodes.push(change.after);
+      updated.workflow.nodes.push(normalizeAgenticNode(change.after));
       const latestTestingNode = updated.workflow.nodes.find((n) => n.name === 'QA Review');
       if (latestTestingNode) {
         updated.workflow.edges.push({ id: `edge-${Date.now()}`, from: latestTestingNode.id, to: change.after.id });

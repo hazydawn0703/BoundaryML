@@ -1,4 +1,5 @@
 import { createExampleProject } from '../../core/src/sampleProject.js';
+import { normalizeAgenticNode } from '../../schema/src/agentic.js';
 
 function applySensitiveAreaRules(project) {
   const hasCustomerData = project.sensitiveAreas.includes('Customer Data');
@@ -72,6 +73,52 @@ function applyProjectTypeTemplate(project, projectType) {
   }
 }
 
+function disableAgenticNode(node) {
+  const next = normalizeAgenticNode(node, {
+    agent_execution_plan: {
+      enabled: false,
+      execution_level: 'L0',
+      execution_target: 'manual_handoff',
+      dispatch_mode: 'disabled',
+      sandbox_execution_contract_id: null,
+      status: 'disabled',
+    },
+  });
+  delete next.sandbox_execution_contract;
+  delete next.sandboxExecutionContract;
+  delete next.promotion_gate;
+  delete next.promotionGate;
+  delete next.execution_evidence_template;
+  delete next.executionEvidenceTemplate;
+  next.agent_execution_plan.sandbox_execution_contract_id = null;
+  next.agent_execution_plan.contract_version = 0;
+  return next;
+}
+
+function applyAgenticScenarioDefaults(project, projectType) {
+  const normalized = (projectType || '').toLowerCase();
+  if (normalized.includes('internal tool')) {
+    project.workflow.nodes = project.workflow.nodes.map(disableAgenticNode);
+    return;
+  }
+  if (normalized.includes('legacy')) {
+    project.workflow.nodes = project.workflow.nodes.map((node) => {
+      const next = disableAgenticNode(node);
+      if (/architecture|modernization|api contract/i.test(next.name || '')) {
+        next.agent_execution_plan = {
+          ...next.agent_execution_plan,
+          enabled: true,
+          execution_level: 'L2',
+          execution_target: 'manual_handoff',
+          dispatch_mode: 'manual_confirmed',
+          status: 'review_required',
+        };
+      }
+      return next;
+    });
+  }
+}
+
 function markAssetsOutdated(project, reason) {
   project.assets.prompts = project.assets.prompts.map((prompt) => ({ ...prompt, status: 'outdated', outdatedReason: reason }));
   project.assets.checklists = project.assets.checklists.map((checklist) => ({ ...checklist, status: 'outdated', outdatedReason: reason }));
@@ -100,6 +147,7 @@ export function generateWorkflowDraft(projectInput, contextPack) {
   applyProjectTypeTemplate(project, project.type);
   applySensitiveAreaRules(project);
   applyOrganizationAwareMapping(project, project.contextPack);
+  applyAgenticScenarioDefaults(project, project.type);
 
   if (contextPack?.summary || (contextPack?.teamRoles?.length || 0) > 0) {
     markAssetsOutdated(project, 'Context Pack changed and workflow regenerated');

@@ -224,6 +224,55 @@ async function main() {
     await apiFetch(baseUrl, `/api/projects/${projectId}/workflow/validate`, { method: 'POST' });
     const preview = await apiFetch(baseUrl, `/api/projects/${projectId}/execution-kits/preview`, { method: 'POST', body: JSON.stringify({ kit_type: 'draft' }) });
     assert(preview.body.data.preview?.files?.['workflow_spec.yaml'], 'execution kit preview should include workflow_spec.yaml');
+    const workflowForAgentTab = await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`);
+    const agentTabNode = workflowForAgentTab.body.data.nodes.find((node) => node.execution_mode !== 'human_only') || workflowForAgentTab.body.data.nodes[0];
+    const smokeContractId = `contract-${agentTabNode.id}-smoke`;
+    const agentTabSave = await apiFetch(baseUrl, `/api/projects/${projectId}/nodes/${agentTabNode.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        workflow_version: workflowForAgentTab.body.data.version,
+        agent_execution_plan: {
+          node_id: agentTabNode.id,
+          enabled: true,
+          execution_level: 'L3',
+          execution_target: 'codex',
+          dispatch_mode: 'manual_confirmed',
+          sandbox_execution_contract_id: smokeContractId,
+          status: 'ready',
+        },
+        sandbox_execution_contract: {
+          id: smokeContractId,
+          node_id: agentTabNode.id,
+          version: 1,
+          execution_target: 'codex',
+          repo_scope: { repository: 'github.com/example/smoke', base_branch: 'main', working_branch: `agent/${agentTabNode.id}`, allowed_paths: ['apps/**'], forbidden_paths: ['infra/**'] },
+          runtime_scope: { allowed_commands: ['npm test', 'npm run build'], network_policy: 'blocked', external_network_approved: false, package_install_policy: 'allow_lockfile_only', max_runtime_minutes: 30 },
+          secret_scope: { policy: 'production_forbidden', allowed_secret_refs: [] },
+          cost_budget: { amount: 10, currency: 'USD' },
+          acceptance_tests: { required: ['npm test', 'npm run build'], optional: [] },
+          output_required: { evidence: ['diff', 'test_report', 'risk_summary'] },
+          review_gate: agentTabNode.review_gate?.id || null,
+          promotion_policy: { promotion_gates: ['sandbox', 'test', 'review'], target_environment: 'review', human_approval_required: true, agent_can_update_formal_workflow: false, production_auto_deploy_allowed: false, block_on_forbidden_paths: true },
+          failure_handling: { on_failure: 'stop_and_report', rollback_required: true },
+          status: 'draft',
+        },
+        execution_evidence_template: { id: `evidence-${agentTabNode.id}`, node_id: agentTabNode.id, required_items: ['diff', 'test_report', 'risk_summary'], status: 'draft' },
+      }),
+    });
+    assert(agentTabSave.body.data.node.agent_execution_plan.execution_level === 'L3', 'Agent / Sandbox Tab save should persist L3 agent plan');
+    const firstContractVersion = agentTabSave.body.data.node.sandbox_execution_contract.version;
+    const nextContract = structuredClone(agentTabSave.body.data.node.sandbox_execution_contract);
+    nextContract.runtime_scope.max_runtime_minutes = 31;
+    const agentTabSecondSave = await apiFetch(baseUrl, `/api/projects/${projectId}/nodes/${agentTabNode.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        workflow_version: agentTabSave.body.data.workflow_summary.version,
+        sandbox_execution_contract: nextContract,
+      }),
+    });
+    assert(agentTabSecondSave.body.data.node.sandbox_execution_contract.version > firstContractVersion, 'Sandbox Contract save should increment contract version');
+    const agentKitPreview = await apiFetch(baseUrl, `/api/projects/${projectId}/execution-kits/preview`, { method: 'POST', body: JSON.stringify({ kit_type: 'draft' }) });
+    assert(agentKitPreview.body.data.preview.files['sandbox_execution_contracts.yaml']?.includes(smokeContractId), 'agent-ready kit preview should include saved sandbox contract');
     await apiFetch(baseUrl, `/api/projects/${projectId}/jobs`);
 
     await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ clear_api_key: true, allow_mock: true }) });
