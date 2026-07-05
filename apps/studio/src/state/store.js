@@ -21,6 +21,16 @@ function initialState() {
     workflowGenerationPending: false,
     exportPreviewType: 'workflow_spec.yaml',
     settingsNavOpen: false,
+    agentAccess: {
+      adapter: 'codex',
+      mode: 'clipboard',
+      payloadView: 'adapter',
+      endpoint: '',
+      selectedProjectId: exampleProject.id,
+      selectedNodeId: exampleProject.workflow.nodes[0]?.id || '',
+      lastStatus: '',
+      runs: [],
+    },
     projectSearch: '',
     jobSearch: '',
     workflowHistoryOpen: false,
@@ -74,6 +84,16 @@ function persistUiState() {
       request: state.projectAgent?.request || '',
       session: state.projectAgent?.session || null,
       pending: false,
+    },
+    agentAccess: {
+      adapter: state.agentAccess?.adapter || 'codex',
+      mode: state.agentAccess?.mode || 'clipboard',
+      payloadView: state.agentAccess?.payloadView || 'adapter',
+      endpoint: state.agentAccess?.endpoint || '',
+      selectedProjectId: state.agentAccess?.selectedProjectId || '',
+      selectedNodeId: state.agentAccess?.selectedNodeId || '',
+      lastStatus: state.agentAccess?.lastStatus || '',
+      runs: [],
     },
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));

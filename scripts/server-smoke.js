@@ -290,6 +290,48 @@ async function main() {
     assert(agentTabSecondSave.body.data.node.sandbox_execution_contract.version > firstContractVersion, 'Sandbox Contract save should increment contract version');
     const agentKitPreview = await apiFetch(baseUrl, `/api/projects/${projectId}/execution-kits/preview`, { method: 'POST', body: JSON.stringify({ kit_type: 'draft' }) });
     assert(agentKitPreview.body.data.preview.files['sandbox_execution_contracts.yaml']?.includes(smokeContractId), 'agent-ready kit preview should include saved sandbox contract');
+    const canonicalAgentRunPayload = {
+      schema: 'boundaryml.agent_task_payload.v1',
+      adapter: { id: 'hermes', label: 'Hermes', payload_profile: 'hermes_task_v1', handoff_mode: 'clipboard' },
+      project: { id: projectId, name: 'smoke-project' },
+      workflow: { version: agentTabSecondSave.body.data.workflow_summary.version },
+      task: { node_id: agentTabNode.id, name: agentTabNode.name, inputs: agentTabNode.inputs || [], outputs: agentTabNode.outputs || [] },
+      agent_execution_plan: { execution_target: 'hermes', execution_level: 'L3' },
+      sandbox_execution_contract: nextContract,
+      boundary_rules: { authority: 'BoundaryML', errors: 0, warnings: 0 },
+    };
+    const agentRunPayload = {
+      schema: 'boundaryml.hermes_task.v1',
+      source_schema: canonicalAgentRunPayload.schema,
+      adapter: canonicalAgentRunPayload.adapter,
+      task: {
+        id: agentTabNode.id,
+        title: agentTabNode.name,
+        objective: agentTabNode.goal || '',
+        project: 'smoke-project',
+      },
+      execution_boundary: { execution_level: 'L3', allowed_paths: nextContract.repo_scope?.allowed_paths || [] },
+      boundaryml_trace: {
+        project_id: projectId,
+        workflow_version: canonicalAgentRunPayload.workflow.version,
+        node_id: agentTabNode.id,
+        canonical_payload: canonicalAgentRunPayload,
+      },
+    };
+    const agentRunCreated = await apiFetch(baseUrl, `/api/projects/${projectId}/agent-runs`, {
+      method: 'POST',
+      body: JSON.stringify({ node_id: agentTabNode.id, adapter: agentRunPayload.adapter, payload: agentRunPayload, canonical_payload: canonicalAgentRunPayload, status: 'ready_for_handoff', handoff_mode: 'clipboard' }),
+    });
+    const agentRun = agentRunCreated.body.data.agent_run;
+    assert(agentRun.adapter.id === 'hermes' && agentRun.node_id === agentTabNode.id, 'Agent Run API should persist Hermes handoff records for project tasks');
+    assert(agentRun.payload_schema === 'boundaryml.hermes_task.v1' && agentRun.canonical_payload.schema === 'boundaryml.agent_task_payload.v1', 'Agent Run API should retain adapter envelope and canonical BoundaryML payload');
+    const agentRunsList = await apiFetch(baseUrl, `/api/projects/${projectId}/agent-runs`);
+    assert(agentRunsList.body.data.agent_runs.some((run) => run.id === agentRun.id), 'Agent Run list should include the created handoff');
+    const agentRunEvidence = await apiFetch(baseUrl, `/api/projects/${projectId}/agent-runs/${agentRun.id}/evidence`, {
+      method: 'POST',
+      body: JSON.stringify({ status: 'succeeded', summary: 'Hermes completed smoke task', evidence: [{ type: 'test_report', content: 'npm test passed' }], external_run_id: 'hermes-smoke-1' }),
+    });
+    assert(agentRunEvidence.body.data.agent_run.status === 'succeeded' && agentRunEvidence.body.data.agent_run.evidence.length === 1, 'Agent Run evidence endpoint should update run status and retain returned evidence');
     await apiFetch(baseUrl, `/api/projects/${projectId}/jobs`);
 
     await apiFetch(baseUrl, '/api/model/config', { method: 'PUT', body: JSON.stringify({ clear_api_key: true, allow_mock: true }) });
@@ -437,7 +479,8 @@ async function main() {
     await waitForServer(baseUrl);
     const persistedModelConfig = await apiFetch(baseUrl, '/api/model/config');
     assert(persistedModelConfig.body.data.default_model === 'smoke-default', 'model config should persist across server restart');
-    await apiFetch(baseUrl, `/api/projects/${projectId}`);
+    const persistedProject = await apiFetch(baseUrl, `/api/projects/${projectId}`);
+    assert((persistedProject.body.data.agent_runs || []).some((run) => run.id === agentRun.id && run.status === 'succeeded'), 'Agent Run records and evidence should persist across server restart');
     await apiFetch(baseUrl, `/api/projects/${projectId}/workflow`);
     console.log('✅ server smoke passed');
   } finally {

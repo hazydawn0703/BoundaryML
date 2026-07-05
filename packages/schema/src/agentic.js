@@ -4,6 +4,8 @@ export const AGENT_EXECUTION_TARGETS = [
   'codex',
   'claude_code',
   'cursor',
+  'hermes',
+  'openclaw',
   'github_issue',
   'manual_handoff',
 ];
@@ -12,6 +14,8 @@ export const AGENT_EXECUTION_TARGET_LABELS = {
   codex: 'Codex',
   claude_code: 'Claude Code',
   cursor: 'Cursor',
+  hermes: 'Hermes',
+  openclaw: 'OpenClaw',
   github_issue: 'GitHub Issue',
   manual_handoff: 'Manual Handoff',
 };
