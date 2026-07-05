@@ -62,6 +62,7 @@ const EDIT_SESSION_LIMIT = 10;
 const DEFAULT_EDIT_SESSION_BATCH_SIZE = 4;
 const ACTIVE_EDIT_SESSION_STATUS = new Set(['collecting_info', 'planning', 'diff_ready', 'awaiting_next_batch']);
 const PROJECT_CREATION_SESSION_LIMIT = 20;
+const AGENT_RUN_LIMIT = 50;
 const projectCreationSessions = new Map();
 const projectCreationSessionsPath = `${dataDir}/project-creation-sessions.json`;
 
@@ -1270,6 +1271,100 @@ function seedIfEmpty(ctx) {
 
 function listScopedProjects(ctx) { return storage.listProjects(ctx.workspace_id).filter((p) => !p.deleted_at); }
 function getProject(ctx, projectId) { const p = storage.getProject(ctx.workspace_id, projectId); return (p && !p.deleted_at) ? p : null; }
+
+function ensureAgentRuns(project) {
+  const runs = project.agent_runs || project.agentRuns || [];
+  project.agent_runs = Array.isArray(runs) ? runs : [];
+  project.agentRuns = project.agent_runs;
+  return project.agent_runs;
+}
+
+function normalizeAgentRunAdapter(value = {}) {
+  if (typeof value === 'string') return { id: value, label: value };
+  return {
+    id: value.id || value.adapter_id || value.adapterId || 'manual',
+    label: value.label || value.name || value.id || 'Manual Handoff',
+    payload_profile: value.payload_profile || value.payloadProfile || 'agent_task_payload_v1',
+    handoff_mode: value.handoff_mode || value.handoffMode || 'manual',
+    endpoint_configured: Boolean(value.endpoint_configured || value.endpointConfigured),
+  };
+}
+
+function normalizeAgentRunEvidence(value = {}) {
+  const evidence = Array.isArray(value.evidence) ? value.evidence : (Array.isArray(value.items) ? value.items : []);
+  return {
+    id: value.id || `evidence_${Date.now()}_${randomUUID().slice(0, 8)}`,
+    status: value.status || 'received',
+    summary: value.summary || '',
+    external_run_id: value.external_run_id || value.externalRunId || '',
+    preview_url: value.preview_url || value.previewUrl || value.result_url || value.resultUrl || '',
+    cost_report: value.cost_report || value.costReport || '',
+    risk_summary: value.risk_summary || value.riskSummary || '',
+    items: evidence,
+    received_at: value.received_at || value.receivedAt || new Date().toISOString(),
+  };
+}
+
+function createAgentRun(ctx, project, body = {}) {
+  const payload = body.payload || {};
+  const canonicalPayload = body.canonical_payload || body.canonicalPayload || payload.boundaryml_trace?.canonical_payload || payload;
+  const nodeId = body.node_id || body.nodeId || canonicalPayload?.task?.node_id || canonicalPayload?.task?.nodeId || payload?.task?.id || payload?.job?.id;
+  const node = (project.workflow?.nodes || []).find((item) => item.id === nodeId);
+  if (!node) {
+    const error = new Error('Agent run node not found');
+    error.code = 'NODE_NOT_FOUND';
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const adapter = normalizeAgentRunAdapter(body.adapter || payload.adapter || {});
+  const run = {
+    id: body.id || `agent_run_${Date.now()}_${randomUUID().slice(0, 8)}`,
+    workspace_id: ctx.workspace_id,
+    project_id: project.id,
+    workflow_version: payload?.workflow?.version || project.workflow?.version || 0,
+    node_id: nodeId,
+    node_name: node.name,
+    adapter,
+    status: body.status || 'ready_for_handoff',
+    handoff_mode: body.handoff_mode || body.handoffMode || adapter.handoff_mode || 'manual',
+    external_endpoint: body.external_endpoint || body.externalEndpoint || '',
+    external_run_id: body.external_run_id || body.externalRunId || '',
+    payload,
+    canonical_payload: canonicalPayload,
+    payload_schema: payload.schema || 'boundaryml.agent_task_payload.v1',
+    evidence: [],
+    created_by: ctx.user_id,
+    created_at: now,
+    updated_at: now,
+  };
+  const runs = ensureAgentRuns(project);
+  project.agent_runs = [run, ...runs.filter((item) => item.id !== run.id)].slice(0, AGENT_RUN_LIMIT);
+  project.agentRuns = project.agent_runs;
+  project.updated_by = ctx.user_id;
+  project.updated_at = now;
+  return run;
+}
+
+function attachAgentRunEvidence(ctx, project, runId, body = {}) {
+  const runs = ensureAgentRuns(project);
+  const run = runs.find((item) => item.id === runId);
+  if (!run) {
+    const error = new Error('Agent run not found');
+    error.code = 'AGENT_RUN_NOT_FOUND';
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const evidence = normalizeAgentRunEvidence(body);
+  run.evidence = [...(run.evidence || []), evidence];
+  run.status = body.status || run.status || 'evidence_received';
+  if (body.external_run_id || body.externalRunId) run.external_run_id = body.external_run_id || body.externalRunId;
+  run.updated_at = now;
+  project.agent_runs = runs;
+  project.agentRuns = runs;
+  project.updated_by = ctx.user_id;
+  project.updated_at = now;
+  return run;
+}
 
 function projectWorkflowStats(project) {
   const nodes = Array.isArray(project?.workflow?.nodes) ? project.workflow.nodes : [];
@@ -2879,6 +2974,39 @@ const server = createServer(async (req, res) => {
       storage.saveProject(ctx.workspace_id, next); return ok(res, ctx, next);
     }
     if (method === 'DELETE') { project.deleted_at = new Date().toISOString(); project.updated_by = ctx.user_id; project.updated_at = new Date().toISOString(); storage.saveProject(ctx.workspace_id, project); return ok(res, ctx, { deleted: true, project_id: project.id, mode: 'soft_delete' }); }
+  }
+
+  const agentRunsRoute = path.match(/^\/api\/projects\/([^/]+)\/agent-runs$/);
+  if (agentRunsRoute) {
+    const project = getProject(ctx, agentRunsRoute[1]);
+    if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    if (method === 'GET') return ok(res, ctx, { agent_runs: ensureAgentRuns(project) });
+    if (method === 'POST') {
+      const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
+      try {
+        const agentRun = createAgentRun(ctx, project, body);
+        storage.saveProject(ctx.workspace_id, project);
+        return ok(res, ctx, { agent_run: agentRun, agent_runs: ensureAgentRuns(project) }, 201);
+      } catch (error) {
+        if (error.code === 'NODE_NOT_FOUND') return fail(res, ctx, 404, 'NODE_NOT_FOUND', 'Agent run node not found');
+        throw error;
+      }
+    }
+  }
+
+  const agentRunEvidenceRoute = path.match(/^\/api\/projects\/([^/]+)\/agent-runs\/([^/]+)\/evidence$/);
+  if (method === 'POST' && agentRunEvidenceRoute) {
+    const project = getProject(ctx, agentRunEvidenceRoute[1]);
+    if (!project) return fail(res, ctx, 404, 'PROJECT_NOT_FOUND', 'Project not found');
+    const body = await readJsonBody(req); if (body === null) return fail(res, ctx, 400, 'INVALID_JSON', 'Invalid JSON');
+    try {
+      const agentRun = attachAgentRunEvidence(ctx, project, agentRunEvidenceRoute[2], body);
+      storage.saveProject(ctx.workspace_id, project);
+      return ok(res, ctx, { agent_run: agentRun, agent_runs: ensureAgentRuns(project) });
+    } catch (error) {
+      if (error.code === 'AGENT_RUN_NOT_FOUND') return fail(res, ctx, 404, 'AGENT_RUN_NOT_FOUND', 'Agent run not found');
+      throw error;
+    }
   }
 
   const cpRoute = path.match(/^\/api\/projects\/([^/]+)\/context-pack$/);

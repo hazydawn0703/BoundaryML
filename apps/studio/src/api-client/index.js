@@ -74,6 +74,12 @@ export const projectAgentApi = {
   message: (payload) => post('/project-agent/messages', payload),
 };
 
+export const agentRunsApi = {
+  list: (projectId) => get(`/projects/${projectId}/agent-runs`),
+  create: (projectId, payload) => post(`/projects/${projectId}/agent-runs`, payload),
+  evidence: (projectId, runId, payload) => post(`/projects/${projectId}/agent-runs/${runId}/evidence`, payload),
+};
+
 export const contextPackApi = {
   get: (projectId) => get(`/projects/${projectId}/context-pack`),
   save: (projectId, payload) => put(`/projects/${projectId}/context-pack`, payload),
@@ -152,6 +158,7 @@ export const apiClient = {
   templatesApi,
   projectsApi,
   projectAgentApi,
+  agentRunsApi,
   contextPackApi,
   workflowApi,
   nodesApi,
