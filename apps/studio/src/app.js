@@ -34,6 +34,7 @@ import { applyWorkflowDiff } from '../../../packages/core/src/diff.js';
 
 const app = document.getElementById('app');
 const AI_CONVERSATION_LIMIT = 20;
+const PROJECT_NAME_MAX_LENGTH = 80;
 const UI_THEMES = {
   'open-source': { label: 'Open Source' },
   signal: { label: 'Signal' },
@@ -89,6 +90,10 @@ const ZH_HANS_REPLACEMENTS = [
   ['Search by task type, status, stage, or message', '按任务类型、状态、阶段或消息搜索'],
   ['No jobs match your search.', '没有匹配搜索的任务。'],
   ['Rename Project', '重命名项目'],
+  ['Project name is required.', '\u9879\u76ee\u540d\u79f0\u4e0d\u80fd\u4e3a\u7a7a\u3002'],
+  ['Project name must be 80 characters or fewer.', '\u9879\u76ee\u540d\u79f0\u4e0d\u80fd\u8d85\u8fc7 80 \u4e2a\u5b57\u7b26\u3002'],
+  ['Project name', '\u9879\u76ee\u540d\u79f0'],
+  ['Save', '\u4fdd\u5b58'],
   ['Delete Project', '删除项目'],
   ['No projects match your search.', '没有匹配搜索的项目。'],
   ['Model Access', '模型访问'],
@@ -665,6 +670,21 @@ function escapeAttr(value = '') {
   return String(value ?? '').replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+function projectNameLength(value) {
+  return [...String(value ?? '')].length;
+}
+
+function limitProjectName(value) {
+  return [...String(value ?? '')].slice(0, PROJECT_NAME_MAX_LENGTH).join('');
+}
+
+function validateProjectName(value) {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) return 'Project name is required.';
+  if (projectNameLength(trimmed) > PROJECT_NAME_MAX_LENGTH) return `Project name must be ${PROJECT_NAME_MAX_LENGTH} characters or fewer.`;
+  return '';
+}
+
 function showToast(message, type = 'info') {
   const id = `toast-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   setState((prev) => ({ ...prev, toasts: [...(prev.toasts || []), { id, message, type }].slice(-4) }));
@@ -792,11 +812,17 @@ function renderProjectGrid(state) {
   return `<div class="project-grid">${projects.map((project) => {
     const stats = countProjectStats(project);
     const menuOpen = state.activeProjectMenuId === project.id;
-    return `<article class="card project"><div class="project-card-head"><h3>${project.name}</h3><div class="project-menu-control"><button class="icon-button project-menu-trigger ${menuOpen ? 'active' : ''}" data-action="toggle-project-menu" data-project-id="${project.id}" aria-label="Project actions" aria-expanded="${menuOpen ? 'true' : 'false'}">${ICONS.more}</button><div class="project-menu" data-project-menu="${project.id}" ${menuOpen ? '' : 'hidden'}><button data-action="rename-project" data-project-id="${project.id}">Rename Project</button><button data-action="delete-project" data-project-id="${project.id}" class="danger-text">Delete Project</button></div></div></div><p>${project.project_type || project.type} - ${(project.risk_level || project.riskLevel)} risk - ${(project.workflow?.status || 'draft')}</p>
-      <div class="kv-row"><span>Nodes ${stats.nodes}</span><span>AI ${stats.aiNodes}</span><span>Gates ${stats.gates}</span></div>
-      <div class="kv-row"><span>Stage</span><strong>${project.current_stage || project.currentStage || 'n/a'}</strong></div>
-      <div class="kv-row"><span>Execution Kit</span><strong>${project.execution_kit?.status || project.executionKit?.status || 'not generated'}</strong></div>
-      <div class="actions"><button class="primary" data-action="open-project" data-project-id="${project.id}">Open Studio</button><button data-action="open-project-page" data-page="context" data-project-id="${project.id}">Context Management</button><button data-action="open-project-page" data-page="assets" data-project-id="${project.id}">Execution Assets</button></div></article>`;
+    const renaming = state.activeProjectRenameId === project.id;
+    const renameDraft = renaming ? limitProjectName(state.projectRenameDraft ?? project.name ?? '') : '';
+    const renameError = renaming ? state.projectRenameError || '' : '';
+    const title = renaming
+      ? `<div class="project-rename-editor" data-project-rename-editor="${escapeAttr(project.id)}"><label>Project name<input data-action="project-name-field" data-project-id="${escapeAttr(project.id)}" maxlength="${PROJECT_NAME_MAX_LENGTH}" value="${escapeAttr(renameDraft)}" aria-label="Project name"/></label><div class="project-rename-meta"><span class="project-rename-error" data-project-rename-error>${escapeAttr(renameError)}</span><span data-project-rename-count>${projectNameLength(renameDraft)}/${PROJECT_NAME_MAX_LENGTH}</span></div><div class="project-rename-actions"><button data-action="cancel-rename-project" data-project-id="${escapeAttr(project.id)}">Cancel</button><button class="primary" data-action="rename-project" data-project-id="${escapeAttr(project.id)}">Save</button></div></div>`
+      : `<h3 title="${escapeAttr(project.name || 'Untitled Project')}">${escapeAttr(project.name || 'Untitled Project')}</h3>`;
+    return `<article class="card project" data-project-card="${escapeAttr(project.id)}"><div class="project-card-head">${title}<div class="project-menu-control"><button class="icon-button project-menu-trigger ${menuOpen ? 'active' : ''}" data-action="toggle-project-menu" data-project-id="${escapeAttr(project.id)}" aria-label="Project actions" aria-expanded="${menuOpen ? 'true' : 'false'}">${ICONS.more}</button><div class="project-menu" data-project-menu="${escapeAttr(project.id)}" ${menuOpen ? '' : 'hidden'}><button data-action="start-rename-project" data-project-id="${escapeAttr(project.id)}">Rename Project</button><button data-action="delete-project" data-project-id="${escapeAttr(project.id)}" class="danger-text">Delete Project</button></div></div></div><p class="project-meta">${escapeAttr(project.project_type || project.type)} - ${escapeAttr(project.risk_level || project.riskLevel)} risk - ${escapeAttr(project.workflow?.status || 'draft')}</p>
+      <div class="kv-row project-stats"><span>Nodes <strong>${stats.nodes}</strong></span><span>AI <strong>${stats.aiNodes}</strong></span><span>Gates <strong>${stats.gates}</strong></span></div>
+      <div class="project-details"><div class="kv-row"><span>Stage</span><strong>${escapeAttr(project.current_stage || project.currentStage || 'n/a')}</strong></div>
+      <div class="kv-row"><span>Execution Kit</span><strong>${escapeAttr(project.execution_kit?.status || project.executionKit?.status || 'not generated')}</strong></div></div>
+      <div class="actions"><button class="primary" data-action="open-project" data-project-id="${escapeAttr(project.id)}">Open Studio</button><button data-action="open-project-page" data-page="context" data-project-id="${escapeAttr(project.id)}">Context Management</button><button data-action="open-project-page" data-page="assets" data-project-id="${escapeAttr(project.id)}">Execution Assets</button></div></article>`;
   }).join('')}</div>`;
 }
 
@@ -1179,11 +1205,11 @@ function renderCanvasTool(action, label, icon, active = false) {
   return `<button class="canvas-tool-button ${active ? 'active' : ''}" data-action="${action}" aria-label="${label}" title="${label}" aria-expanded="${active ? 'true' : 'false'}"><span class="canvas-tool-icon">${icon}</span><span class="canvas-tool-tip">${label}</span></button>`;
 }
 
-function renderWorkflowCanvasTools(viewport) {
+function renderWorkflowCanvasTools(viewport, state = getState()) {
   return `<div class="workflow-canvas-tools" aria-label="Workflow tools">
     ${renderCanvasTool('undo-workflow', 'Undo', ICONS.undo)}
     <span class="workflow-zoom-badge">Zoom <span data-workflow-zoom>${Math.round(viewport.scale * 100)}%</span></span>
-    <button class="canvas-tool-button" data-action="toggle-workflow-filters" aria-label="Filters" title="Filters" aria-expanded="${getState().workflowFiltersOpen ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.filter}</span><span class="canvas-tool-tip">Filters</span></button>
+    <div class="workflow-filter-control"><button class="canvas-tool-button" data-action="toggle-workflow-filters" aria-label="Filters" title="Filters" aria-expanded="${state.workflowFiltersOpen ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.filter}</span><span class="canvas-tool-tip">Filters</span></button>${renderWorkflowCanvasFilters(state)}</div>
   </div>`;
 }
 
@@ -1253,8 +1279,7 @@ function renderStudio(state) {
   <section class="workflow-board">
     <div class="workflow-canvas">
       ${emptyWorkflow ? `<div class="workflow-empty-state"><h3>Workflow has no nodes</h3><p>The previous workflow generation did not complete. Generate it again with the configured LLM.</p><button class="primary" data-action="regenerate-empty-workflow" ${state.workflowGenerationPending ? 'disabled' : ''}>${state.workflowGenerationPending ? 'Generating Workflow...' : 'Generate Workflow with Agent'}</button></div>` : ''}
-      ${renderWorkflowCanvasTools(viewport)}
-      ${renderWorkflowCanvasFilters(state)}
+      ${renderWorkflowCanvasTools(viewport, state)}
       ${renderWorkflowCanvasContent(state, project, nodes, selectedNode, viewport)}
       ${renderAiEdit(state, project, selectedNode)}
       ${renderAiComposer(state, project, selectedNode)}
@@ -2070,6 +2095,17 @@ function refreshProjectGrid() {
   localizeDom(state.language || 'en');
 }
 
+function syncProjectRenameEditor(projectId) {
+  const state = getState();
+  const editor = app.querySelector(`[data-project-rename-editor="${CSS.escape(projectId)}"]`);
+  if (!editor) return;
+  const draft = state.projectRenameDraft || '';
+  const count = editor.querySelector('[data-project-rename-count]');
+  const error = editor.querySelector('[data-project-rename-error]');
+  if (count) count.textContent = `${projectNameLength(draft)}/${PROJECT_NAME_MAX_LENGTH}`;
+  if (error) error.textContent = translateText(state.projectRenameError || '', state.language || 'en');
+}
+
 function refreshJobResults() {
   const state = getState();
   const target = app.querySelector('[data-job-results]');
@@ -2383,20 +2419,56 @@ function handleAction(event) {
     syncProjectMenu();
     return;
   }
+  if (action === 'start-rename-project') {
+    const projectId = target.dataset.projectId;
+    const project = getState().projects.find((item) => item.id === projectId);
+    if (!project) return;
+    updateUiStateSilently((state) => {
+      state.activeProjectMenuId = null;
+      state.activeProjectRenameId = projectId;
+      state.projectRenameDraft = limitProjectName(project.name || '');
+      state.projectRenameError = '';
+    });
+    refreshProjectGrid();
+    app.querySelector(`[data-action="project-name-field"][data-project-id="${CSS.escape(projectId)}"]`)?.focus();
+    return;
+  }
+  if (action === 'cancel-rename-project') {
+    updateUiStateSilently((state) => {
+      state.activeProjectRenameId = null;
+      state.projectRenameDraft = '';
+      state.projectRenameError = '';
+    });
+    refreshProjectGrid();
+    return;
+  }
   if (action === 'rename-project') {
     const projectId = target.dataset.projectId;
     const project = getState().projects.find((item) => item.id === projectId);
     if (!project) return;
-    const nextName = window.prompt('Rename Project', project.name || '');
-    if (!nextName || nextName.trim() === project.name) {
-      updateUiStateSilently((state) => { state.activeProjectMenuId = null; });
-      syncProjectMenu();
+    const nextName = String(getState().projectRenameDraft || '').trim();
+    const validationError = validateProjectName(nextName);
+    if (validationError) {
+      updateUiStateSilently((state) => { state.projectRenameError = validationError; });
+      syncProjectRenameEditor(projectId);
+      return;
+    }
+    if (nextName === project.name) {
+      updateUiStateSilently((state) => {
+        state.activeProjectRenameId = null;
+        state.projectRenameDraft = '';
+        state.projectRenameError = '';
+      });
+      refreshProjectGrid();
       return;
     }
     const applyRename = (updatedProject) => setState((prev) => ({
       ...prev,
       projects: prev.projects.map((item) => (item.id === projectId ? { ...item, ...updatedProject, name: nextName.trim() } : item)),
       activeProjectMenuId: null,
+      activeProjectRenameId: null,
+      projectRenameDraft: '',
+      projectRenameError: '',
     }));
     if (getState().serverAvailable) {
       apiClient.projectsApi.update(projectId, { name: nextName.trim() })
@@ -3643,6 +3715,18 @@ function handleInput(event) {
     refreshProjectGrid();
     return;
   }
+  if (target.dataset.action === 'project-name-field') {
+    const projectId = target.dataset.projectId;
+    const limited = limitProjectName(target.value);
+    if (limited !== target.value) target.value = limited;
+    updateUiStateSilently((state) => {
+      state.activeProjectRenameId = projectId;
+      state.projectRenameDraft = limited;
+      state.projectRenameError = '';
+    });
+    syncProjectRenameEditor(projectId);
+    return;
+  }
   if (target.dataset.action === 'search-jobs') {
     updateUiStateSilently((state) => {
       state.jobSearch = target.value;
@@ -3856,6 +3940,17 @@ function handleInput(event) {
 }
 
 function handleComposerKeydown(event) {
+  if (event.target.dataset.action === 'project-name-field') {
+    if (event.key === 'Enter' && !event.isComposing) {
+      event.preventDefault();
+      event.target.closest('.project-rename-editor')?.querySelector('[data-action="rename-project"]')?.click();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.target.closest('.project-rename-editor')?.querySelector('[data-action="cancel-rename-project"]')?.click();
+    }
+    return;
+  }
   if (event.target.dataset.action !== 'set-project-agent-request') return;
   if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
   event.preventDefault();
