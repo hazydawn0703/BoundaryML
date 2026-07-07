@@ -47,12 +47,14 @@ const UI_LANGUAGES = {
 };
 
 const AGENT_ACCESS_ADAPTERS = {
-  codex: { label: 'Codex', payload_profile: 'agent_task_payload_v1' },
-  'claude-code': { label: 'Claude Code', payload_profile: 'agent_task_payload_v1' },
-  cursor: { label: 'Cursor', payload_profile: 'agent_task_payload_v1' },
+  codex: { label: 'Codex', payload_profile: 'coding_agent_handoff_v1' },
+  'claude-code': { label: 'Claude Code', payload_profile: 'coding_agent_handoff_v1' },
+  'github-copilot': { label: 'GitHub Copilot', payload_profile: 'coding_agent_handoff_v1' },
+  cursor: { label: 'Cursor', payload_profile: 'coding_agent_handoff_v1' },
   hermes: { label: 'Hermes', payload_profile: 'hermes_task_v1' },
   openclaw: { label: 'OpenClaw', payload_profile: 'openclaw_job_v1' },
-  'github-issue': { label: 'GitHub Issue', payload_profile: 'issue_payload_v1' },
+  'github-issue': { label: 'GitHub Issue', payload_profile: 'github_issue_handoff_v1' },
+  'github-pr': { label: 'GitHub PR', payload_profile: 'github_pr_handoff_v1' },
   manual: { label: 'Manual Handoff', payload_profile: 'agent_task_payload_v1' },
 };
 
@@ -555,6 +557,8 @@ const ZH_HANS_REPLACEMENTS = [
   ['No project tasks available.', '暂无可交接的项目任务。'],
   ['BoundaryML Adapter Payload', 'BoundaryML 适配器任务包'],
   ['Adapter Payload Preview', '适配器任务包预览'],
+  ['Copy payload prepares a reviewed task packet for Codex, Claude Code, GitHub Copilot, Cursor, Hermes, OpenClaw, GitHub PR, or another Agent.', '复制任务包会为 Codex、Claude Code、GitHub Copilot、Cursor、Hermes、OpenClaw、GitHub PR 或其他 Agent 准备已审核的任务包。'],
+  ['Webhook POST sends the BoundaryML Adapter Payload as JSON.', 'Webhook POST 会以 JSON 发送 BoundaryML 适配器任务包。'],
   ['Boundary Rules remain authoritative; the external Agent must return evidence for review.', 'Boundary Rules 仍然是权威约束；外部 Agent 必须回传证据供审核。'],
   ['Agent Access configuration saved.', 'Agent 接入配置已保存。'],
   ['Failed to send Agent task.', 'Agent 任务发送失败。'],
@@ -1956,7 +1960,9 @@ function getAgentAccessConfig(state = getState()) {
 function agentAccessExecutionTarget(adapter) {
   return {
     'claude-code': 'claude_code',
+    'github-copilot': 'github_copilot',
     'github-issue': 'github_issue',
+    'github-pr': 'github_pr',
     manual: 'manual_handoff',
   }[adapter] || adapter;
 }
@@ -2086,6 +2092,148 @@ function agentAccessContractPart(payload, path, fallback) {
   return path.reduce((value, key) => (value && value[key] !== undefined ? value[key] : undefined), payload.sandbox_execution_contract || {}) ?? fallback;
 }
 
+function agentAccessRequiredEvidence(payload, outputRequired = {}) {
+  return payload.execution_evidence_template?.required_items || outputRequired.evidence || [];
+}
+
+function agentAccessBoundaryTrace(payload) {
+  return {
+    project_id: payload.project.id,
+    workflow_version: payload.workflow.version,
+    node_id: payload.task.node_id,
+    canonical_payload: payload,
+  };
+}
+
+function buildCodingAgentHandoffPayload(payload) {
+  const repoScope = agentAccessContractPart(payload, ['repo_scope'], {});
+  const runtimeScope = agentAccessContractPart(payload, ['runtime_scope'], {});
+  const secretScope = agentAccessContractPart(payload, ['secret_scope'], {});
+  const costBudget = agentAccessContractPart(payload, ['cost_budget'], {});
+  const acceptanceTests = agentAccessContractPart(payload, ['acceptance_tests'], {});
+  const outputRequired = agentAccessContractPart(payload, ['output_required'], {});
+  const promotionPolicy = agentAccessContractPart(payload, ['promotion_policy'], {});
+  return {
+    schema: 'boundaryml.coding_agent_handoff.v1',
+    source_schema: payload.schema,
+    generated_at: payload.generated_at,
+    adapter: payload.adapter,
+    handoff: {
+      target_agent: payload.adapter.label,
+      execution_target: payload.agent_execution_plan.execution_target,
+      dispatch_mode: payload.adapter.handoff_mode,
+      profile: payload.adapter.payload_profile,
+    },
+    task: {
+      id: payload.task.node_id,
+      title: payload.task.name,
+      objective: payload.task.goal,
+      phase: payload.workflow.phase,
+      owner: payload.task.human_owner_role,
+      ai_role: payload.task.ai_role,
+      inputs: payload.task.inputs,
+      expected_outputs: payload.task.outputs,
+      upstream_dependencies: payload.task.upstream_dependencies,
+      downstream_dependencies: payload.task.downstream_dependencies,
+    },
+    project_context: {
+      project: payload.project,
+      workflow: payload.workflow,
+      context_pack: payload.context_pack,
+    },
+    execution_contract: {
+      execution_level: payload.agent_execution_plan.execution_level,
+      execution_mode: payload.task.execution_mode,
+      risk_level: payload.task.risk_level,
+      repository: repoScope.repository || '',
+      base_branch: repoScope.base_branch || 'main',
+      working_branch: repoScope.working_branch || '',
+      allowed_paths: repoScope.allowed_paths || [],
+      forbidden_paths: repoScope.forbidden_paths || [],
+      allowed_commands: runtimeScope.allowed_commands || [],
+      network_policy: runtimeScope.network_policy || 'blocked',
+      package_install_policy: runtimeScope.package_install_policy || 'disabled',
+      max_runtime_minutes: runtimeScope.max_runtime_minutes || 30,
+      secret_policy: secretScope.policy || 'production_forbidden',
+      cost_budget: costBudget,
+      promotion_policy: promotionPolicy,
+      review_gate: payload.task.review_gate,
+    },
+    evidence_contract: {
+      required_tests: acceptanceTests.required || [],
+      optional_tests: acceptanceTests.optional || [],
+      required_evidence: agentAccessRequiredEvidence(payload, outputRequired),
+      return_to_boundaryml: true,
+    },
+    boundary_rules: payload.boundary_rules,
+    boundaryml_trace: agentAccessBoundaryTrace(payload),
+  };
+}
+
+function buildGitHubIssuePayload(payload) {
+  const repoScope = agentAccessContractPart(payload, ['repo_scope'], {});
+  const acceptanceTests = agentAccessContractPart(payload, ['acceptance_tests'], {});
+  const outputRequired = agentAccessContractPart(payload, ['output_required'], {});
+  return {
+    schema: 'boundaryml.github_issue_handoff.v1',
+    source_schema: payload.schema,
+    generated_at: payload.generated_at,
+    adapter: payload.adapter,
+    issue: {
+      repository: repoScope.repository || '',
+      title: `[BoundaryML] ${payload.task.name}`,
+      body: [
+        `Project: ${payload.project.name}`,
+        `Task: ${payload.task.name}`,
+        `Objective: ${payload.task.goal || ''}`,
+        `Phase: ${payload.workflow.phase}`,
+        `Execution target: ${payload.agent_execution_plan.execution_target}`,
+        `Allowed paths: ${(repoScope.allowed_paths || []).join(', ') || 'n/a'}`,
+        `Forbidden paths: ${(repoScope.forbidden_paths || []).join(', ') || 'n/a'}`,
+        `Required tests: ${(acceptanceTests.required || []).join(', ') || 'n/a'}`,
+        `Required evidence: ${agentAccessRequiredEvidence(payload, outputRequired).join(', ') || 'n/a'}`,
+      ].join('\n'),
+      labels: ['boundaryml', 'agent-ready', payload.task.risk_level || 'medium-risk'].filter(Boolean),
+    },
+    boundary_rules: payload.boundary_rules,
+    boundaryml_trace: agentAccessBoundaryTrace(payload),
+  };
+}
+
+function buildGitHubPrPayload(payload) {
+  const repoScope = agentAccessContractPart(payload, ['repo_scope'], {});
+  const acceptanceTests = agentAccessContractPart(payload, ['acceptance_tests'], {});
+  const outputRequired = agentAccessContractPart(payload, ['output_required'], {});
+  return {
+    schema: 'boundaryml.github_pr_handoff.v1',
+    source_schema: payload.schema,
+    generated_at: payload.generated_at,
+    adapter: payload.adapter,
+    pull_request: {
+      repository: repoScope.repository || '',
+      base_branch: repoScope.base_branch || 'main',
+      head_branch: repoScope.working_branch || `agent/${payload.task.node_id}`,
+      draft: true,
+      title: `[BoundaryML] ${payload.task.name}`,
+      body: [
+        `Project: ${payload.project.name}`,
+        `Task: ${payload.task.name}`,
+        `Objective: ${payload.task.goal || ''}`,
+        `Execution target: ${payload.agent_execution_plan.execution_target}`,
+        `Review gate: ${payload.task.review_gate?.id || payload.task.review_gate || 'n/a'}`,
+        `Required tests: ${(acceptanceTests.required || []).join(', ') || 'n/a'}`,
+        `Required evidence: ${agentAccessRequiredEvidence(payload, outputRequired).join(', ') || 'n/a'}`,
+      ].join('\n'),
+    },
+    repository_contract: {
+      allowed_paths: repoScope.allowed_paths || [],
+      forbidden_paths: repoScope.forbidden_paths || [],
+    },
+    boundary_rules: payload.boundary_rules,
+    boundaryml_trace: agentAccessBoundaryTrace(payload),
+  };
+}
+
 function buildHermesTaskPayload(payload) {
   const repoScope = agentAccessContractPart(payload, ['repo_scope'], {});
   const runtimeScope = agentAccessContractPart(payload, ['runtime_scope'], {});
@@ -2127,10 +2275,7 @@ function buildHermesTaskPayload(payload) {
       boundary_rule_summary: payload.boundary_rules,
     },
     boundaryml_trace: {
-      project_id: payload.project.id,
-      workflow_version: payload.workflow.version,
-      node_id: payload.task.node_id,
-      canonical_payload: payload,
+      ...agentAccessBoundaryTrace(payload),
     },
   };
 }
@@ -2180,18 +2325,18 @@ function buildOpenClawJobPayload(payload) {
       return_to_boundaryml: true,
     },
     boundaryml_trace: {
-      project_id: payload.project.id,
-      workflow_version: payload.workflow.version,
-      node_id: payload.task.node_id,
-      canonical_payload: payload,
+      ...agentAccessBoundaryTrace(payload),
     },
   };
 }
 
 function buildAgentAdapterPayload(payload) {
   if (!payload) return null;
+  if (['codex', 'claude-code', 'cursor', 'github-copilot'].includes(payload.adapter.id)) return buildCodingAgentHandoffPayload(payload);
   if (payload.adapter.id === 'hermes') return buildHermesTaskPayload(payload);
   if (payload.adapter.id === 'openclaw') return buildOpenClawJobPayload(payload);
+  if (payload.adapter.id === 'github-issue') return buildGitHubIssuePayload(payload);
+  if (payload.adapter.id === 'github-pr') return buildGitHubPrPayload(payload);
   return payload;
 }
 
@@ -2214,7 +2359,7 @@ function renderAgentAccess(state) {
   const recentRuns = config.runs || [];
   const modeHelp = config.mode === 'webhook'
     ? 'Webhook POST sends the BoundaryML Adapter Payload as JSON.'
-    : 'Copy payload prepares a reviewed task packet for Hermes, OpenClaw, Codex, Claude Code, Cursor, or another Agent.';
+    : 'Copy payload prepares a reviewed task packet for Codex, Claude Code, GitHub Copilot, Cursor, Hermes, OpenClaw, GitHub PR, or another Agent.';
   return `<section class="page agent-access-page">
     <div class="split-2">
       <form class="card form agent-access-config" data-form="agent-access-config">
@@ -2615,6 +2760,7 @@ function handleWorkflowWheel(event) {
     event.stopPropagation();
     return;
   }
+  if (closestElement(event.target, '.ai-conversation-drawer')) return;
   if (closestElement(event.target, '.workflow-detail')) return;
   const canvas = closestElement(event.target, '.workflow-canvas');
   if (!canvas) return;

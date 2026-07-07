@@ -3,20 +3,24 @@ export const AGENT_EXECUTION_LEVELS = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
 export const AGENT_EXECUTION_TARGETS = [
   'codex',
   'claude_code',
+  'github_copilot',
   'cursor',
   'hermes',
   'openclaw',
   'github_issue',
+  'github_pr',
   'manual_handoff',
 ];
 
 export const AGENT_EXECUTION_TARGET_LABELS = {
   codex: 'Codex',
   claude_code: 'Claude Code',
+  github_copilot: 'GitHub Copilot',
   cursor: 'Cursor',
   hermes: 'Hermes',
   openclaw: 'OpenClaw',
   github_issue: 'GitHub Issue',
+  github_pr: 'GitHub PR',
   manual_handoff: 'Manual Handoff',
 };
 
