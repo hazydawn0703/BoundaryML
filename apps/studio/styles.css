@@ -571,6 +571,7 @@ textarea { min-height: 82px; resize: vertical; }
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overscroll-behavior: contain;
 }
 .ai-conversation-drawer .toolbar {
   align-items: start;
@@ -589,6 +590,7 @@ textarea { min-height: 82px; resize: vertical; }
   gap: 14px;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding-right: 2px;
 }
 .ai-chat-empty {
