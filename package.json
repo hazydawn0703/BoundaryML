@@ -1,5 +1,5 @@
 {
-  "name": "boundaryml",
+  "name": "roleunion",
   "version": "0.3.0",
   "private": true,
   "workspaces": [
@@ -8,8 +8,8 @@
   ],
   "scripts": {
     "dev": "node scripts/dev-local.js",
-    "dev:studio": "npm run dev -w @boundaryml/studio",
-    "dev:server": "npm run dev -w @boundaryml/server",
+    "dev:studio": "npm run dev -w @roleunion/studio",
+    "dev:server": "npm run dev -w @roleunion/server",
     "acceptance:open-source": "node scripts/open-source-acceptance.js",
     "check": "node scripts/check.js && npm run smoke:server",
     "test": "node scripts/check.js",

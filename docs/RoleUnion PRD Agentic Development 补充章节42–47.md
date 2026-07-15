@@ -1,8 +1,8 @@
-# BoundaryML PRD Agentic Development 补充章节42–47
+# RoleUnion PRD Agentic Development 补充章节42–47
 
-> 文档定位：本文作为 BoundaryML PRD 的 Agentic Development 场景补充文件，用于定义 Coding Agent 沙箱执行治理、Agent Execution Level、Sandbox Execution Contract、Execution Evidence、Promotion Gate 和 Agent 安全 / 成本 / 权限规则。
+> 文档定位：本文作为 RoleUnion PRD 的 Agentic Development 场景补充文件，用于定义 Coding Agent 沙箱执行治理、Agent Execution Level、Sandbox Execution Contract、Execution Evidence、Promotion Gate 和 Agent 安全 / 成本 / 权限规则。
 >
-> 本文不改变 BoundaryML 的通用产品定位。BoundaryML 仍然是面向人机协作工作流的边界建模与治理层；Agentic Development 是第一个重点落地场景和商业爆破点。
+> 本文不改变 RoleUnion 的通用产品定位。RoleUnion 仍然是面向人机协作工作流的边界建模与治理层；Agentic Development 是第一个重点落地场景和商业爆破点。
 
 ---
 
@@ -10,24 +10,24 @@
 
 软件开发正在从“人拉代码 + AI 补代码”走向“Agent 在受控沙箱中执行任务”。但企业不能把沙箱环境直接推到生产环境。
 
-Agentic Development 是 BoundaryML 的第一个重点落地场景，不是 BoundaryML 的全部产品定义。它依赖通用 BoundaryML Spec、Workflow、Node、Execution Mode、Review Gate 和 Execution Kit，并在此基础上扩展 Agent Execution Plan、Sandbox Execution Contract、Agent Run、Execution Evidence、Promotion Gate 等场景对象。
+Agentic Development 是 RoleUnion 的第一个重点落地场景，不是 RoleUnion 的全部产品定义。它依赖通用 RoleUnion Spec、Workflow、Node、Execution Mode、Review Gate 和 Execution Kit，并在此基础上扩展 Agent Execution Plan、Sandbox Execution Contract、Agent Run、Execution Evidence、Promotion Gate 等场景对象。
 
 核心原则：
 
 ```text
-沙箱跑好了，生成可验证变更；通过 BoundaryML 定义的 Review Gate、测试门、权限门、成本门和发布门后，再进入正式工程链路。
+沙箱跑好了，生成可验证变更；通过 RoleUnion 定义的 Review Gate、测试门、权限门、成本门和发布门后，再进入正式工程链路。
 ```
 
 Sandbox 是执行场，不是 production 来源本体。
 
 正式进入工程链路的不是 mutable sandbox，而是 versioned diff、commit、PR、build artifact、test report、preview URL、risk report、cost report 和 rollback note。
 
-BoundaryML 与 Coding Agent 的分工：
+RoleUnion 与 Coding Agent 的分工：
 
-- BoundaryML 负责规划、边界、审核、成本、授权、证据回收和发布门；
+- RoleUnion 负责规划、边界、审核、成本、授权、证据回收和发布门；
 - Coding Agent 负责在受控沙箱或外部工具中执行具体任务。
 
-BoundaryML 不做通用 Coding Agent Runtime，不直接替代 Codex、Claude Code、Cursor、Hermes、OpenClaw 等 Agent，也不直接把沙箱环境推到生产环境。
+RoleUnion 不做通用 Coding Agent Runtime，不直接替代 Codex、Claude Code、Cursor、Hermes、OpenClaw 等 Agent，也不直接把沙箱环境推到生产环境。
 
 ---
 
@@ -162,13 +162,13 @@ sandbox_execution_contract:
 受控执行流程：
 
 ```text
-BoundaryML Node
+RoleUnion Node
 → Generate Sandbox Execution Contract
 → User / Policy Approves Dispatch
 → Create Sandbox / Agent Task
 → Agent Executes
 → Collect Diff / Test Report / Preview URL / Cost Report / Risk Summary
-→ BoundaryML Validation
+→ RoleUnion Validation
 → Human Review Gate
 → PR / Staging / Production Gate
 ```

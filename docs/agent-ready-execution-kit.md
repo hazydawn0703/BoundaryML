@@ -1,10 +1,10 @@
 # Agent-Ready Execution Kit
 
-This document describes BoundaryML's first focused use case: Agentic Development.
+This document describes RoleUnion's first focused use case: Agentic Development.
 
-It does not define the entire BoundaryML product boundary. BoundaryML's underlying model applies to broader human-AI workflows, while Agent-Ready Execution Kit is the first scenario-specific kit for software development and Coding Agent handoff.
+It does not define the entire RoleUnion product boundary. RoleUnion's underlying model applies to broader human-AI workflows, while Agent-Ready Execution Kit is the first scenario-specific kit for software development and Coding Agent handoff.
 
-本文描述的是 BoundaryML 的第一个重点场景：Agentic Development。它不是 BoundaryML 的全部产品边界。
+本文描述的是 RoleUnion 的第一个重点场景：Agentic Development。它不是 RoleUnion 的全部产品边界。
 
 ## Purpose
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { apiClient } from '../apps/studio/src/api-client/index.js';
 
 async function run() {
-  global.window = { BOUNDARYML_API_BASE_URL: '/window-api' };
+  global.window = { ROLEUNION_API_BASE_URL: '/window-api' };
   assert.equal(apiClient.resolveBaseUrl(), '/window-api');
 
   let lastUrl = '';

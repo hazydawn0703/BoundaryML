@@ -1,4 +1,4 @@
-﻿# BoundaryML Architecture Mapping（对应 PRD 27–41）
+﻿# RoleUnion Architecture Mapping（对应 PRD 27–41）
 
 ## 27. System Architecture & Runtime Model
 
@@ -43,12 +43,12 @@
 - FileStorage 按 workspace 目录隔离
 - Atomic write（tmp + rename）
 - Server 自动写入 workspace_id / created_by / updated_by
-- Schema validation（项目/工作流/job + BoundaryML 完整 Spec 校验）
+- Schema validation（项目/工作流/job + RoleUnion 完整 Spec 校验）
 
 ### Stub
 - LLM 输出仅做基础 schema 校验
 - model status 提供 mock/real 配置状态，但真实 provider 调用未完成
-- `validateProject` 仅是实体校验；完整项目级 Spec 校验由 `validateBoundaryMLProjectSpec` 提供
+- `validateProject` 仅是实体校验；完整项目级 Spec 校验由 `validateRoleUnionProjectSpec` 提供
 
 ### 未实现
 - 完整安全基线（速率限制、审计、密钥轮换、KMS）

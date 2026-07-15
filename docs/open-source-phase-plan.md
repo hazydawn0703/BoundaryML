@@ -1,14 +1,14 @@
-# BoundaryML Open-source Phase Plan
+# RoleUnion Open-source Phase Plan
 
-> 本文用于把最新 PRD 与当前代码进度对齐，定义 BoundaryML 开源 Community Core 的后续开发 Phase。
+> 本文用于把最新 PRD 与当前代码进度对齐，定义 RoleUnion 开源 Community Core 的后续开发 Phase。
 >
-> 当前结论：BoundaryML 的底层定位是通用人机协作工作流边界建模与治理层；第一个重点落地场景是 Agentic Development。Agentic Development P0 属于开源主线，且需要包含完整 Agent / Sandbox Tab 编辑能力。
+> 当前结论：RoleUnion 的底层定位是通用人机协作工作流边界建模与治理层；第一个重点落地场景是 Agentic Development。Agentic Development P0 属于开源主线，且需要包含完整 Agent / Sandbox Tab 编辑能力。
 
 ---
 
 ## 1. Product Boundary
 
-BoundaryML Community Core 的目标不是做通用流程图、项目管理工具或 Agent Runtime，而是让团队在 AI / Agent 执行之前，先得到一份可审核、可校验、可导出的工作流边界蓝图。
+RoleUnion Community Core 的目标不是做通用流程图、项目管理工具或 Agent Runtime，而是让团队在 AI / Agent 执行之前，先得到一份可审核、可校验、可导出的工作流边界蓝图。
 
 开源主线必须覆盖：
 
@@ -54,7 +54,7 @@ BoundaryML Community Core 的目标不是做通用流程图、项目管理工具
 
 | Phase | Name | Scope | Current status | Completion target |
 | --- | --- | --- | --- | --- |
-| Phase 0 | Spec / Schema / Core / Rules | BoundaryML Spec、基础 Schema、Workflow Core、Diff、Validation Rules | 完成 | Agentic Development 场景对象 schema 与 rules 已补齐 |
+| Phase 0 | Spec / Schema / Core / Rules | RoleUnion Spec、基础 Schema、Workflow Core、Diff、Validation Rules | 完成 | Agentic Development 场景对象 schema 与 rules 已补齐 |
 | Phase 1 | Server API / Communication Layer | HTTP JSON API、response envelope、server-first data flow | 完成 | Agent / Sandbox 字段读写 API 已补齐 |
 | Phase 2 | Storage / Version / Jobs / History | FileStorage、workspace scope、workflow version、history、jobs | 完成 | Agent / Sandbox 配置已随 snapshot/version 保存 |
 | Phase 3 | Studio Server Data Integration | Studio 通过 API 访问 Server，减少 localStorage 正式数据 | 完成 | Agent / Sandbox Tab 的刷新和错误处理已接入 |
@@ -219,7 +219,7 @@ Tab 字段：
 
 ### Phase 9A - Examples / Docs / Release Hardening
 
-目标：让 README、示例、检查脚本和 smoke test 都能证明 BoundaryML 不是普通流程图工具。
+目标：让 README、示例、检查脚本和 smoke test 都能证明 RoleUnion 不是普通流程图工具。
 
 需要补全：
 
@@ -230,7 +230,7 @@ Tab 字段：
 - `docs/agent-ready-execution-kit.md` 更新文件清单；
 - `scripts/check.js` 校验 Agentic schema / rules / export；
 - `scripts/server-smoke.js` 覆盖 Agent / Sandbox Tab 保存和 kit export；
-- `package-lock.json` workspace link 补齐 `@boundaryml/examples` 和 `@boundaryml/exporter`。
+- `package-lock.json` workspace link 补齐 `@roleunion/examples` 和 `@roleunion/exporter`。
 
 验收：
 

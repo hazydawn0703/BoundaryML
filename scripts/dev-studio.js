@@ -3,9 +3,9 @@ import { createServer, request as httpRequest } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const requestedPort = Number(process.env.BOUNDARYML_STUDIO_PORT || process.env.PORT || 5173);
-const maxPortAttempts = Number(process.env.BOUNDARYML_STUDIO_PORT_ATTEMPTS || 10);
-const apiBaseUrl = process.env.BOUNDARYML_API_BASE_URL || 'http://localhost:8787';
+const requestedPort = Number(process.env.ROLEUNION_STUDIO_PORT || process.env.PORT || 5173);
+const maxPortAttempts = Number(process.env.ROLEUNION_STUDIO_PORT_ATTEMPTS || 10);
+const apiBaseUrl = process.env.ROLEUNION_API_BASE_URL || 'http://localhost:8787';
 const rootDir = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 const contentTypes = {
@@ -69,7 +69,7 @@ function listenWithFallback(port, attempt = 0) {
     process.exitCode = 1;
   });
   server.listen(port, () => {
-    console.log(`BoundaryML Studio: http://localhost:${port}/apps/studio/index.html`);
+    console.log(`RoleUnion Studio: http://localhost:${port}/apps/studio/index.html`);
     console.log(`API proxy: /api -> ${apiBaseUrl}/api`);
     if (port !== requestedPort) console.log(`Requested port ${requestedPort} was busy; using ${port} instead.`);
   });

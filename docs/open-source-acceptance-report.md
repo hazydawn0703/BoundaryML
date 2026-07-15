@@ -1,10 +1,10 @@
-# BoundaryML 开源部分功能验收报告
+# RoleUnion 开源部分功能验收报告
 - 运行 ID: `2026-07-04T06-43-54-021Z`
 - 验收状态: **通过**
 - 验收项目: `Open Source Acceptance Agentic Dev 2026-07-04T06-43-54-021Z` / `project_1783147434867`
-- 本地持久化数据目录: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data`
-- 验收证据目录: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data\open-source-acceptance`
-- 项目文件: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data\workspaces\local_default\projects\project_1783147434867.json`
+- 本地持久化数据目录: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data`
+- 验收证据目录: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data\open-source-acceptance`
+- 项目文件: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data\workspaces\local_default\projects\project_1783147434867.json`
 - 通过检查数: 13
 - 失败检查数: 0
 - Server URL: http://127.0.0.1:59490
@@ -28,15 +28,15 @@
 | Storage / Traceability | Restart server and verify persisted project plus model-call logs | PASS | {<br>  "restarted_server": 47192,<br>  "restored_project": "project_1783147434867",<br>  "model_calls": 24<br>} |
 | Phase Plan / Release Hardening | Phase 0-9 statuses are all complete and check script guards them | PASS | {<br>  "phases": [<br>    "Phase 0: 完成",<br>    "Phase 1: 完成",<br>    "Phase 2: 完成",<br>    "Phase 3: 完成",<br>    "Phase 4: 完成",<br>    "Phase 5: 完成",<br>    "Phase 6: 完成",<br>    "Phase 7: 完成",<br>    "Phase 8: 完成",<br>    "Phase 9: 完成"<br>  ]<br>} |
 ## 验收产物
-- acceptance_dir: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data\open-source-acceptance`
-- data_dir: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data`
-- model_config_file: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data\open-source-acceptance\model-config.json`
+- acceptance_dir: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data\open-source-acceptance`
+- data_dir: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data`
+- model_config_file: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data\open-source-acceptance\model-config.json`
 - fake_model_url: `http://127.0.0.1:16617/v1`
-- server_log: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data\open-source-acceptance\logs\server-2026-07-04T06-43-54-021Z.log`
+- server_log: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data\open-source-acceptance\logs\server-2026-07-04T06-43-54-021Z.log`
 - server_url: `http://127.0.0.1:59490`
-- studio_log: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data\open-source-acceptance\logs\studio-2026-07-04T06-43-54-021Z.log`
+- studio_log: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data\open-source-acceptance\logs\studio-2026-07-04T06-43-54-021Z.log`
 - studio_url: `http://127.0.0.1:16622/apps/studio/index.html`
-- project_file: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data\workspaces\local_default\projects\project_1783147434867.json`
-- model_calls_file: `D:\HuaweiMoveData\Users\89735\Documents\BoundaryML\data\model-calls.json`
+- project_file: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data\workspaces\local_default\projects\project_1783147434867.json`
+- model_calls_file: `D:\HuaweiMoveData\Users\89735\Documents\RoleUnion\data\model-calls.json`
 ## 结论
 开源 Community Core Phase 0-9 的真实项目验收全部通过。验收项目和日志已保留在本地持久化目录，后续可直接用于复查或缺陷修复。

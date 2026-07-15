@@ -26,7 +26,7 @@ function replaceFileWithRetry(tempPath, filePath) {
 }
 
 export class FileStorage {
-  constructor(baseDir = '.boundaryml-data') {
+  constructor(baseDir = '.roleunion-data') {
     this.baseDir = baseDir;
   }
 

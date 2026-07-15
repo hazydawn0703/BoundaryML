@@ -1,6 +1,6 @@
 function resolveBaseUrl() {
-  const viteBaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_BOUNDARYML_API_BASE_URL : undefined;
-  return viteBaseUrl || window.BOUNDARYML_API_BASE_URL || '/api';
+  const viteBaseUrl = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_ROLEUNION_API_BASE_URL : undefined;
+  return viteBaseUrl || window.ROLEUNION_API_BASE_URL || '/api';
 }
 
 class ApiError extends Error {

@@ -65,7 +65,7 @@ const AGENT_ACCESS_MODES = {
 
 const AGENT_PAYLOAD_VIEWS = {
   adapter: 'Adapter envelope',
-  boundaryml: 'BoundaryML canonical',
+  roleunion: 'RoleUnion canonical',
 };
 
 const ZH_HANS_REPLACEMENTS = [
@@ -79,11 +79,11 @@ const ZH_HANS_REPLACEMENTS = [
   ['Current phase', '当前阶段'],
   ['Entire workflow', '整个工作流'],
   ['Close AI Assisted Edit', '关闭 AI 辅助编辑'],
-  ['Ask BoundaryML to modify this workflow...', '让 BoundaryML 修改这个工作流...'],
+  ['Ask RoleUnion to modify this workflow...', '让 RoleUnion 修改这个工作流...'],
   ['Generate reviewed workflow diff', '生成待审核工作流 Diff'],
   ['Generating...', '生成中...'],
   ['Generating workflow diff...', '正在生成工作流 Diff...'],
-  ['BoundaryML is planning the edit and preparing reviewable changes.', 'BoundaryML 正在规划修改并准备可审核的变更。'],
+  ['RoleUnion is planning the edit and preparing reviewable changes.', 'RoleUnion 正在规划修改并准备可审核的变更。'],
   ['No diff generated yet.', '尚未生成 Diff。'],
   ['No AI edit history yet.', '暂无 AI 编辑历史。'],
   ['You', '你'],
@@ -148,7 +148,7 @@ const ZH_HANS_REPLACEMENTS = [
   ['Mode: Local Server', '模式：Local Server'],
   ['Reconnect Server', '重新连接服务'],
   ['Theme Settings', '主题设置'],
-  ['BoundaryML preferences', 'BoundaryML 偏好设置'],
+  ['RoleUnion preferences', 'RoleUnion 偏好设置'],
   ['High Contrast', '高对比度'],
   ['Open Source', '开源主题'],
   ['Signal', '信号'],
@@ -193,8 +193,8 @@ const ZH_HANS_REPLACEMENTS = [
   ['Workflow generated successfully.', '工作流生成成功。'],
   ['Workflow generation failed.', '工作流生成失败。'],
   ['Start with a project goal.', '从项目目标开始。'],
-  ['BoundaryML will generate a human-AI workflow boundary draft.', 'BoundaryML 会生成一份人机协作边界工作流草稿。'],
-  ['Data-driven projects powered by BoundaryML domain model.', '由 BoundaryML 领域模型驱动的数据化项目。'],
+  ['RoleUnion will generate a human-AI workflow boundary draft.', 'RoleUnion 会生成一份人机协作边界工作流草稿。'],
+  ['Data-driven projects powered by RoleUnion domain model.', '由 RoleUnion 领域模型驱动的数据化项目。'],
   ['Current Stage', '当前阶段'],
   ['Target Deliverables', '目标交付物'],
   ['Expected AI Scope', '预期 AI 范围'],
@@ -223,7 +223,7 @@ const ZH_HANS_REPLACEMENTS = [
   ['Risk Warnings', '风险提醒'],
   ['No summary yet.', '暂无摘要。'],
   ['Loading project', '正在加载项目'],
-  ['Loading workflow, assets, validation, and history from BoundaryML Server.', '正在从 BoundaryML Server 加载工作流、资产、校验和历史。'],
+  ['Loading workflow, assets, validation, and history from RoleUnion Server.', '正在从 RoleUnion Server 加载工作流、资产、校验和历史。'],
   ['Back to Projects', '返回项目'],
   ['Back', '返回'],
   ['Loading Studio', '正在加载 Studio'],
@@ -267,8 +267,8 @@ const ZH_HANS_REPLACEMENTS = [
   ['Validation', '校验'],
   ['Zoom', '缩放'],
   ['Reset View', '重置视图'],
-  ['Manage BoundaryML projects', '管理 BoundaryML 项目'],
-  ['Create a new BoundaryML project', '创建新的 BoundaryML 项目'],
+  ['Manage RoleUnion projects', '管理 RoleUnion 项目'],
+  ['Create a new RoleUnion project', '创建新的 RoleUnion 项目'],
   ['Manage model and runtime settings', '管理模型和运行时设置'],
   ['Add Phase', '添加阶段'],
   ['Rename Phase', '重命名阶段'],
@@ -543,7 +543,7 @@ const ZH_HANS_REPLACEMENTS = [
   ['Webhook Endpoint', 'Webhook 端点'],
   ['Payload View', '任务包视图'],
   ['Adapter envelope', '适配器任务包'],
-  ['BoundaryML canonical', 'BoundaryML 标准包'],
+  ['RoleUnion canonical', 'RoleUnion 标准包'],
   ['Project Task Handoff', '项目任务交接'],
   ['Select Project', '选择项目'],
   ['Select Task', '选择任务'],
@@ -555,10 +555,10 @@ const ZH_HANS_REPLACEMENTS = [
   ['Configure a webhook endpoint before sending.', '发送前请先配置 Webhook 端点。'],
   ['Select a project task before handoff.', '请先选择一个项目任务。'],
   ['No project tasks available.', '暂无可交接的项目任务。'],
-  ['BoundaryML Adapter Payload', 'BoundaryML 适配器任务包'],
+  ['RoleUnion Adapter Payload', 'RoleUnion 适配器任务包'],
   ['Adapter Payload Preview', '适配器任务包预览'],
   ['Copy payload prepares a reviewed task packet for Codex, Claude Code, GitHub Copilot, Cursor, Hermes, OpenClaw, GitHub PR, or another Agent.', '复制任务包会为 Codex、Claude Code、GitHub Copilot、Cursor、Hermes、OpenClaw、GitHub PR 或其他 Agent 准备已审核的任务包。'],
-  ['Webhook POST sends the BoundaryML Adapter Payload as JSON.', 'Webhook POST 会以 JSON 发送 BoundaryML 适配器任务包。'],
+  ['Webhook POST sends the RoleUnion Adapter Payload as JSON.', 'Webhook POST 会以 JSON 发送 RoleUnion 适配器任务包。'],
   ['Boundary Rules remain authoritative; the external Agent must return evidence for review.', 'Boundary Rules 仍然是权威约束；外部 Agent 必须回传证据供审核。'],
   ['Agent Access configuration saved.', 'Agent 接入配置已保存。'],
   ['Failed to send Agent task.', 'Agent 任务发送失败。'],
@@ -791,17 +791,17 @@ function renderTopbar(state) {
   };
   const outdatedPromptCount = (project?.assets?.prompts || []).filter((prompt) => prompt.status === 'outdated' || prompt.outdatedReason || prompt.outdated_reason).length;
   const pageCopy = {
-    projects: ['Projects', 'Manage BoundaryML projects'],
-    create: ['Create Project', 'Create a new BoundaryML project'],
+    projects: ['Projects', 'Manage RoleUnion projects'],
+    create: ['Create Project', 'Create a new RoleUnion project'],
     jobs: ['Jobs', 'Monitor recent generation tasks'],
     settings: ['Settings', 'Manage model and runtime settings'],
     'settings-model': ['Model Access', 'Manage model provider, keys, and runtime test calls'],
     'settings-agent': ['Agent Access', 'Configure external Agent handoff adapters'],
-    'settings-theme': ['Theme Settings', 'BoundaryML preferences'],
+    'settings-theme': ['Theme Settings', 'RoleUnion preferences'],
   };
   const isProjectTopbar = !pageCopy[state.currentPage] && Boolean(project?.id);
   const [title, subtitle] = pageCopy[state.currentPage] || [
-    project?.name || 'BoundaryML',
+    project?.name || 'RoleUnion',
     `Workflow ${project?.workflow?.status || 'draft'} · ${stats.nodes} Nodes · ${stats.aiNodes} AI Nodes · ${stats.gates} Review Gates · Validation: ${validationSummary.errors} errors, ${validationSummary.warnings} warnings`,
   ];
   const titleBadge = isProjectTopbar && outdatedPromptCount
@@ -822,7 +822,7 @@ function renderTopbar(state) {
 
 function renderProjects(state) {
   if (!state.projects.length) {
-    return `<section class="page"><div class="card panel"><p>Start with a project goal.<br/>BoundaryML will generate a human-AI workflow boundary draft.</p><button class="primary" data-action="goto" data-page="create">Create First Project</button></div></section>`;
+    return `<section class="page"><div class="card panel"><p>Start with a project goal.<br/>RoleUnion will generate a human-AI workflow boundary draft.</p><button class="primary" data-action="goto" data-page="create">Create First Project</button></div></section>`;
   }
   return `<section class="page"><div class="page-head"><label class="project-search"><span>Search projects</span><input data-action="search-projects" value="${escapeAttr(state.projectSearch || '')}" placeholder="Search by project name"/></label><button class="primary" data-action="goto" data-page="create">+ New Project</button></div>
   <div data-project-results>${renderProjectGrid(state)}</div></section>`;
@@ -1049,7 +1049,7 @@ function hasProjectRuntime(project) {
 }
 
 function renderProjectLoading(state, title = 'Loading project') {
-  const message = state.serverError || 'Loading workflow, assets, validation, and history from BoundaryML Server.';
+  const message = state.serverError || 'Loading workflow, assets, validation, and history from RoleUnion Server.';
   return `<section class="page"><div class="card panel"><h2>${title}</h2><p class="muted">${message}</p><div class="actions"><button data-action="goto" data-page="projects">Back to Projects</button><button data-action="refresh-server-mode" class="primary">Reconnect Server</button></div></div></section>`;
 }
 
@@ -1348,7 +1348,7 @@ function renderAiComposer(state, project, selectedNode) {
   const llmRequired = requiresLocalServerLlm(state);
   return `<div class="ai-composer">
     <button class="icon-button ai-drawer-open" data-action="open-ai-edit" aria-label="Open AI Assisted Edit" title="Open AI Assisted Edit" aria-expanded="${state.aiEdit.open ? 'true' : 'false'}"><span class="canvas-tool-icon">${ICONS.history}</span></button>
-    <textarea data-action="set-ai-request" rows="1" placeholder="${llmRequired ? 'Configure an LLM to use Workflow Agent...' : 'Ask BoundaryML to modify this workflow...'}" ${llmRequired ? 'disabled' : ''}>${state.aiEdit.request || ''}</textarea>
+    <textarea data-action="set-ai-request" rows="1" placeholder="${llmRequired ? 'Configure an LLM to use Workflow Agent...' : 'Ask RoleUnion to modify this workflow...'}" ${llmRequired ? 'disabled' : ''}>${state.aiEdit.request || ''}</textarea>
     ${llmRequired
       ? '<button class="primary ai-send ai-configure" data-action="open-model-settings" aria-label="Configure LLM" title="Configure LLM">Configure LLM</button>'
       : `<button class="primary ai-send" data-action="generate-diff" aria-label="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" title="${state.aiEdit.pending ? 'Generating...' : 'Generate reviewed workflow diff'}" ${state.aiEdit.pending ? 'disabled' : ''}><span class="canvas-tool-icon">${ICONS.send}</span></button>`}
@@ -1356,7 +1356,7 @@ function renderAiComposer(state, project, selectedNode) {
 }
 
 function renderDiffPending() {
-  return '<div class="diff-pending" role="status" aria-live="polite"><span class="diff-pending-dot"></span><div><strong>Generating workflow diff...</strong><p class="muted">BoundaryML is planning the edit and preparing reviewable changes.</p></div></div>';
+  return '<div class="diff-pending" role="status" aria-live="polite"><span class="diff-pending-dot"></span><div><strong>Generating workflow diff...</strong><p class="muted">RoleUnion is planning the edit and preparing reviewable changes.</p></div></div>';
 }
 
 function workflowDiffSourceLabel(diff) {
@@ -2027,7 +2027,7 @@ function buildAgentTaskPayload(state = getState()) {
   const upstream = edges.filter((edge) => (edge.to || edge.to_node_id) === node.id);
   const downstream = edges.filter((edge) => (edge.from || edge.from_node_id) === node.id);
   return {
-    schema: 'boundaryml.agent_task_payload.v1',
+    schema: 'roleunion.agent_task_payload.v1',
     generated_at: new Date().toISOString(),
     adapter: {
       id: config.adapter,
@@ -2074,7 +2074,7 @@ function buildAgentTaskPayload(state = getState()) {
     execution_evidence_template: evidence || null,
     context_pack: project.context_pack || project.contextPack || {},
     boundary_rules: {
-      authority: 'BoundaryML',
+      authority: 'RoleUnion',
       errors,
       warnings,
       results: validationResults,
@@ -2114,7 +2114,7 @@ function buildCodingAgentHandoffPayload(payload) {
   const outputRequired = agentAccessContractPart(payload, ['output_required'], {});
   const promotionPolicy = agentAccessContractPart(payload, ['promotion_policy'], {});
   return {
-    schema: 'boundaryml.coding_agent_handoff.v1',
+    schema: 'roleunion.coding_agent_handoff.v1',
     source_schema: payload.schema,
     generated_at: payload.generated_at,
     adapter: payload.adapter,
@@ -2163,10 +2163,10 @@ function buildCodingAgentHandoffPayload(payload) {
       required_tests: acceptanceTests.required || [],
       optional_tests: acceptanceTests.optional || [],
       required_evidence: agentAccessRequiredEvidence(payload, outputRequired),
-      return_to_boundaryml: true,
+      return_to_roleunion: true,
     },
     boundary_rules: payload.boundary_rules,
-    boundaryml_trace: agentAccessBoundaryTrace(payload),
+    roleunion_trace: agentAccessBoundaryTrace(payload),
   };
 }
 
@@ -2175,13 +2175,13 @@ function buildGitHubIssuePayload(payload) {
   const acceptanceTests = agentAccessContractPart(payload, ['acceptance_tests'], {});
   const outputRequired = agentAccessContractPart(payload, ['output_required'], {});
   return {
-    schema: 'boundaryml.github_issue_handoff.v1',
+    schema: 'roleunion.github_issue_handoff.v1',
     source_schema: payload.schema,
     generated_at: payload.generated_at,
     adapter: payload.adapter,
     issue: {
       repository: repoScope.repository || '',
-      title: `[BoundaryML] ${payload.task.name}`,
+      title: `[RoleUnion] ${payload.task.name}`,
       body: [
         `Project: ${payload.project.name}`,
         `Task: ${payload.task.name}`,
@@ -2193,10 +2193,10 @@ function buildGitHubIssuePayload(payload) {
         `Required tests: ${(acceptanceTests.required || []).join(', ') || 'n/a'}`,
         `Required evidence: ${agentAccessRequiredEvidence(payload, outputRequired).join(', ') || 'n/a'}`,
       ].join('\n'),
-      labels: ['boundaryml', 'agent-ready', payload.task.risk_level || 'medium-risk'].filter(Boolean),
+      labels: ['roleunion', 'agent-ready', payload.task.risk_level || 'medium-risk'].filter(Boolean),
     },
     boundary_rules: payload.boundary_rules,
-    boundaryml_trace: agentAccessBoundaryTrace(payload),
+    roleunion_trace: agentAccessBoundaryTrace(payload),
   };
 }
 
@@ -2205,7 +2205,7 @@ function buildGitHubPrPayload(payload) {
   const acceptanceTests = agentAccessContractPart(payload, ['acceptance_tests'], {});
   const outputRequired = agentAccessContractPart(payload, ['output_required'], {});
   return {
-    schema: 'boundaryml.github_pr_handoff.v1',
+    schema: 'roleunion.github_pr_handoff.v1',
     source_schema: payload.schema,
     generated_at: payload.generated_at,
     adapter: payload.adapter,
@@ -2214,7 +2214,7 @@ function buildGitHubPrPayload(payload) {
       base_branch: repoScope.base_branch || 'main',
       head_branch: repoScope.working_branch || `agent/${payload.task.node_id}`,
       draft: true,
-      title: `[BoundaryML] ${payload.task.name}`,
+      title: `[RoleUnion] ${payload.task.name}`,
       body: [
         `Project: ${payload.project.name}`,
         `Task: ${payload.task.name}`,
@@ -2230,7 +2230,7 @@ function buildGitHubPrPayload(payload) {
       forbidden_paths: repoScope.forbidden_paths || [],
     },
     boundary_rules: payload.boundary_rules,
-    boundaryml_trace: agentAccessBoundaryTrace(payload),
+    roleunion_trace: agentAccessBoundaryTrace(payload),
   };
 }
 
@@ -2240,7 +2240,7 @@ function buildHermesTaskPayload(payload) {
   const acceptanceTests = agentAccessContractPart(payload, ['acceptance_tests'], {});
   const outputRequired = agentAccessContractPart(payload, ['output_required'], {});
   return {
-    schema: 'boundaryml.hermes_task.v1',
+    schema: 'roleunion.hermes_task.v1',
     source_schema: payload.schema,
     generated_at: payload.generated_at,
     adapter: payload.adapter,
@@ -2274,7 +2274,7 @@ function buildHermesTaskPayload(payload) {
       promotion_gate: payload.promotion_gate,
       boundary_rule_summary: payload.boundary_rules,
     },
-    boundaryml_trace: {
+    roleunion_trace: {
       ...agentAccessBoundaryTrace(payload),
     },
   };
@@ -2289,7 +2289,7 @@ function buildOpenClawJobPayload(payload) {
   const outputRequired = agentAccessContractPart(payload, ['output_required'], {});
   const promotionPolicy = agentAccessContractPart(payload, ['promotion_policy'], {});
   return {
-    schema: 'boundaryml.openclaw_job.v1',
+    schema: 'roleunion.openclaw_job.v1',
     source_schema: payload.schema,
     generated_at: payload.generated_at,
     adapter: payload.adapter,
@@ -2322,9 +2322,9 @@ function buildOpenClawJobPayload(payload) {
       required_tests: acceptanceTests.required || [],
       optional_tests: acceptanceTests.optional || [],
       required_evidence: payload.execution_evidence_template?.required_items || outputRequired.evidence || [],
-      return_to_boundaryml: true,
+      return_to_roleunion: true,
     },
-    boundaryml_trace: {
+    roleunion_trace: {
       ...agentAccessBoundaryTrace(payload),
     },
   };
@@ -2341,9 +2341,9 @@ function buildAgentAdapterPayload(payload) {
 }
 
 function buildAgentAccessPayloads(state = getState()) {
-  const boundaryml = buildAgentTaskPayload(state);
-  const adapter = buildAgentAdapterPayload(boundaryml);
-  return { boundaryml, adapter };
+  const roleunion = buildAgentTaskPayload(state);
+  const adapter = buildAgentAdapterPayload(roleunion);
+  return { roleunion, adapter };
 }
 
 function renderAgentAccess(state) {
@@ -2353,12 +2353,12 @@ function renderAgentAccess(state) {
   const selectedProjectId = project?.id || '';
   const selectedNodeId = node?.id || '';
   const payloads = buildAgentAccessPayloads(state);
-  const payload = payloads.boundaryml;
-  const previewPayload = config.payloadView === 'boundaryml' ? payloads.boundaryml : payloads.adapter;
+  const payload = payloads.roleunion;
+  const previewPayload = config.payloadView === 'roleunion' ? payloads.roleunion : payloads.adapter;
   const payloadText = previewPayload ? JSON.stringify(previewPayload, null, 2) : 'No project tasks available.';
   const recentRuns = config.runs || [];
   const modeHelp = config.mode === 'webhook'
-    ? 'Webhook POST sends the BoundaryML Adapter Payload as JSON.'
+    ? 'Webhook POST sends the RoleUnion Adapter Payload as JSON.'
     : 'Copy payload prepares a reviewed task packet for Codex, Claude Code, GitHub Copilot, Cursor, Hermes, OpenClaw, GitHub PR, or another Agent.';
   return `<section class="page agent-access-page">
     <div class="split-2">
@@ -2368,13 +2368,13 @@ function renderAgentAccess(state) {
           <label>Target Agent<select name="adapter">${Object.entries(AGENT_ACCESS_ADAPTERS).map(([id, adapter]) => `<option value="${id}" ${config.adapter === id ? 'selected' : ''}>${adapter.label}</option>`).join('')}</select></label>
           <label>Handoff Mode<select name="mode">${Object.entries(AGENT_ACCESS_MODES).map(([id, label]) => `<option value="${id}" ${config.mode === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
           <label>Payload View<select name="payloadView">${Object.entries(AGENT_PAYLOAD_VIEWS).map(([id, label]) => `<option value="${id}" ${config.payloadView === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
-          <label class="wide">Webhook Endpoint<input name="endpoint" value="${escapeAttr(config.endpoint)}" placeholder="https://agent.example.com/boundaryml/tasks"/></label>
+          <label class="wide">Webhook Endpoint<input name="endpoint" value="${escapeAttr(config.endpoint)}" placeholder="https://agent.example.com/roleunion/tasks"/></label>
         </div>
         <p class="muted">${modeHelp}</p>
         <div class="actions"><button type="submit" class="primary">Save Configuration</button></div>
       </form>
       <article class="card panel agent-access-summary">
-        <h3>BoundaryML Adapter Payload</h3>
+        <h3>RoleUnion Adapter Payload</h3>
         <p>Boundary Rules remain authoritative; the external Agent must return evidence for review.</p>
         <div class="agent-access-pills">
           ${badge(AGENT_ACCESS_ADAPTERS[config.adapter].label)}
@@ -2399,7 +2399,7 @@ function renderAgentAccess(state) {
         <div class="actions"><button type="button" data-action="copy-agent-task" ${payload ? '' : 'disabled'}>Copy Task Payload</button><button type="button" class="primary" data-action="dispatch-agent-task" ${payload ? '' : 'disabled'}>Send to Agent</button></div>
       </article>
       <article class="card panel agent-payload-card">
-        <h3>${config.payloadView === 'boundaryml' ? 'Task Payload Preview' : 'Adapter Payload Preview'}</h3>
+        <h3>${config.payloadView === 'roleunion' ? 'Task Payload Preview' : 'Adapter Payload Preview'}</h3>
         <pre data-agent-task-payload>${escapeAttr(payloadText)}</pre>
       </article>
     </div>
@@ -2914,7 +2914,7 @@ async function createAgentRunRecord(payload, status, handoffMode, handoffPayload
 }
 
 async function copyAgentTaskPayload() {
-  const { boundaryml: payload, adapter: handoffPayload } = buildAgentAccessPayloads();
+  const { roleunion: payload, adapter: handoffPayload } = buildAgentAccessPayloads();
   if (!payload) {
     showToast('Select a project task before handoff.', 'error');
     return;
@@ -2933,7 +2933,7 @@ async function copyAgentTaskPayload() {
 async function dispatchAgentTaskPayload() {
   const state = getState();
   const config = getAgentAccessConfig(state);
-  const { boundaryml: payload, adapter: handoffPayload } = buildAgentAccessPayloads(state);
+  const { roleunion: payload, adapter: handoffPayload } = buildAgentAccessPayloads(state);
   if (!payload) {
     showToast('Select a project task before handoff.', 'error');
     return;

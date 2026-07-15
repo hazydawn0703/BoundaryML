@@ -3,22 +3,22 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const defaultConfig = {
-  provider: process.env.BOUNDARYML_LLM_PROVIDER || process.env.LLM_PROVIDER || 'mock',
-  api_base_url: process.env.BOUNDARYML_LLM_BASE_URL || process.env.LLM_API_BASE_URL || 'https://api.openai.com/v1',
-  api_key: process.env.BOUNDARYML_LLM_API_KEY || process.env.LLM_API_KEY || '',
-  default_model: process.env.BOUNDARYML_LLM_DEFAULT_MODEL || process.env.LLM_MODEL || 'mock-planning-model',
-  planning_model: process.env.BOUNDARYML_LLM_PLANNING_MODEL || process.env.BOUNDARYML_LLM_DEFAULT_MODEL || process.env.LLM_MODEL || 'mock-planning-model',
-  prompt_model: process.env.BOUNDARYML_LLM_PROMPT_MODEL || process.env.BOUNDARYML_LLM_DEFAULT_MODEL || process.env.LLM_MODEL || 'mock-prompt-model',
-  diff_model: process.env.BOUNDARYML_LLM_DIFF_MODEL || process.env.BOUNDARYML_LLM_DEFAULT_MODEL || process.env.LLM_MODEL || 'mock-diff-model',
-  timeout_ms: Number(process.env.BOUNDARYML_LLM_TIMEOUT_MS || 60000),
-  structured_output_enabled: String(process.env.BOUNDARYML_LLM_ENABLE_STRUCTURED_OUTPUT ?? 'true') !== 'false',
-  allow_mock: String(process.env.BOUNDARYML_ALLOW_MOCK_MODEL ?? 'true') !== 'false',
-  log_level: process.env.BOUNDARYML_LLM_LOG_LEVEL || 'summary',
+  provider: process.env.ROLEUNION_LLM_PROVIDER || process.env.LLM_PROVIDER || 'mock',
+  api_base_url: process.env.ROLEUNION_LLM_BASE_URL || process.env.LLM_API_BASE_URL || 'https://api.openai.com/v1',
+  api_key: process.env.ROLEUNION_LLM_API_KEY || process.env.LLM_API_KEY || '',
+  default_model: process.env.ROLEUNION_LLM_DEFAULT_MODEL || process.env.LLM_MODEL || 'mock-planning-model',
+  planning_model: process.env.ROLEUNION_LLM_PLANNING_MODEL || process.env.ROLEUNION_LLM_DEFAULT_MODEL || process.env.LLM_MODEL || 'mock-planning-model',
+  prompt_model: process.env.ROLEUNION_LLM_PROMPT_MODEL || process.env.ROLEUNION_LLM_DEFAULT_MODEL || process.env.LLM_MODEL || 'mock-prompt-model',
+  diff_model: process.env.ROLEUNION_LLM_DIFF_MODEL || process.env.ROLEUNION_LLM_DEFAULT_MODEL || process.env.LLM_MODEL || 'mock-diff-model',
+  timeout_ms: Number(process.env.ROLEUNION_LLM_TIMEOUT_MS || 60000),
+  structured_output_enabled: String(process.env.ROLEUNION_LLM_ENABLE_STRUCTURED_OUTPUT ?? 'true') !== 'false',
+  allow_mock: String(process.env.ROLEUNION_ALLOW_MOCK_MODEL ?? 'true') !== 'false',
+  log_level: process.env.ROLEUNION_LLM_LOG_LEVEL || 'summary',
 };
 
 const repoRoot = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
 const defaultDataDir = resolve(repoRoot, 'data');
-const configPath = resolve(process.env.BOUNDARYML_MODEL_CONFIG_PATH || process.env.BOUNDARYML_LLM_CONFIG_PATH || `${process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || defaultDataDir}/model-config.json`);
+const configPath = resolve(process.env.ROLEUNION_MODEL_CONFIG_PATH || process.env.ROLEUNION_LLM_CONFIG_PATH || `${process.env.ROLEUNION_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || defaultDataDir}/model-config.json`);
 const editableFields = new Set(['provider', 'api_base_url', 'api_key', 'default_model', 'planning_model', 'prompt_model', 'diff_model', 'timeout_ms', 'structured_output_enabled', 'allow_mock', 'log_level']);
 const config = { ...defaultConfig, ...loadPersistedConfig() };
 
@@ -206,7 +206,7 @@ export async function runModel(task, payload, options = {}) {
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: 'You are BoundaryML Model Access Layer. Return strict JSON only.' },
+          { role: 'system', content: 'You are RoleUnion Model Access Layer. Return strict JSON only.' },
           { role: 'user', content: JSON.stringify({ task, payload }) },
         ],
         temperature: 0.2,

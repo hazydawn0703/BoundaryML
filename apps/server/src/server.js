@@ -12,19 +12,19 @@ import { generateExecutionKit } from '../../../packages/generators/src/execution
 import { exportExecutionKit } from '../../../packages/exporter/src/executionKitExporter.js';
 import { loadAiSaasFeatureMvpSpec } from '../../../packages/examples/src/aiSaasFeatureMvp.js';
 import { validateWorkflow as validateRulesWorkflow } from '../../../packages/rules/src/validationEngine.js';
-import { validateProject, validateWorkflow, validateBoundaryMLProjectSpec, validateGenerationJob } from '../../../packages/schema/src/schema.js';
+import { validateProject, validateWorkflow, validateRoleUnionProjectSpec, validateGenerationJob } from '../../../packages/schema/src/schema.js';
 import { normalizeAgenticNode } from '../../../packages/schema/src/agentic.js';
 import { MemoryStorage } from '../../../packages/storage/src/memoryStorage.js';
 import { FileStorage } from '../../../packages/storage/src/fileStorage.js';
 import { getModelConfig, getModelStatus, runModel, updateModelConfig } from './llmAccess.js';
 import { detectSchemaVersion, migrateObjectIfNeeded } from '../../../packages/schema/src/migrations.js';
 
-const port = Number(process.env.BOUNDARYML_SERVER_PORT || process.env.PORT || 8787);
+const port = Number(process.env.ROLEUNION_SERVER_PORT || process.env.PORT || 8787);
 const runtimeMode = 'local_server';
-const storageAdapter = process.env.BOUNDARYML_STORAGE_ADAPTER || process.env.STORAGE_MODE || 'file';
+const storageAdapter = process.env.ROLEUNION_STORAGE_ADAPTER || process.env.STORAGE_MODE || 'file';
 const repoRoot = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
 const defaultDataDir = resolve(repoRoot, 'data');
-const dataDir = process.env.BOUNDARYML_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || defaultDataDir;
+const dataDir = process.env.ROLEUNION_DATA_DIR || process.env.STORAGE_DIR || process.env.DATA_DIR || defaultDataDir;
 if (storageAdapter === 'file') mkdirSync(dataDir, { recursive: true });
 const storage = storageAdapter === 'file' ? new FileStorage(dataDir) : new MemoryStorage();
 const ACTIVE_JOB_STATUS = new Set(['queued', 'running', 'succeeded']);
@@ -1262,8 +1262,8 @@ function seedIfEmpty(ctx) {
   p.assets = spec.assets;
   p.workflow = spec.workflow;
   p.context_pack = spec.context_pack;
-  p.boundaryml_version = spec.boundaryml_version;
-  p.schema_version = 'boundaryml-schema-v0.1';
+  p.roleunion_version = spec.roleunion_version;
+  p.schema_version = 'roleunion-schema-v0.1';
   p.workflow_history = [createWorkflowSnapshot(p, p.context_pack, p.workflow, p.assets, spec.validation || [])];
   p.deleted_at = null;
   storage.saveProject(ctx.workspace_id, p);
@@ -1307,7 +1307,7 @@ function normalizeAgentRunEvidence(value = {}) {
 
 function createAgentRun(ctx, project, body = {}) {
   const payload = body.payload || {};
-  const canonicalPayload = body.canonical_payload || body.canonicalPayload || payload.boundaryml_trace?.canonical_payload || payload;
+  const canonicalPayload = body.canonical_payload || body.canonicalPayload || payload.roleunion_trace?.canonical_payload || payload;
   const nodeId = body.node_id || body.nodeId || canonicalPayload?.task?.node_id || canonicalPayload?.task?.nodeId || payload?.task?.id || payload?.job?.id;
   const node = (project.workflow?.nodes || []).find((item) => item.id === nodeId);
   if (!node) {
@@ -1331,7 +1331,7 @@ function createAgentRun(ctx, project, body = {}) {
     external_run_id: body.external_run_id || body.externalRunId || '',
     payload,
     canonical_payload: canonicalPayload,
-    payload_schema: payload.schema || 'boundaryml.agent_task_payload.v1',
+    payload_schema: payload.schema || 'roleunion.agent_task_payload.v1',
     evidence: [],
     created_by: ctx.user_id,
     created_at: now,
@@ -1394,7 +1394,7 @@ function projectListSummary(project) {
 
 function writeOwnership(ctx, obj, isCreate = false) {
   const now = new Date().toISOString();
-  return { ...obj, workspace_id: ctx.workspace_id, created_by: isCreate ? ctx.user_id : (obj.created_by || ctx.user_id), updated_by: ctx.user_id, created_at: isCreate ? now : (obj.created_at || now), updated_at: now, boundaryml_version: obj.boundaryml_version || 'v0.1', schema_version: obj.schema_version || 'boundaryml-schema-v0.1' };
+  return { ...obj, workspace_id: ctx.workspace_id, created_by: isCreate ? ctx.user_id : (obj.created_by || ctx.user_id), updated_by: ctx.user_id, created_at: isCreate ? now : (obj.created_at || now), updated_at: now, roleunion_version: obj.roleunion_version || 'v0.1', schema_version: obj.schema_version || 'roleunion-schema-v0.1' };
 }
 
 function safeId(value, fallback) {
@@ -2504,7 +2504,7 @@ function buildAssetsForWorkflow(workflow, contextPack = {}, modelName = 'configu
 
 function modelWorkflowPayload(project) {
   return {
-    instruction: 'Generate a domain-specific BoundaryML workflow draft as strict JSON. Infer phases and nodes from this project only. Do not copy a generic software delivery template. Return at least three concrete nodes whose names and goals clearly match the project domain.',
+    instruction: 'Generate a domain-specific RoleUnion workflow draft as strict JSON. Infer phases and nodes from this project only. Do not copy a generic software delivery template. Return at least three concrete nodes whose names and goals clearly match the project domain.',
     output_contract: {
       workflow: {
         phases: [{ id: 'phase-1', name: 'Discovery', order: 1 }],
@@ -2581,7 +2581,7 @@ async function prepareWorkflowGeneration(ctx, project, selectedTemplate) {
     const schema = validateWorkflow(workflow);
     if (!schema.ok) throw new Error(`MODEL_WORKFLOW_SCHEMA_INVALID: ${schema.errors.join('; ')}`);
     const validation = validateRulesWorkflow(workflow, assets, { forGeneration: true, modelConfig: getModelStatus() });
-    const specCheck = validateBoundaryMLProjectSpec({ boundaryml_version: 'v0.1', project, context_pack: project.context_pack, workflow, assets, validation, execution_kits: project.execution_kits || [] });
+    const specCheck = validateRoleUnionProjectSpec({ roleunion_version: 'v0.1', project, context_pack: project.context_pack, workflow, assets, validation, execution_kits: project.execution_kits || [] });
     if (!specCheck.ok) throw new Error(`MODEL_PROJECT_SPEC_INVALID: ${specCheck.errors.join('; ')}`);
     return { workflow, assets, validation, modelResult };
   } catch (error) {
@@ -3952,5 +3952,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, () => {
-  console.log(`BoundaryML Server listening on http://localhost:${port}`);
+  console.log(`RoleUnion Server listening on http://localhost:${port}`);
 });

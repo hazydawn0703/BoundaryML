@@ -1,14 +1,14 @@
-# BoundaryML Development Memory
+# RoleUnion Development Memory
 
 ## Phase 0 - Shared Schema / Core / Spec / Rules 最小地基
 
 ### 本 Phase 完成内容
 - 强化 `packages/schema`：补齐 Spec v0.1 关键对象 schema 与 runtime 校验函数。
-- 补充 `validateBoundaryMLProjectSpec` 全量项目级校验与 `validateAssets`。
+- 补充 `validateRoleUnionProjectSpec` 全量项目级校验与 `validateAssets`。
 - 强化 `packages/rules`：补齐 Phase 0 所需 P0 规则（10 条）。
 - 新增 `packages/core/src/engine.js`：实现 workflow patch/diff/version/snapshot/normalize/validation-status 等纯函数。
 - 提供 `packages/examples` 与 `packages/exporter` 最小可复用包。
-- 更新 example 生成逻辑，使 `examples/ai-saas-feature-mvp.json` 为完整 BoundaryML Spec，并包含 warning、outdated prompt、diff 示例。
+- 更新 example 生成逻辑，使 `examples/ai-saas-feature-mvp.json` 为完整 RoleUnion Spec，并包含 warning、outdated prompt、diff 示例。
 - 扩展 `scripts/check.js`，覆盖 schema / rules / core / snapshot / storage / server smoke。
 
 ### 修改文件清单
@@ -28,7 +28,7 @@
 
 ### 新增 API / Schema / 类型 / 测试
 - Schema:
-  - `validateBoundaryMLProjectSpec`
+  - `validateRoleUnionProjectSpec`
   - `validateAssets`
   - `validateArtifactContract` / `validateArtifactTemplate` / `validateWorkflowSnapshot` / `validateModelCallLog` / `validateTemplate`
 - Core:
@@ -42,7 +42,7 @@
   - `calculateWorkflowValidationStatus`
 - Tests:
   - 规则覆盖（高风险 gate、AI output、acceptance、human-only prompt、edge required outputs、autonomous 风险、production/release 限制等）
-  - `validateBoundaryMLProjectSpec` error/warning/suggestion 覆盖
+  - `validateRoleUnionProjectSpec` error/warning/suggestion 覆盖
   - server smoke（job + file persistence）
 
 ### 已知限制
@@ -100,7 +100,7 @@
 - `GET /api/projects/:projectId/jobs` and `GET /api/projects/:projectId/jobs/:jobId`
 
 ### Schema / Core / Rule Integration
-- Workflow generate: `createWorkflowFromTemplate` + `normalizeWorkflowSpec` + `validateWorkflow(schema)` + `validateWorkflow(rules)` + spec-level `validateBoundaryMLProjectSpec`。
+- Workflow generate: `createWorkflowFromTemplate` + `normalizeWorkflowSpec` + `validateWorkflow(schema)` + `validateWorkflow(rules)` + spec-level `validateRoleUnionProjectSpec`。
 - Workflow patch: `applyWorkflowPatch` + schema validation + rules validation + snapshot。
 - Node patch: workflow patch + `markAffectedAssetsOutdated` + rules validation。
 - Diff apply: `applyDiff` + `markAffectedAssetsOutdated` + rules validation + snapshot。
@@ -457,7 +457,7 @@
 ## Open-source Phase 5–9 Roadmap Alignment (Post Phase 4B)
 
 ### PRD Review Source
-- Reviewed the latest three PRD files: `docs/BoundaryML PRD.md`, `docs/BoundaryML PRD 补充章节15–26.md`, and `docs/BoundaryML PRD 架构补充章节27–41.md`.
+- Reviewed the latest three PRD files: `docs/RoleUnion PRD.md`, `docs/RoleUnion PRD 补充章节15–26.md`, and `docs/RoleUnion PRD 架构补充章节27–41.md`.
 - The public GitHub roadmap should continue with the MVP / open-source line only.
 - Commercial Pro / Enterprise / SaaS phases are intentionally excluded from the public GitHub roadmap and will be developed locally / privately.
 
@@ -591,12 +591,12 @@
 
 ### Pre-coding Audit
 - docs/development-memory.md review: Phase 6 已完成 Execution Kit Export，Phase 7 应进入 Model Access Layer / Real LLM / Structured Output，Phase 8 应启动 AI Assisted Edit + Diff Review UI；Phase 10–14 仍为私有闭源商业化范围。
-- Existing Model Access: `llmAccess.js` 仅返回 mock / real-not-implemented，且 env key 与 `.env.example` 的 `BOUNDARYML_LLM_*` 不一致。
+- Existing Model Access: `llmAccess.js` 仅返回 mock / real-not-implemented，且 env key 与 `.env.example` 的 `ROLEUNION_LLM_*` 不一致。
 - Existing Diff UI: Studio 已有 AI Edit / Diff Review 轻量 UI，但 server mode 仍走本地 mock diff / local apply，未调用 Diff API。
 - Gaps found: OpenAI-compatible call 未实现；structured output parsing 缺失；model call summary 不完整；AI Diff 生成 / apply / reject 未 server 化；AI context 发送提示缺失。
 
 ### Completed
-- Phase 7：`llmAccess.js` 支持 `BOUNDARYML_LLM_*` 配置、OpenAI-compatible `/chat/completions` 调用、structured JSON output parsing、timeout、mock fallback、model status 扩展。
+- Phase 7：`llmAccess.js` 支持 `ROLEUNION_LLM_*` 配置、OpenAI-compatible `/chat/completions` 调用、structured JSON output parsing、timeout、mock fallback、model status 扩展。
 - Phase 7：Model status 返回 provider / mode / default / planning / prompt / diff model / structured output / log level；model calls 记录 purpose/status/model/summary。
 - Phase 8：API Client 新增 `diffsApi.generate/get/apply/reject`。
 - Phase 8：Server diff generation 会先尝试 `runModel('workflow_diff')`，若模型输出没有结构化 diff 则 fallback 到 deterministic diff generator；生成结果保存为 draft diff。
@@ -737,7 +737,7 @@
 
 ### Completed
 - 修正 `apps/studio/src/state/store.js` 与 `apps/studio/src/services/mockModelService.js` 的 package import 深度，使其在 repo-root static server 下解析到 `/packages/...`。
-- 新增 `scripts/dev-studio.js`：从仓库根目录 serve Studio，并将 `/api/*` proxy 到 `BOUNDARYML_API_BASE_URL`（默认 `http://localhost:8787`）。
+- 新增 `scripts/dev-studio.js`：从仓库根目录 serve Studio，并将 `/api/*` proxy 到 `ROLEUNION_API_BASE_URL`（默认 `http://localhost:8787`）。
 - `apps/studio/package.json` 的 `dev` 改为调用上述 dev server，后续可直接使用 `npm run dev:studio` 查看 UI。
 - `scripts/studio-workflow-edit-check.js` 增加 dev server 与 nested import 检查，避免 `/apps/packages/...` 回归。
 

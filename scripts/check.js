@@ -5,7 +5,7 @@ import { listPublicTemplates, selectTemplateForProject } from '../packages/core/
 import { validateWorkflow } from '../packages/rules/src/validationEngine.js';
 import { generateExecutionKit } from '../packages/generators/src/executionKitGenerator.js';
 import { generateWorkflowDiff, applyWorkflowDiff } from '../packages/core/src/diff.js';
-import { validateAgentExecutionPlan, validateBoundaryMLProjectSpec, validateNode, validateSandboxExecutionContract, validateTemplate } from '../packages/schema/src/schema.js';
+import { validateAgentExecutionPlan, validateRoleUnionProjectSpec, validateNode, validateSandboxExecutionContract, validateTemplate } from '../packages/schema/src/schema.js';
 import { FileStorage } from '../packages/storage/src/fileStorage.js';
 import { exportExampleExecutionKit } from './export-example.js';
 import { createWorkflowSnapshot, applyWorkflowPatch, applyDiff, calculateWorkflowValidationStatus, markAffectedAssetsOutdated } from '../packages/core/src/engine.js';
@@ -71,10 +71,10 @@ async function main() {
   assert(selectTemplateForProject({ type: 'Internal Tool' }).id === 'template-internal-ai-tool', 'Internal Tool template matching should work');
   assert(selectTemplateForProject({ type: 'Legacy Modernization' }).id === 'template-legacy-system-ai-modernization', 'Legacy Modernization template matching should work');
 
-  const validSpec = validateBoundaryMLProjectSpec(exampleSpec);
+  const validSpec = validateRoleUnionProjectSpec(exampleSpec);
   assert(validSpec.ok, `example spec should be valid: ${validSpec.errors.join(', ')}`);
-  assert(validateBoundaryMLProjectSpec(internalToolSpec).ok, 'internal tool example spec should be valid');
-  assert(validateBoundaryMLProjectSpec(legacySpec).ok, 'legacy modernization example spec should be valid');
+  assert(validateRoleUnionProjectSpec(internalToolSpec).ok, 'internal tool example spec should be valid');
+  assert(validateRoleUnionProjectSpec(legacySpec).ok, 'legacy modernization example spec should be valid');
   const aiSaasL3Node = (exampleSpec.workflow.nodes || []).find((node) => node.agent_execution_plan?.execution_level === 'L3');
   const aiSaasProductionNode = (exampleSpec.workflow.nodes || []).find((node) => /production/i.test(node.name || ''));
   assert(aiSaasL3Node?.sandbox_execution_contract, 'AI SaaS example should include an L3 Sandbox node with contract');
@@ -89,7 +89,7 @@ async function main() {
   assert((exampleSpec.assets.checklists || []).every((asset) => asset.generated_from?.node_id && asset.generated_from?.workflow_version), 'example checklists should link generated_from node and workflow version');
   assert((exampleSpec.assets.artifact_templates || []).every((asset) => asset.generated_from?.node_id && asset.generated_from?.workflow_version), 'example artifact templates should link generated_from node and workflow version');
   assert(validSpec.warnings.length >= 1, 'example spec should contain at least one warning');
-  assert(validSpec.suggestions.length >= 1, 'validateBoundaryMLProjectSpec should return suggestion');
+  assert(validSpec.suggestions.length >= 1, 'validateRoleUnionProjectSpec should return suggestion');
 
   const invalidNode = validateNode({ id: 1 });
   assert(!invalidNode.ok, 'schema parse failure path should be covered');
