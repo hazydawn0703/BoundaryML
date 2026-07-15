@@ -1,12 +1,12 @@
-# BoundaryML
+# RoleUnion
 
-BoundaryML 是面向 **人机协作工作流** 的边界建模与治理层。它帮助团队在 AI 参与复杂项目之前，明确：项目阶段、节点输入输出、人机执行模式、Review Gate、Execution Assets 与可导出的 Execution Kit。
+RoleUnion 是面向 **人机协作工作流** 的边界建模与治理层。它帮助团队在 AI 参与复杂项目之前，明确：项目阶段、节点输入输出、人机执行模式、Review Gate、Execution Assets 与可导出的 Execution Kit。
 
-BoundaryML 的第一个重点落地场景是 **Agentic Development**：将模糊的软件开发任务转成可审核、可测试、可交接给 Codex / Claude Code / GitHub Copilot / Cursor / Hermes / OpenClaw 等 Coding Agent 的 Agent-ready Execution Kit。
+RoleUnion 的第一个重点落地场景是 **Agentic Development**：将模糊的软件开发任务转成可审核、可测试、可交接给 Codex / Claude Code / GitHub Copilot / Cursor / Hermes / OpenClaw 等 Coding Agent 的 Agent-ready Execution Kit。
 
 换句话说：
 
-- BoundaryML 的底层能力是通用的人机协作边界建模；
+- RoleUnion 的底层能力是通用的人机协作边界建模；
 - Agentic Development 是第一个商业爆破点；
 - Agent-ready Execution Kit 是第一个场景化输出；
 - AI Coding Governance Kit 是第一个商业化套件。
@@ -35,7 +35,7 @@ Mode: Local Demo / Mock Model
 
 ### Local Server Mode
 
-当前正式开源运行模式：Studio 通过 HTTP API 访问 BoundaryML Server，Server 负责 `.env`、持久化、LLM Access、Workflow/Asset/Execution Kit 生成。Local Server 默认使用 FileStorage，并会在首次启动时自动创建 `./data`；如需一次性内存模式，可显式设置 `BOUNDARYML_STORAGE_ADAPTER=memory`。
+当前正式开源运行模式：Studio 通过 HTTP API 访问 RoleUnion Server，Server 负责 `.env`、持久化、LLM Access、Workflow/Asset/Execution Kit 生成。Local Server 默认使用 FileStorage，并会在首次启动时自动创建 `./data`；如需一次性内存模式，可显式设置 `ROLEUNION_STORAGE_ADAPTER=memory`。
 
 ## Quick Start
 
@@ -53,30 +53,30 @@ npm run dev:studio
 
 - Server: `http://localhost:8787`
 - Studio: `http://localhost:5173/apps/studio/index.html`（如果 5173 被占用，终端会自动打印新的端口，例如 5174）
-- `npm run dev:studio` 会从仓库根目录 serve Studio，并将 `/api/*` proxy 到 `BOUNDARYML_API_BASE_URL`（默认 `http://localhost:8787`）。
+- `npm run dev:studio` 会从仓库根目录 serve Studio，并将 `/api/*` proxy 到 `ROLEUNION_API_BASE_URL`（默认 `http://localhost:8787`）。
 - 若页面只有背景没有内容，请确认浏览器打开的是 `npm run dev:studio` 终端打印的 URL，并停止旧的 `py -m http.server 5173` 进程或换用自动分配的新端口。
-- Studio API Base URL: `VITE_BOUNDARYML_API_BASE_URL` → `window.BOUNDARYML_API_BASE_URL` → `/api`
+- Studio API Base URL: `VITE_ROLEUNION_API_BASE_URL` → `window.ROLEUNION_API_BASE_URL` → `/api`
 
 ## OpenAI-compatible Model 配置
 
 开源版支持两种配置方式：
 
 - 在 `.env` 中设置默认模型配置。
-- 在 Studio 的 `Settings / Model Access` 页面保存配置，保存后会立即更新 Server 运行时，并写入 `BOUNDARYML_MODEL_CONFIG_PATH`（默认 `./data/model-config.json`）。
+- 在 Studio 的 `Settings / Model Access` 页面保存配置，保存后会立即更新 Server 运行时，并写入 `ROLEUNION_MODEL_CONFIG_PATH`（默认 `./data/model-config.json`）。
 
 `.env.example` 已包含：
 
 ```bash
-BOUNDARYML_MODEL_CONFIG_PATH=./data/model-config.json
-BOUNDARYML_LLM_PROVIDER=openai-compatible
-BOUNDARYML_LLM_API_KEY=
-BOUNDARYML_LLM_BASE_URL=
-BOUNDARYML_LLM_DEFAULT_MODEL=
-BOUNDARYML_LLM_PLANNING_MODEL=
-BOUNDARYML_LLM_PROMPT_MODEL=
-BOUNDARYML_LLM_DIFF_MODEL=
-BOUNDARYML_LLM_ENABLE_STRUCTURED_OUTPUT=true
-BOUNDARYML_ALLOW_MOCK_MODEL=true
+ROLEUNION_MODEL_CONFIG_PATH=./data/model-config.json
+ROLEUNION_LLM_PROVIDER=openai-compatible
+ROLEUNION_LLM_API_KEY=
+ROLEUNION_LLM_BASE_URL=
+ROLEUNION_LLM_DEFAULT_MODEL=
+ROLEUNION_LLM_PLANNING_MODEL=
+ROLEUNION_LLM_PROMPT_MODEL=
+ROLEUNION_LLM_DIFF_MODEL=
+ROLEUNION_LLM_ENABLE_STRUCTURED_OUTPUT=true
+ROLEUNION_ALLOW_MOCK_MODEL=true
 ```
 
 如果未配置 API Key，Server 会在允许 mock 的情况下使用 Mock Model fallback。Studio 不会回显原始 API Key，只显示是否已配置和 masked 值；模型 Key 只保存在 Server 本地配置文件中，不进入浏览器 localStorage，也不进入 git（`data/` 已被忽略）。
@@ -100,22 +100,22 @@ Server 公开只读模板 API：`GET /api/templates` 与 `GET /api/templates/:te
 - `examples/legacy-system-ai-modernization.json`
 - `examples/templates.json`
 
-这些示例均为 BoundaryML Spec，包含 workflow、assets、validation、diff 示例与模板引用。
+这些示例均为 RoleUnion Spec，包含 workflow、assets、validation、diff 示例与模板引用。
 
 `ai-saas-feature-mvp.json` 包含一个 L3 Sandbox Coding Agent 节点和一个 L0 Production 节点；`internal-ai-tool.json` 默认禁用 Agentic Development 字段；`legacy-system-ai-modernization.json` 使用更保守的 L2 Agent 计划。
 
-当前公开示例以软件开发和 AI 转型项目为主，但 BoundaryML Spec 本身并不限定于 Coding Agent 场景，后续可扩展到 GEO 运营、内容生产、企业审批、数据分析、咨询交付和多 Agent 业务流程治理。
+当前公开示例以软件开发和 AI 转型项目为主，但 RoleUnion Spec 本身并不限定于 Coding Agent 场景，后续可扩展到 GEO 运营、内容生产、企业审批、数据分析、咨询交付和多 Agent 业务流程治理。
 
 ## 关键文档
 
-- `docs/BoundaryML PRD Agentic Development 补充章节42–47.md` — Agentic Development 场景补充，定义 Coding Agent 执行等级、沙箱执行契约、证据回收、Promotion Gate 和 Agent 安全 / 成本 / 权限规则。
+- `docs/RoleUnion PRD Agentic Development 补充章节42–47.md` — Agentic Development 场景补充，定义 Coding Agent 执行等级、沙箱执行契约、证据回收、Promotion Gate 和 Agent 安全 / 成本 / 权限规则。
 - `docs/open-source-phase-plan.md` — 最新开源 / 闭源 Phase 计划，明确 Agentic Development P0 的 Agent / Sandbox Tab、Sandbox Contract Export 和 Community Core 边界。
 
 ## Workspace 结构
 
-- `apps/studio`：BoundaryML Studio
-- `apps/server`：BoundaryML Server API
-- `packages/schema`：BoundaryML schema + validation
+- `apps/studio`：RoleUnion Studio
+- `apps/server`：RoleUnion Server API
+- `packages/schema`：RoleUnion schema + validation
 - `packages/core`：Workflow / Diff / Template 核心对象
 - `packages/rules`：Boundary Rules
 - `packages/generators`：Workflow / Prompt / Checklist / ExecutionKit generators

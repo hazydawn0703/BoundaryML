@@ -50,7 +50,7 @@ function writeReport(status = 'running') {
   const failed = results.filter((item) => item.status === 'FAIL').length;
   const statusLabel = { running: '运行中', passed: '通过', failed: '失败' }[status] || status;
   const lines = [
-    '# BoundaryML 开源部分功能验收报告',
+    '# RoleUnion 开源部分功能验收报告',
     '',
     `- 运行 ID: \`${runId}\``,
     `- 验收状态: **${statusLabel}**`,
@@ -177,7 +177,7 @@ function fakeModelOutput(task, payload) {
       changed_fields: [],
       project: {
         name: projectName,
-        goal: 'Verify BoundaryML open-source Community Core Phase 0-9 end to end with persisted evidence.',
+        goal: 'Verify RoleUnion open-source Community Core Phase 0-9 end to end with persisted evidence.',
         project_type: 'AI Feature',
         current_stage: 'Acceptance',
         risk_level: 'high',
@@ -188,7 +188,7 @@ function fakeModelOutput(task, payload) {
           request_sources: ['Open-source acceptance team'],
           team_roles: ['Product Owner', 'Tech Lead', 'QA Lead', 'Release Manager'],
           approval_process: ['Tech Lead Review', 'Release Manager Approval'],
-          tool_stack: ['GitHub', 'npm', 'Playwright', 'BoundaryML Studio'],
+          tool_stack: ['GitHub', 'npm', 'Playwright', 'RoleUnion Studio'],
           risk_constraints: ['No production deployment without human approval', 'No production secrets in sandbox'],
           historical_process_materials: 'Acceptance runbook v1',
         },
@@ -294,10 +294,10 @@ async function startBoundaryServer() {
   serverPort = await getFreePort();
   baseUrl = `http://127.0.0.1:${serverPort}`;
   const child = spawnLogged('server', process.execPath, ['apps/server/src/server.js'], {
-    BOUNDARYML_SERVER_PORT: String(serverPort),
-    BOUNDARYML_STORAGE_ADAPTER: 'file',
-    BOUNDARYML_DATA_DIR: dataDir,
-    BOUNDARYML_MODEL_CONFIG_PATH: modelConfigPath,
+    ROLEUNION_SERVER_PORT: String(serverPort),
+    ROLEUNION_STORAGE_ADAPTER: 'file',
+    ROLEUNION_DATA_DIR: dataDir,
+    ROLEUNION_MODEL_CONFIG_PATH: modelConfigPath,
   });
   await waitForHttp(`${baseUrl}/api/health`, (res) => res.status === 200 && res.body?.ok === true);
   artifacts.server_url = baseUrl;
@@ -308,10 +308,10 @@ async function startStudioServer() {
   studioPort = await getFreePort();
   studioUrl = `http://127.0.0.1:${studioPort}/apps/studio/index.html`;
   const child = spawnLogged('studio', process.execPath, ['scripts/dev-studio.js'], {
-    BOUNDARYML_STUDIO_PORT: String(studioPort),
-    BOUNDARYML_API_BASE_URL: baseUrl,
+    ROLEUNION_STUDIO_PORT: String(studioPort),
+    ROLEUNION_API_BASE_URL: baseUrl,
   });
-  await waitForHttp(studioUrl, (res) => res.status === 200 && String(res.raw).includes('BoundaryML'));
+  await waitForHttp(studioUrl, (res) => res.status === 200 && String(res.raw).includes('RoleUnion'));
   await waitForHttp(`http://127.0.0.1:${studioPort}/api/health`, (res) => res.status === 200 && res.body?.ok === true);
   artifacts.studio_url = studioUrl;
   return child;
@@ -355,7 +355,7 @@ async function createAcceptanceProject() {
       output_language: 'zh-Hans',
       request: [
         `项目名称是 ${projectName}`,
-        '目标是端到端验收 BoundaryML 开源 Community Core Phase 0-9',
+        '目标是端到端验收 RoleUnion 开源 Community Core Phase 0-9',
         '当前阶段是开源验收',
         '目标交付物是验收工作流、Agent-ready Execution Kit、验收报告',
         '预期 AI 范围是生成 Workflow Diff、准备 Prompt 和 Checklist、生成执行证据',
@@ -363,7 +363,7 @@ async function createAcceptanceProject() {
         '需求来源是开源验收团队',
         '团队角色有 Product Owner、Tech Lead、QA Lead、Release Manager',
         '审批流程是 Tech Lead Review 和 Release Manager Approval',
-        '工具栈是 GitHub、npm、Playwright、BoundaryML Studio',
+        '工具栈是 GitHub、npm、Playwright、RoleUnion Studio',
         '风险约束是不能在 sandbox 使用生产密钥，生产发布必须人工批准',
       ].join('，'),
     }),
@@ -416,7 +416,7 @@ async function configureAgentSandboxDirectly() {
         id: contractId,
         node_id: codeNode.id,
         execution_target: 'codex',
-        repo_scope: { repository: 'github.com/hazydawn0703/BoundaryML', base_branch: 'main', working_branch: `acceptance/${codeNode.id}`, allowed_paths: ['apps/**', 'packages/**', 'scripts/**'], forbidden_paths: ['secrets/**'] },
+        repo_scope: { repository: 'github.com/hazydawn0703/RoleUnion', base_branch: 'main', working_branch: `acceptance/${codeNode.id}`, allowed_paths: ['apps/**', 'packages/**', 'scripts/**'], forbidden_paths: ['secrets/**'] },
         runtime_scope: { allowed_commands: ['npm run check', 'npm run typecheck'], network_policy: 'blocked', external_network_approved: false, package_install_policy: 'allow_lockfile_only', max_runtime_minutes: 45 },
         secret_scope: { policy: 'sandbox_only', allowed_secret_refs: [] },
         cost_budget: { currency: 'USD', amount: 5 },
@@ -615,7 +615,7 @@ async function main() {
         body: JSON.stringify({
           team_roles: ['Product Owner', 'Tech Lead', 'QA Lead', 'Release Manager'],
           approval_process: ['Tech Lead Review', 'Release Manager Approval'],
-          tool_stack: ['GitHub', 'npm', 'Playwright', 'BoundaryML Studio'],
+          tool_stack: ['GitHub', 'npm', 'Playwright', 'RoleUnion Studio'],
           risk_constraints: ['No production deployment without human approval', 'No production secrets in sandbox'],
           historical_process_materials: 'Acceptance runbook v1',
         }),

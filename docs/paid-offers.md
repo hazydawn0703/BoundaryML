@@ -1,6 +1,6 @@
-# BoundaryML Paid Offers
+# RoleUnion Paid Offers
 
-These offers start with Agentic Development because it is the clearest initial commercial wedge for BoundaryML. They do not limit BoundaryML's broader positioning as a human-AI workflow modeling and governance layer.
+These offers start with Agentic Development because it is the clearest initial commercial wedge for RoleUnion. They do not limit RoleUnion's broader positioning as a human-AI workflow modeling and governance layer.
 
 ## Offer 0: Human-AI Workflow Boundary Blueprint
 
@@ -50,7 +50,7 @@ This offer converts a project idea, PRD, or feature brief into a practical execu
 - review checklists
 - agent prompts
 
-This offer helps teams make AI coding work reviewable by defining task boundaries, approval points, output contracts, and agent prompts for a real development workflow. It is the first commercial governance kit, not the full boundary of BoundaryML.
+This offer helps teams make AI coding work reviewable by defining task boundaries, approval points, output contracts, and agent prompts for a real development workflow. It is the first commercial governance kit, not the full boundary of RoleUnion.
 
 ## Offer 3: Enterprise AI Agent Governance Blueprint
 

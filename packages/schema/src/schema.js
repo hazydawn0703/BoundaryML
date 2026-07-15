@@ -12,7 +12,7 @@ import {
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:/;
 
-export const SCHEMA_VERSION = 'boundaryml-schema-v0.1';
+export const SCHEMA_VERSION = 'roleunion-schema-v0.1';
 
 export const ENTITY_SCHEMAS = {
   project: { required: ['id', 'workspace_id', 'name', 'type', 'goal', 'risk_level', 'setup_mode'] },
@@ -180,13 +180,13 @@ export function validateAssets(assets) {
   return { ok: errors.length === 0, errors, normalized };
 }
 
-export function validateBoundaryMLProjectSpec(payload) {
+export function validateRoleUnionProjectSpec(payload) {
   const normalized = toSnakeCaseKeys(payload);
   const errors = [];
   const warnings = [];
   const suggestions = [];
 
-  const requiredTopLevel = ['boundaryml_version', 'project', 'context_pack', 'workflow', 'assets', 'validation', 'execution_kits'];
+  const requiredTopLevel = ['roleunion_version', 'project', 'context_pack', 'workflow', 'assets', 'validation', 'execution_kits'];
   requiredTopLevel.forEach((field) => {
     if (!(field in normalized)) errors.push(`spec.${field} is required`);
   });

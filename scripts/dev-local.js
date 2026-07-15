@@ -5,11 +5,11 @@ const isWindows = process.platform === 'win32';
 const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const serverDir = fileURLToPath(new URL('../apps/server', import.meta.url));
 const studioDir = fileURLToPath(new URL('../apps/studio', import.meta.url));
-const dataDir = process.env.BOUNDARYML_DATA_DIR || fileURLToPath(new URL('../data', import.meta.url));
-const serverBaseUrl = process.env.BOUNDARYML_API_BASE_URL || `http://localhost:${process.env.BOUNDARYML_SERVER_PORT || 8787}`;
+const dataDir = process.env.ROLEUNION_DATA_DIR || fileURLToPath(new URL('../data', import.meta.url));
+const serverBaseUrl = process.env.ROLEUNION_API_BASE_URL || `http://localhost:${process.env.ROLEUNION_SERVER_PORT || 8787}`;
 
 const processes = [
-  { name: 'server', color: '\x1b[36m', command: process.execPath, args: ['--watch', 'src/server.js'], cwd: serverDir, healthUrl: `${serverBaseUrl}/api/health`, env: { BOUNDARYML_DATA_DIR: dataDir } },
+  { name: 'server', color: '\x1b[36m', command: process.execPath, args: ['--watch', 'src/server.js'], cwd: serverDir, healthUrl: `${serverBaseUrl}/api/health`, env: { ROLEUNION_DATA_DIR: dataDir } },
   { name: 'studio', color: '\x1b[35m', command: process.execPath, args: ['../../scripts/dev-studio.js'], cwd: studioDir },
 ];
 
@@ -51,7 +51,7 @@ async function isHealthy(url) {
 
 for (const proc of processes) {
   if (await isHealthy(proc.healthUrl)) {
-    process.stdout.write(`${proc.color}[${proc.name}]\x1b[0m Reusing existing BoundaryML Server at ${serverBaseUrl}\n`);
+    process.stdout.write(`${proc.color}[${proc.name}]\x1b[0m Reusing existing RoleUnion Server at ${serverBaseUrl}\n`);
     continue;
   }
 

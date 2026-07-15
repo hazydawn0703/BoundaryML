@@ -158,7 +158,7 @@ async function main() {
   const baseUrl = `http://127.0.0.1:${port}`;
   const fakeModelServer = await startFakeModelServer(modelPort);
   const tmpDataDir = `.tmp-server-smoke-${Date.now()}`;
-  const env = { ...process.env, BOUNDARYML_SERVER_PORT: port, BOUNDARYML_STORAGE_ADAPTER: 'file', BOUNDARYML_DATA_DIR: tmpDataDir };
+  const env = { ...process.env, ROLEUNION_SERVER_PORT: port, ROLEUNION_STORAGE_ADAPTER: 'file', ROLEUNION_DATA_DIR: tmpDataDir };
   let server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
   server.stderr.on('data', (chunk) => process.stderr.write(chunk));
   try {
@@ -291,17 +291,17 @@ async function main() {
     const agentKitPreview = await apiFetch(baseUrl, `/api/projects/${projectId}/execution-kits/preview`, { method: 'POST', body: JSON.stringify({ kit_type: 'draft' }) });
     assert(agentKitPreview.body.data.preview.files['sandbox_execution_contracts.yaml']?.includes(smokeContractId), 'agent-ready kit preview should include saved sandbox contract');
     const canonicalAgentRunPayload = {
-      schema: 'boundaryml.agent_task_payload.v1',
+      schema: 'roleunion.agent_task_payload.v1',
       adapter: { id: 'hermes', label: 'Hermes', payload_profile: 'hermes_task_v1', handoff_mode: 'clipboard' },
       project: { id: projectId, name: 'smoke-project' },
       workflow: { version: agentTabSecondSave.body.data.workflow_summary.version },
       task: { node_id: agentTabNode.id, name: agentTabNode.name, inputs: agentTabNode.inputs || [], outputs: agentTabNode.outputs || [] },
       agent_execution_plan: { execution_target: 'hermes', execution_level: 'L3' },
       sandbox_execution_contract: nextContract,
-      boundary_rules: { authority: 'BoundaryML', errors: 0, warnings: 0 },
+      boundary_rules: { authority: 'RoleUnion', errors: 0, warnings: 0 },
     };
     const agentRunPayload = {
-      schema: 'boundaryml.hermes_task.v1',
+      schema: 'roleunion.hermes_task.v1',
       source_schema: canonicalAgentRunPayload.schema,
       adapter: canonicalAgentRunPayload.adapter,
       task: {
@@ -311,7 +311,7 @@ async function main() {
         project: 'smoke-project',
       },
       execution_boundary: { execution_level: 'L3', allowed_paths: nextContract.repo_scope?.allowed_paths || [] },
-      boundaryml_trace: {
+      roleunion_trace: {
         project_id: projectId,
         workflow_version: canonicalAgentRunPayload.workflow.version,
         node_id: agentTabNode.id,
@@ -324,7 +324,7 @@ async function main() {
     });
     const agentRun = agentRunCreated.body.data.agent_run;
     assert(agentRun.adapter.id === 'hermes' && agentRun.node_id === agentTabNode.id, 'Agent Run API should persist Hermes handoff records for project tasks');
-    assert(agentRun.payload_schema === 'boundaryml.hermes_task.v1' && agentRun.canonical_payload.schema === 'boundaryml.agent_task_payload.v1', 'Agent Run API should retain adapter envelope and canonical BoundaryML payload');
+    assert(agentRun.payload_schema === 'roleunion.hermes_task.v1' && agentRun.canonical_payload.schema === 'roleunion.agent_task_payload.v1', 'Agent Run API should retain adapter envelope and canonical RoleUnion payload');
     const agentRunsList = await apiFetch(baseUrl, `/api/projects/${projectId}/agent-runs`);
     assert(agentRunsList.body.data.agent_runs.some((run) => run.id === agentRun.id), 'Agent Run list should include the created handoff');
     const agentRunEvidence = await apiFetch(baseUrl, `/api/projects/${projectId}/agent-runs/${agentRun.id}/evidence`, {
@@ -495,8 +495,8 @@ async function checkDefaultFileStorage() {
   const port = String(9980 + Math.floor(Math.random() * 80));
   const baseUrl = `http://127.0.0.1:${port}`;
   const tmpDataDir = `.tmp-server-default-storage-${Date.now()}`;
-  const env = { ...process.env, BOUNDARYML_SERVER_PORT: port, BOUNDARYML_DATA_DIR: tmpDataDir };
-  delete env.BOUNDARYML_STORAGE_ADAPTER;
+  const env = { ...process.env, ROLEUNION_SERVER_PORT: port, ROLEUNION_DATA_DIR: tmpDataDir };
+  delete env.ROLEUNION_STORAGE_ADAPTER;
   delete env.STORAGE_MODE;
   let server = spawn('node', ['apps/server/src/server.js'], { env, stdio: 'pipe' });
   try {

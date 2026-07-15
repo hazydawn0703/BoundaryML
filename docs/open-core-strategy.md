@@ -1,12 +1,12 @@
-# BoundaryML Open Core Strategy
+# RoleUnion Open Core Strategy
 
 ## 1. Product Positioning
 
-BoundaryML is a modeling and governance layer for human-AI workflows.
+RoleUnion is a modeling and governance layer for human-AI workflows.
 
 It helps teams turn vague AI-assisted work into structured, reviewable execution kits with explicit boundaries between human work, AI work, human-AI collaboration, review gates, output contracts, and downstream handoff rules.
 
-Agentic Development is BoundaryML's first focused use case and commercial wedge. In that scenario, BoundaryML prepares software development work before Coding Agents execute.
+Agentic Development is RoleUnion's first focused use case and commercial wedge. In that scenario, RoleUnion prepares software development work before Coding Agents execute.
 
 ## 2. Core User Problem
 
@@ -28,7 +28,7 @@ Without these boundaries, teams hand AI tools vague requests, review work too la
 
 | Layer | Purpose | Included examples | Distribution |
 | --- | --- | --- | --- |
-| Community Core | Local, open-source foundation for the BoundaryML Spec and basic execution-kit generation. | Spec, schema, validator, basic human-AI workflow model, basic Studio, basic Server, basic rules, community example. | Open source repository. |
+| Community Core | Local, open-source foundation for the RoleUnion Spec and basic execution-kit generation. | Spec, schema, validator, basic human-AI workflow model, basic Studio, basic Server, basic rules, community example. | Open source repository. |
 | Pro | Production-ready templates and repeatable governance packages for teams. | Vertical workflow governance kits, AI Coding Governance Kit as the first kit, GEO Launch Ops Kit, advanced prompt packs, advanced review gates. | Commercial template/license package. |
 | Enterprise | Organization-aware governance, integrations, deployment, and audit controls. | Enterprise rule packs, approval templates, team workspace, audit logs, advanced GitHub / Linear / Jira exporters, hosted cloud, self-hosted deployment. | Commercial enterprise agreement. |
 | Services | Done-for-you implementation and project-specific kit delivery. | Human-AI workflow mapping, Agent-ready execution kits, issue breakdown, prompt packs, review checklists, custom governance blueprint. | Paid consulting/service engagement. |
@@ -71,15 +71,15 @@ Community is the open-source foundation. It should be useful for local experimen
 
 Pro Templates package repeatable commercial workflows for users who want production-ready human-AI boundaries, governance prompts, review gates, and execution-kit structures for common scenarios.
 
-AI Coding Governance Kit is the first Pro kit because Agentic Development is the clearest initial wedge, not because BoundaryML is limited to software development.
+AI Coding Governance Kit is the first Pro kit because Agentic Development is the clearest initial wedge, not because RoleUnion is limited to software development.
 
 ### Enterprise / Cloud
 
-Enterprise / Cloud adds team collaboration, organization-specific policy mapping, advanced exporters, audit logs, hosted BoundaryML Cloud, and self-hosted enterprise deployment support.
+Enterprise / Cloud adds team collaboration, organization-specific policy mapping, advanced exporters, audit logs, hosted RoleUnion Cloud, and self-hosted enterprise deployment support.
 
 ## 7. First Paid Offer
 
-The first paid offer focuses on Agentic Development because it is the clearest initial wedge, not because BoundaryML is limited to software development.
+The first paid offer focuses on Agentic Development because it is the clearest initial wedge, not because RoleUnion is limited to software development.
 
 The first paid offer is the **Agent-Ready Execution Kit Service**.
 
@@ -97,7 +97,7 @@ This service converts a real software project brief, PRD, or product idea into a
 
 ## 8. Non-goals
 
-BoundaryML is:
+RoleUnion is:
 
 - not a project management replacement
 - not an agent runtime

@@ -42,7 +42,7 @@ function buildExampleSpec(projectInput) {
   const validation = validateWorkflow(project.workflow, project.assets, { forGeneration: true, modelConfig: null });
 
   return {
-    boundaryml_version: 'v0.1',
+    roleunion_version: 'v0.1',
     project: { ...project, context_pack: project.contextPack },
     context_pack: project.contextPack,
     workflow: { ...project.workflow, workspace_id: 'demo_workspace', template_id: selectedTemplate.id, template_version: selectedTemplate.version },

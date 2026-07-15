@@ -11,11 +11,11 @@ export function detectSchemaVersion(object) {
 export function migrateObjectIfNeeded(object) {
   const fromVersion = detectSchemaVersion(object);
   if (!fromVersion) return object;
-  if (fromVersion === '0.1' || fromVersion === 'boundaryml-schema-v0.1') return object;
+  if (fromVersion === '0.1' || fromVersion === 'roleunion-schema-v0.1') return object;
   const key = `${fromVersion}->0.1`;
   const fn = migrations.get(key);
   if (!fn) {
-    const err = new Error('This object schema version is not supported by the current BoundaryML runtime.');
+    const err = new Error('This object schema version is not supported by the current RoleUnion runtime.');
     err.code = 'SCHEMA_VERSION_UNSUPPORTED';
     throw err;
   }
